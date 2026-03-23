@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Firebase service account key - DO NOT COMMIT
+backend/serviceAccountKey.json
+
+# Environment variables
+.env
+backend/.env
+frontend/.env

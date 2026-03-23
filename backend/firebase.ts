@@ -1,7 +1,10 @@
 import * as admin from 'firebase-admin';
+import * as path from 'path';
+
+const serviceAccount = path.resolve(__dirname, './serviceAccountKey.json');
 
 admin.initializeApp({
-  projectId: "PROJECT_ID"
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
