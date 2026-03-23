@@ -5,7 +5,7 @@ import { usePortfolio } from './hooks/usePortfolio';
 import { useTransactionHistory } from './hooks/useTransactionHistory';
 import { useStreamers, Streamer } from './hooks/useStreamers';
 import { auth, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously } from 'firebase/auth';
+import { signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 
 const Sparkline = ({ data }: { data: number[] }) => {
   if (data.length < 2) return <div className="h-full flex items-center justify-center text-gray-600 text-xs text-center px-4">Waiting for market movement...</div>;
@@ -341,8 +341,28 @@ function App() {
 
   const handleGuestLogin = async () => {
     try {
-      // Firebase automatically caches Anonymous auth tokens natively inside IndexedDB exactly as instructed
-      await signInAnonymously(auth);
+      const { user } = await signInAnonymously(auth);
+
+      // 브라우저 fingerprint로 동일 디바이스를 식별 → 세션이 달라도 동일 포트폴리오 유지
+      const FingerprintJS = await import('@fingerprintjs/fingerprintjs');
+      const fp = await FingerprintJS.load();
+      const fpResult = await fp.get();
+      const fingerprint = fpResult.visitorId;
+
+      const res = await fetch('http://localhost:3000/register-guest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint, uid: user.uid }),
+      });
+
+      if (res.ok) {
+        const { customToken } = await res.json();
+        if (customToken) {
+          // 동일 디바이스의 재방문 — canonical UID로 재로그인
+          await signOut(auth);
+          await signInWithCustomToken(auth, customToken);
+        }
+      }
     } catch(err) {
       console.error(err);
       alert("Guest Login Error: Navigate to Firebase Console > Authentication > Sign-in Method and ENABLE 'Anonymous' provider!");

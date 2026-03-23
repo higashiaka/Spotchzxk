@@ -2,162 +2,239 @@ import { db } from './firebase';
 import { Request, Response } from 'express';
 import { firestore } from 'firebase-admin';
 
-interface Order {
+// ─── Config ───────────────────────────────────────────────────────────────────
+const FLUSH_INTERVAL_MS = 3000; // Firestore 저장 주기 (ms) — 여기서 조절
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Portfolio {
+  balance: number;
+  shares: Record<string, number>;
+}
+
+interface StreamerState {
+  price: number;
+  totalSupply: number;   // 0 = 무제한. 팔로워 수 기반으로 /admin/sync-followers 에서 설정
+  issuedShares: number;  // 현재 유통 중인 총 수량
+}
+
+interface CompletedOrder {
   userId: string;
   streamerId: string;
   type: 'buy' | 'sell';
   quantity: number;
   estimatedPrice: number;
+  executedPrice: number;
   timestamp: number;
+  status: 'completed';
 }
 
-// In-Memory Cycle Buffer: Saves Firebase API Write quotas natively by aggregating orders to execute per cycle
-let pendingOrders: Order[] = [];
+// ─── In-Memory State ──────────────────────────────────────────────────────────
+const portfolioCache: Record<string, Portfolio> = {};
+const streamerCache: Record<string, StreamerState> = {};
+const volumeAccum: Record<string, { net: number; gross: number }> = {};
 
-export const submitTrade = (req: Request, res: Response): void => {
+const dirtyPortfolios = new Set<string>();
+const dirtyStreamers = new Set<string>();
+const pendingOrderHistory: CompletedOrder[] = [];
+
+// 동일 ID에 대한 중복 Firestore 읽기 방지
+const portfolioLoading: Record<string, Promise<Portfolio>> = {};
+const streamerLoading: Record<string, Promise<StreamerState>> = {};
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function getPortfolio(userId: string): Promise<Portfolio> {
+  if (portfolioCache[userId]) return portfolioCache[userId];
+  if (!portfolioLoading[userId]) {
+    portfolioLoading[userId] = db.collection('portfolios').doc(userId).get()
+      .then(doc => {
+        const data = (doc.data() as Portfolio) ?? { balance: 10000, shares: {} };
+        portfolioCache[userId] = data;
+        delete portfolioLoading[userId];
+        return data;
+      });
+  }
+  return portfolioLoading[userId];
+}
+
+async function getStreamer(streamerId: string): Promise<StreamerState> {
+  if (streamerCache[streamerId]) return streamerCache[streamerId];
+  if (!streamerLoading[streamerId]) {
+    streamerLoading[streamerId] = db.collection('streamers').doc(streamerId).get()
+      .then(doc => {
+        const data = doc.data() ?? {};
+        const state: StreamerState = {
+          price: data.price ?? 100,
+          totalSupply: data.totalSupply ?? 0,
+          issuedShares: data.issuedShares ?? 0,
+        };
+        streamerCache[streamerId] = state;
+        delete streamerLoading[streamerId];
+        return state;
+      });
+  }
+  return streamerLoading[streamerId];
+}
+
+// 외부(sync-followers)에서 totalSupply를 메모리에 즉시 반영하기 위한 함수
+export function updateStreamerSupply(streamerId: string, totalSupply: number): void {
+  if (streamerCache[streamerId]) {
+    streamerCache[streamerId].totalSupply = totalSupply;
+  } else {
+    streamerCache[streamerId] = { price: 100, totalSupply, issuedShares: 0 };
+  }
+}
+
+export const submitTrade = async (req: Request, res: Response): Promise<void> => {
   const { userId, streamerId, type, quantity, estimatedPrice } = req.body;
+
   if (!userId || !streamerId || !type || !quantity) {
     res.status(400).json({ error: 'Invalid trade data' });
     return;
   }
 
-  // Push straight into server memory buffer. No Firebase write here!
-  pendingOrders.push({
-    userId,
-    streamerId,
-    type,
-    quantity: Number(quantity),
-    estimatedPrice: Number(estimatedPrice),
-    timestamp: Date.now()
-  });
+  const qty = Number(quantity);
 
-  res.json({ status: 'queued' });
+  try {
+    const [portfolio, streamer] = await Promise.all([
+      getPortfolio(userId),
+      getStreamer(streamerId),
+    ]);
+
+    // 가격 충격(market impact)을 먼저 적용한 뒤 그 가격으로 체결
+    // → 자기 주문으로 가격을 올리고 즉시 되파는 차익 구조 원천 차단
+    // 매수: 내 수요가 가격을 올린 뒤 올라간 가격에 체결 (불리)
+    // 매도: 내 공급이 가격을 내린 뒤 내려간 가격에 체결 (불리)
+    // 왕복 손익 = P × N × (1 - (N×k)²) < 0 (항상 손실)
+    if (!volumeAccum[streamerId]) volumeAccum[streamerId] = { net: 0, gross: 0 };
+    const netDelta = type === 'buy' ? qty : -qty;
+    const priceMultiplier = 1 + (netDelta * 0.0005);
+    const executedPrice = Math.max(0.01, streamer.price * priceMultiplier);
+    streamer.price = executedPrice;
+
+    volumeAccum[streamerId].net += netDelta;
+    volumeAccum[streamerId].gross += qty;
+
+    const cost = executedPrice * qty;
+
+    if (type === 'buy') {
+      // 잔액 검증
+      if (portfolio.balance < cost) {
+        res.status(400).json({ error: 'Insufficient balance' });
+        return;
+      }
+      // 발행량 검증 (totalSupply = 0이면 무제한)
+      if (streamer.totalSupply > 0 && streamer.issuedShares + qty > streamer.totalSupply) {
+        res.status(400).json({ error: 'Supply limit reached' });
+        return;
+      }
+      portfolio.balance -= cost;
+      portfolio.shares[streamerId] = (portfolio.shares[streamerId] ?? 0) + qty;
+      streamer.issuedShares += qty;
+
+    } else if (type === 'sell') {
+      const held = portfolio.shares[streamerId] ?? 0;
+      if (held < qty) {
+        res.status(400).json({ error: 'Insufficient shares' });
+        return;
+      }
+      portfolio.balance += cost;
+      portfolio.shares[streamerId] = held - qty;
+      streamer.issuedShares -= qty;
+
+    } else {
+      res.status(400).json({ error: 'Invalid trade type' });
+      return;
+    }
+
+    // dirty 표시 — 다음 flush 주기에 저장됨
+    dirtyPortfolios.add(userId);
+    dirtyStreamers.add(streamerId);
+
+    pendingOrderHistory.push({
+      userId,
+      streamerId,
+      type,
+      quantity: qty,
+      estimatedPrice: Number(estimatedPrice),
+      executedPrice: executedPrice,
+      timestamp: Date.now(),
+      status: 'completed',
+    });
+
+    res.json({
+      status: 'executed',
+      executedPrice: streamer.price,
+      newBalance: portfolio.balance,
+    });
+
+  } catch (err: any) {
+    console.error('Trade error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 export const startEngine = (): void => {
-  console.log('Starting Cyclic Matching Engine...');
-  const CYCLE_INTERVAL_MS = 3000; // Executes batched logic every 3 seconds
+  console.log(`Flush Engine started. Firestore sync interval: ${FLUSH_INTERVAL_MS}ms`);
 
   setInterval(async () => {
-    if (pendingOrders.length === 0) return;
+    if (dirtyPortfolios.size === 0 && dirtyStreamers.size === 0) return;
 
-    // Snapshot the current queue for this cycle and clear the live queue
-    const cycleOrders = [...pendingOrders];
-    pendingOrders = [];
-
-    console.log(`Cycle triggered: Processing ${cycleOrders.length} orders...`);
-
-    // Group orders to optimize fetch costs
-    const streamersToUpdate = new Set<string>();
-    const usersToUpdate = new Set<string>();
-    
-    cycleOrders.forEach(o => {
-      streamersToUpdate.add(o.streamerId);
-      usersToUpdate.add(o.userId);
+    // 현재 dirty 목록 스냅샷 후 즉시 초기화 (flush 중 새 거래 수용)
+    const portfoliosToFlush = new Set(dirtyPortfolios);
+    const streamersToFlush = new Set(dirtyStreamers);
+    const ordersToFlush = [...pendingOrderHistory];
+    const volumeSnapshot: Record<string, { net: number; gross: number }> = {};
+    streamersToFlush.forEach(id => {
+      if (volumeAccum[id]) volumeSnapshot[id] = { ...volumeAccum[id] };
+      delete volumeAccum[id];
     });
 
+    dirtyPortfolios.clear();
+    dirtyStreamers.clear();
+    pendingOrderHistory.length = 0;
+
+    console.log(`Flushing — portfolios: ${portfoliosToFlush.size}, streamers: ${streamersToFlush.size}, orders: ${ordersToFlush.length}`);
+
     try {
-      // Execute the entire cycle within a single heavy transaction for atomicity
-      await db.runTransaction(async (transaction: firestore.Transaction) => {
+      const batch = db.batch();
 
-        // 1. Fetch current streamers
-        const streamerRefs = Array.from(streamersToUpdate).map(id => db.collection('streamers').doc(id));
-        const streamerDocs = await transaction.getAll(...streamerRefs);
-        
-        const currentPrices: Record<string, number> = {};
-        streamerDocs.forEach(doc => {
-          if (doc.exists) {
-            currentPrices[doc.id] = doc.data()?.price || 100;
-          } else {
-            currentPrices[doc.id] = 100; // default anchor
-          }
-        });
+      portfoliosToFlush.forEach(userId => {
+        const ref = db.collection('portfolios').doc(userId);
+        batch.set(ref, portfolioCache[userId], { merge: true });
+      });
 
-        // 2. Fetch current portfolios
-        const portfolioRefs = Array.from(usersToUpdate).map(id => db.collection('portfolios').doc(id));
-        const portfolioDocs = await transaction.getAll(...portfolioRefs);
-        
-        const portfolios: Record<string, any> = {};
-        portfolioDocs.forEach(doc => {
-          if (doc.exists) {
-            portfolios[doc.id] = doc.data();
-          } else {
-            portfolios[doc.id] = { balance: 10000, shares: {} };
-          }
-        });
+      streamersToFlush.forEach(streamerId => {
+        const ref = db.collection('streamers').doc(streamerId);
+        const s = streamerCache[streamerId];
+        const vol = volumeSnapshot[streamerId];
+        batch.set(ref, {
+          price: s.price,
+          issuedShares: s.issuedShares,
+          ...(vol ? { totalVolume: firestore.FieldValue.increment(vol.gross) } : {}),
+        }, { merge: true });
+      });
 
-        // 3. Process each order and tally net volume per streamer
-        const streamerNetVolume: Record<string, number> = {};
-        const streamerGrossVolume: Record<string, number> = {};
-        
-        streamersToUpdate.forEach(id => {
-           streamerNetVolume[id] = 0;
-           streamerGrossVolume[id] = 0;
-        });
+      ordersToFlush.forEach(order => {
+        const ref = db.collection('portfolios').doc(order.userId).collection('orders').doc();
+        batch.set(ref, order);
+      });
 
-        for (const order of cycleOrders) {
-           const pData = portfolios[order.userId];
-           const currentBalance = pData.balance || 0;
-           const currentShares = (pData.shares && pData.shares[order.streamerId]) || 0;
-           
-           const cost = currentPrices[order.streamerId] * order.quantity;
+      await batch.commit();
+      console.log('Flush complete.');
 
-           // Server-side validation
-           if (order.type === 'buy') {
-             if (currentBalance < cost) continue; // Skip invalid order
-             pData.balance -= cost;
-             if (!pData.shares) pData.shares = {};
-             pData.shares[order.streamerId] = (pData.shares[order.streamerId] || 0) + order.quantity;
-             streamerNetVolume[order.streamerId] += order.quantity; // Adds to Buy Volume
-             streamerGrossVolume[order.streamerId] += order.quantity;
-           } else if (order.type === 'sell') {
-             if (currentShares < order.quantity) continue;
-             pData.balance += cost;
-             if (!pData.shares) pData.shares = {};
-             pData.shares[order.streamerId] -= order.quantity;
-             streamerNetVolume[order.streamerId] -= order.quantity; // Adds to Sell Volume
-             streamerGrossVolume[order.streamerId] += order.quantity;
-           }
-        }
-
-        // 4. Calculate new market prices dynamically according to VOLUME
-        streamersToUpdate.forEach(streamerId => {
-           let price = currentPrices[streamerId];
-           const netVol = streamerNetVolume[streamerId]; 
-           const grossVol = streamerGrossVolume[streamerId];
-           
-           // If aggregate Buys overpower Sells, netVol > 0 (Price Rises)
-           // If aggregate Sells overpower Buys, netVol < 0 (Price Falls)
-           const priceMultiplier = 1 + (netVol * 0.0005);
-           price = Math.max(0.01, price * priceMultiplier);
-           
-           const ref = db.collection('streamers').doc(streamerId);
-           transaction.set(ref, { 
-             price,
-             totalVolume: firestore.FieldValue.increment(grossVol)
-           }, { merge: true });
-        });
-
-        // 5. Commit portfolios
-        usersToUpdate.forEach(userId => {
-           const ref = db.collection('portfolios').doc(userId);
-           transaction.set(ref, portfolios[userId], { merge: true });
-        });
-        
-        // 6. Push completed traces safely to firebase log linked entirely to user's identity nested path
-        for (const order of cycleOrders) {
-           const ref = db.collection('portfolios').doc(order.userId).collection('orders').doc();
-           transaction.set(ref, {
-             ...order,
-             status: 'completed',
-             executedPrice: currentPrices[order.streamerId]
-           });
+    } catch (err: any) {
+      console.error('Flush error:', err.message);
+      // 실패 시 dirty 목록 복원 — 다음 주기에 재시도
+      portfoliosToFlush.forEach(id => dirtyPortfolios.add(id));
+      streamersToFlush.forEach(id => {
+        dirtyStreamers.add(id);
+        if (volumeSnapshot[id]) {
+          if (!volumeAccum[id]) volumeAccum[id] = { net: 0, gross: 0 };
+          volumeAccum[id].net += volumeSnapshot[id].net;
+          volumeAccum[id].gross += volumeSnapshot[id].gross;
         }
       });
-      
-      console.log(`Cycle completed successfully: Prices adjusted heavily relative to batch volume.`);
-    } catch (err: any) {
-      console.error(`Error during core engine cycle: ${err.message}`);
+      ordersToFlush.forEach(o => pendingOrderHistory.push(o));
     }
-  }, CYCLE_INTERVAL_MS);
+  }, FLUSH_INTERVAL_MS);
 };
