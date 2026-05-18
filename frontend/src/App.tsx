@@ -1,579 +1,1776 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useStreamerPrice } from './hooks/useStreamerPrice';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { createChart, ColorType, CrosshairMode, LineStyle, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
+import { useStockPrice } from './hooks/useStockPrice';
 import { useTrade } from './hooks/useTrade';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useTransactionHistory } from './hooks/useTransactionHistory';
-import { useStreamers, Streamer } from './hooks/useStreamers';
+import { useStocks, Stock, DEFAULT_STOCKS } from './hooks/useStocks';
+import { useResetPortfolio } from './hooks/useResetPortfolio';
 import { auth, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import {
+  signInWithPopup, signOut, onAuthStateChanged,
+  User, signInAnonymously, signInWithCustomToken,
+} from 'firebase/auth';
+import { subscribeStomp } from './lib/stompClient';
+import { apiFetch } from './lib/api';
 
-const Sparkline = ({ data }: { data: number[] }) => {
-  if (data.length < 2) return <div className="h-full flex items-center justify-center text-gray-600 text-xs text-center px-4">Waiting for market movement...</div>;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const points = data.map((d, i) => `${(i / (data.length - 1)) * 100},${100 - ((d - min) / range) * 100}`).join(' ');
+// ─── 타입 ────────────────────────────────────────────────────────────────────
+type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile';
 
-  return (
-    <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible" preserveAspectRatio="none">
-       <polyline points={points} fill="none" stroke="#4ade80" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
+interface LiveTrade {
+  streamerId: string;
+  streamerName: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  price: number;
+  timestamp: number;
+}
+
+// ─── 상수 ────────────────────────────────────────────────────────────────────
+const BASE_PRICE = 1000;
+const INITIAL_BALANCE = 10_000_000;
+
+// ─── 유틸 ────────────────────────────────────────────────────────────────────
+const fmt = (value: number): string => {
+  if (value < 1) return `${value.toFixed(2)}원`;
+  return `${Math.round(value).toLocaleString('ko-KR')}원`;
 };
 
-const TradeInterface = ({ streamer, user, portfolio, onBack }: { streamer: Streamer, user: User | null, portfolio: any, onBack: () => void }) => {
-  const { currentPrice, previousPrice, direction } = useStreamerPrice(streamer.id, streamer.price);
-  const tradeMutation = useTrade(user?.uid || 'spectator');
-  const [quantityStr, setQuantityStr] = useState<string>("10");
-  const quantity = Math.max(1, parseInt(quantityStr, 10) || 0);
-  const [history, setHistory] = useState<number[]>([streamer.price]);
+const fmtCompact = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(n);
+};
 
-  useEffect(() => {
-     setHistory(prev => {
-        const next = [...prev, currentPrice];
-        if (next.length > 20) next.shift(); // Keep 20 ticks mapped
-        return next;
-     });
-  }, [currentPrice]);
+const changePct = (price: number, basePrice: number = BASE_PRICE) => ((price - basePrice) / basePrice) * 100;
 
-  const estimatedCost = currentPrice * quantity;
-  const canBuy = portfolio && portfolio.balance >= estimatedCost;
-  const canSell = portfolio && (portfolio.shares[streamer.id] || 0) >= quantity;
+const grade = (assets: number): { label: string; color: string } => {
+  if (assets >= 30_000_000) return { label: '다이아 리그', color: '#00BCD4' };
+  if (assets >= 15_000_000) return { label: '플래티넘 리그', color: '#C0C0C0' };
+  if (assets >= 12_000_000) return { label: '골드 리그', color: '#FFD700' };
+  if (assets >= 10_000_000) return { label: '실버 리그', color: '#A8A8A8' };
+  return { label: '브론즈 리그', color: '#CD7F32' };
+};
 
-  const handleTrade = (type: 'buy' | 'sell') => {
-    if (!user) {
-       alert("Please Login or Play as Guest first to trace valid orders.");
-       return;
-    }
-    if (type === 'buy' && !canBuy) return;
-    if (type === 'sell' && !canSell) return;
+// 상승=빨강 / 하락=파랑 / 보합=회색 (한국 증시 관례)
+const priceColor = (pct: number) => pct > 0 ? '#FF5252' : pct < 0 ? '#3D8BFF' : '#888888';
 
-    tradeMutation.mutate({
-      streamerId: streamer.id,
-      type,
-      quantity,
-      estimatedPrice: currentPrice
-    });
-  };
+// 종목 이름 기반 아바타 색상 (일관된 해시)
+const AVATAR_COLORS = ['#FF5252', '#3D8BFF', '#00E676', '#FFD700', '#FF9800', '#AB47BC', '#00BCD4', '#F06292'];
+const avatarColor = (name: string): string => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+};
+
+
+
+// ─── Ticker ───────────────────────────────────────────────────────────────────
+const Ticker = ({ streamers }: { streamers: Stock[] }) => {
+  const items = useMemo(() => {
+    const active = streamers.filter(s => s.totalVolume > 0);
+    const list = active.length >= 6 ? active : streamers.slice(0, 20);
+    const sorted = [...list].sort((a, b) => Math.abs(changePct(b.price, b.basePrice)) - Math.abs(changePct(a.price, a.basePrice)));
+    return [...sorted, ...sorted]; // 무한 루프를 위해 복제
+  }, [streamers]);
+
+  if (items.length === 0) return null;
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 p-6 rounded-3xl shadow-2xl border border-gray-800 animate-in fade-in zoom-in duration-200">
-      <button onClick={onBack} className="text-gray-400 hover:text-white self-start mb-6 flex items-center gap-2 transition-colors font-bold uppercase tracking-wider text-sm">
-         <span className="text-xl">←</span> Market Board
-      </button>
-      
-      <div className="flex justify-between items-start mb-6">
-         <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">{streamer.name}</h2>
-         <div className="text-right">
-             <div className={`text-5xl font-mono font-bold transition-colors duration-300 ${direction === 'up' ? 'text-green-400' : direction === 'down' ? 'text-red-400' : 'text-white'}`}>
-                ${currentPrice.toFixed(2)}
-             </div>
-             {direction !== 'none' && previousPrice !== null && (
-               <span className={`font-mono font-bold text-md ${direction === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                 {direction === 'up' ? '▲' : '▼'} {Math.abs(currentPrice - previousPrice).toFixed(2)}
-               </span>
-             )}
-         </div>
-      </div>
-
-      <div className="w-full h-32 bg-gray-950 border border-gray-800 rounded-xl mb-6 p-4 shadow-inner">
-         <Sparkline data={history} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-6">
-         <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-md transition-all hover:bg-gray-700">
-            <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 font-bold">Total Demand Volume</p>
-            <p className="font-mono text-2xl font-bold text-white">{streamer.totalVolume.toLocaleString()}</p>
-         </div>
-         <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-md transition-all hover:bg-gray-700">
-            <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 font-bold">My Personal SA</p>
-            <p className="font-mono text-2xl font-bold text-blue-400">{portfolio?.shares[streamer.id] || 0} SA</p>
-         </div>
-      </div>
-
-      <div className="w-full mb-6 mt-auto">
-          <label className="block text-gray-400 text-sm font-bold mb-2 uppercase tracking-wide" htmlFor="quantity">
-              Order Quantity
-          </label>
-          <input 
-              type="number" 
-              id="quantity"
-              value={quantityStr}
-              onChange={(e) => setQuantityStr(e.target.value)}
-              min="1"
-              disabled={!user}
-              placeholder={!user ? "Authentication Required" : ""}
-              className="w-full bg-gray-950 text-white rounded-xl border border-gray-700 py-4 px-4 focus:outline-none focus:border-blue-500 font-mono text-center text-3xl shadow-inner transition-colors disabled:opacity-50"
-          />
-          <div className="flex justify-between items-center mt-3 px-2">
-              <span className="text-gray-500 text-sm font-bold">Total Net Execution Cost:</span>
-              <span className="text-gray-200 font-mono font-bold text-lg">${estimatedCost.toFixed(2)}</span>
-          </div>
-      </div>
-
-      <div className="flex w-full gap-4">
-         <button 
-           onClick={() => handleTrade('buy')}
-           disabled={tradeMutation.isPending || !canBuy || !user}
-           className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-400 hover:to-green-500 focus:scale-[0.98] text-white font-bold py-4 px-4 rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg"
-         >
-           Buy {user ? quantity : 'Disabled'}
-         </button>
-         <button 
-           onClick={() => handleTrade('sell')}
-           disabled={tradeMutation.isPending || !canSell || !user}
-           className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 focus:scale-[0.98] text-white font-bold py-4 px-4 rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-lg"
-         >
-           Sell {user ? quantity : 'Disabled'}
-         </button>
+    <div className="relative overflow-hidden shrink-0"
+      style={{ background: '#0E121A', borderBottom: '1px solid #222A3A' }}>
+      <div className="absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to right, #0E121A, transparent)' }} />
+      <div className="absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to left, #0E121A, transparent)' }} />
+      <div className="flex py-2" style={{ width: 'max-content', animation: 'ticker-scroll 60s linear infinite' }}>
+        {items.map((s, i) => {
+          const pct = changePct(s.price, s.basePrice);
+          return (
+            <span key={i} className="inline-flex items-center gap-1.5 px-4">
+              <span className="text-xs font-bold" style={{ color: '#BAC4D1' }}>{s.name}</span>
+              <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
+                {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+              </span>
+              <span className="text-xs" style={{ color: '#26334D' }}>|</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-const DEFAULT_STREAMERS = [
-  { id: 'chzzk-hle-delight', name: 'HLE Delight', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hle-gumayusi', name: 'HLE Gumayusi', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hle-kanavi', name: 'HLE Kanavi', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hle-zeka', name: 'HLE Zeka', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hle-zeus', name: 'HLE Zeus', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kangsoyeon', name: '강소연', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kangji', name: '강지', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kangqui', name: '강퀴', price: 100, totalVolume: 0 },
-  { id: 'chzzk-gaebogeo', name: '개복어', price: 100, totalVolume: 0 },
-  { id: 'chzzk-gankim', name: '갱맘', price: 100, totalVolume: 0 },
-  { id: 'chzzk-gyechunhwe', name: '계춘회', price: 100, totalVolume: 0 },
-  { id: 'chzzk-gochabi', name: '고차비', price: 100, totalVolume: 0 },
-  { id: 'chzzk-monster-mouse', name: '괴물쥐', price: 100, totalVolume: 0 },
-  { id: 'chzzk-geumsahyang', name: '금사향', price: 100, totalVolume: 0 },
-  { id: 'chzzk-geumhwi', name: '금휘', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimnaseong', name: '김나성', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimnambong', name: '김남봉', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimdo', name: '김도', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimdduddi', name: '김뚜띠', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimblue', name: '김블루', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimbbung', name: '김뿡', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimjungmin', name: '김정민', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kimhorror', name: '김호러', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kkolrangi', name: '꼴랑이', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kkotbin', name: '꽃빈', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kkotpin', name: '꽃핀', price: 100, totalVolume: 0 },
-  { id: 'chzzk-nanayang', name: '나나양', price: 100, totalVolume: 0 },
-  { id: 'chzzk-namgunghyuk', name: '남궁혁', price: 100, totalVolume: 0 },
-  { id: 'chzzk-neobul', name: '너불', price: 100, totalVolume: 0 },
-  { id: 'chzzk-neneko', name: '네네코 마시로', price: 100, totalVolume: 0 },
-  { id: 'chzzk-necrit', name: '네클릿', price: 100, totalVolume: 0 },
-  { id: 'chzzk-nofe', name: '노페', price: 100, totalVolume: 0 },
-  { id: 'chzzk-nokduro', name: '녹두로', price: 100, totalVolume: 0 },
-  { id: 'chzzk-nonggwan', name: '농관전', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-box', name: '농심 BOX', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-exito', name: '농심 Exito', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-ryuk', name: '농심 RYUK', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-ppuljebi', name: '농심 ppuljebi', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-dambi', name: '농심 담비', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-redforce', name: '농심 레드포스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-lehends', name: '농심 리헨즈', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-scout', name: '농심 스카웃', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-sponge', name: '농심 스폰지', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-ivy', name: '농심 아이비', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-albi', name: '농심 알비', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-xross', name: '농심 엑스로스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-calix', name: '농심 칼릭스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-kingen', name: '농심 킹겐', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-taeyoon', name: '농심 태윤', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ns-francis', name: '농심 프란시스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-nyorongi', name: '뇨롱이', price: 100, totalVolume: 0 },
-  { id: 'chzzk-noonkkot', name: '눈꽃', price: 100, totalVolume: 0 },
-  { id: 'chzzk-neujjam', name: '늦잠', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ninia', name: '니니아', price: 100, totalVolume: 0 },
-  { id: 'chzzk-daju', name: '다주', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dalkomrena', name: '달콤레나', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dawn', name: '던', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dopa', name: '도파', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dokcake', name: '독케익', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dunijuni', name: '두니주니', price: 100, totalVolume: 0 },
-  { id: 'chzzk-dunggeure', name: '둥그레', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ddahyoni', name: '따효니', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ttolttoli', name: '똘똘똘이', price: 100, totalVolume: 0 },
-  { id: 'chzzk-radiyu', name: '라디유', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ralo', name: '랄로', price: 100, totalVolume: 0 },
-  { id: 'chzzk-lucky', name: '러끼', price: 100, totalVolume: 0 },
-  { id: 'chzzk-runner', name: '러너', price: 100, totalVolume: 0 },
-  { id: 'chzzk-reva', name: '레바', price: 100, totalVolume: 0 },
-  { id: 'chzzk-rutae', name: '루태', price: 100, totalVolume: 0 },
-  { id: 'chzzk-looksam', name: '룩삼', price: 100, totalVolume: 0 },
-  { id: 'chzzk-lilka', name: '릴카', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mareflos', name: '마레플로스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mamwa', name: '마뫄', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mangnae', name: '망내', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mulluckking', name: '멀럭킹', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mutsa', name: '멋사', price: 100, totalVolume: 0 },
-  { id: 'chzzk-medal', name: '명예훈장', price: 100, totalVolume: 0 },
-  { id: 'chzzk-morara', name: '모라라', price: 100, totalVolume: 0 },
-  { id: 'chzzk-mochahyung', name: '모카형', price: 100, totalVolume: 0 },
-  { id: 'chzzk-michir', name: '미치르', price: 100, totalVolume: 0 },
-  { id: 'chzzk-baedon', name: '배돈', price: 100, totalVolume: 0 },
-  { id: 'chzzk-baekgompa', name: '백곰파', price: 100, totalVolume: 0 },
-  { id: 'chzzk-bang', name: '뱅', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-gideon', name: '브리온 기드온', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-namgung', name: '브리온 남궁', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-roamer', name: '브리온 로머', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-loki', name: '브리온 로키', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-casting', name: '브리온 캐스팅', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-teddy', name: '브리온 테디', price: 100, totalVolume: 0 },
-  { id: 'chzzk-brion-fisher', name: '브리온 피셔', price: 100, totalVolume: 0 },
-  { id: 'chzzk-vicha', name: '브이챠', price: 100, totalVolume: 0 },
-  { id: 'chzzk-bighead', name: '빅헤드', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ppibu', name: '삐부', price: 100, totalVolume: 0 },
-  { id: 'chzzk-sakihane', name: '사키하네 후야', price: 100, totalVolume: 0 },
-  { id: 'chzzk-salgu', name: '살구', price: 100, totalVolume: 0 },
-  { id: 'chzzk-samsik', name: '삼식', price: 100, totalVolume: 0 },
-  { id: 'chzzk-samway', name: '샘웨', price: 100, totalVolume: 0 },
-  { id: 'chzzk-seoneng', name: '서넹', price: 100, totalVolume: 0 },
-  { id: 'chzzk-saddummy', name: '서새봄', price: 100, totalVolume: 0 },
-  { id: 'chzzk-seolbaek', name: '설백', price: 100, totalVolume: 0 },
-  { id: 'chzzk-sonishow', name: '소니쇼', price: 100, totalVolume: 0 },
-  { id: 'chzzk-souler', name: '소우릎', price: 100, totalVolume: 0 },
-  { id: 'chzzk-sopoong', name: '소풍왔니', price: 100, totalVolume: 0 },
-  { id: 'chzzk-suryun', name: '수련수련', price: 100, totalVolume: 0 },
-  { id: 'chzzk-sherry', name: '쉐리', price: 100, totalVolume: 0 },
-  { id: 'chzzk-snarang', name: '스나랑', price: 100, totalVolume: 0 },
-  { id: 'chzzk-shirayuki', name: '시라유키 히나', price: 100, totalVolume: 0 },
-  { id: 'chzzk-sylph', name: '실프', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ssangbe', name: '쌍베', price: 100, totalVolume: 0 },
-  { id: 'chzzk-crag', name: '씨랙', price: 100, totalVolume: 0 },
-  { id: 'chzzk-aguibbo', name: '아구이뽀', price: 100, totalVolume: 0 },
-  { id: 'chzzk-tabi', name: '아라하시 타비', price: 100, totalVolume: 0 },
-  { id: 'chzzk-arisa', name: '아리사', price: 100, totalVolume: 0 },
-  { id: 'chzzk-fatherking', name: '아빠킹', price: 100, totalVolume: 0 },
-  { id: 'chzzk-uni', name: '아야츠노 유니', price: 100, totalVolume: 0 },
-  { id: 'chzzk-rin', name: '아오쿠모 린', price: 100, totalVolume: 0 },
-  { id: 'chzzk-lize', name: '아카네 리제', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ryu', name: '아카이로 류', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ambition', name: '앰비션', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yapyap', name: '얍얍', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yadda', name: '얏따', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yangdding', name: '양띵', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yangaji', name: '양아지', price: 100, totalVolume: 0 },
-  { id: 'chzzk-eris', name: '에리스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-elli', name: '엘리', price: 100, totalVolume: 0 },
-  { id: 'chzzk-youngdu', name: '영듀', price: 100, totalVolume: 0 },
-  { id: 'chzzk-oknyang', name: '옥냥이', price: 100, totalVolume: 0 },
-  { id: 'chzzk-wadid', name: '와디드', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yoru', name: '요룰레히', price: 100, totalVolume: 0 },
-  { id: 'chzzk-untara', name: '운타라', price: 100, totalVolume: 0 },
-  { id: 'chzzk-wolf', name: '울프', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yuzuha', name: '유즈하 리코', price: 100, totalVolume: 0 },
-  { id: 'chzzk-yunga', name: '윤가놈', price: 100, totalVolume: 0 },
-  { id: 'chzzk-eaglecob', name: '이글콥', price: 100, totalVolume: 0 },
-  { id: 'chzzk-irona', name: '이로나묭 치카', price: 100, totalVolume: 0 },
-  { id: 'chzzk-leesun', name: '이선생', price: 100, totalVolume: 0 },
-  { id: 'chzzk-leechohong', name: '이초홍', price: 100, totalVolume: 0 },
-  { id: 'chzzk-leechunhyang', name: '이춘향', price: 100, totalVolume: 0 },
-  { id: 'chzzk-inganjelly', name: '인간젤리', price: 100, totalVolume: 0 },
-  { id: 'chzzk-insec', name: '인섹', price: 100, totalVolume: 0 },
-  { id: 'chzzk-imnaeun', name: '임나은', price: 100, totalVolume: 0 },
-  { id: 'chzzk-jadong', name: '자동', price: 100, totalVolume: 0 },
-  { id: 'chzzk-jack', name: '잭', price: 100, totalVolume: 0 },
-  { id: 'chzzk-jongmal', name: '종말맨', price: 100, totalVolume: 0 },
-  { id: 'chzzk-judoongi', name: '주둥이방송', price: 100, totalVolume: 0 },
-  { id: 'chzzk-jinu', name: '지누', price: 100, totalVolume: 0 },
-  { id: 'chzzk-chaehyun', name: '채현찌', price: 100, totalVolume: 0 },
-  { id: 'chzzk-chulmyun', name: '철면수심', price: 100, totalVolume: 0 },
-  { id: 'chzzk-choseung', name: '초승달', price: 100, totalVolume: 0 },
-  { id: 'chzzk-chicken', name: '치킨쿤', price: 100, totalVolume: 0 },
-  { id: 'chzzk-karin', name: '카린', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kandeer', name: '칸데르니아', price: 100, totalVolume: 0 },
-  { id: 'chzzk-captainjack', name: '캡틴잭', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kane', name: '케인', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kongkong', name: '콩콩', price: 100, totalVolume: 0 },
-  { id: 'chzzk-kuha', name: '쿠하', price: 100, totalVolume: 0 },
-  { id: 'chzzk-cuvee', name: '큐베', price: 100, totalVolume: 0 },
-  { id: 'chzzk-crank', name: '크랭크', price: 100, totalVolume: 0 },
-  { id: 'chzzk-ccat', name: '크캣', price: 100, totalVolume: 0 },
-  { id: 'chzzk-tamttam', name: '탬탬버린', price: 100, totalVolume: 0 },
-  { id: 'chzzk-tenko', name: '텐코 시부키', price: 100, totalVolume: 0 },
-  { id: 'chzzk-paka', name: '파카', price: 100, totalVolume: 0 },
-  { id: 'chzzk-portia', name: '포셔', price: 100, totalVolume: 0 },
-  { id: 'chzzk-purin', name: '푸린', price: 100, totalVolume: 0 },
-  { id: 'chzzk-poong', name: '풍월량', price: 100, totalVolume: 0 },
-  { id: 'chzzk-flurry', name: '플러리', price: 100, totalVolume: 0 },
-  { id: 'chzzk-flame', name: '플레임', price: 100, totalVolume: 0 },
-  { id: 'chzzk-phoenixpark', name: '피닉스박', price: 100, totalVolume: 0 },
-  { id: 'chzzk-pingman', name: '핑맨', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hanako', name: '하나코 나나', price: 100, totalVolume: 0 },
-  { id: 'chzzk-haruto', name: '하루토', price: 100, totalVolume: 0 },
-  { id: 'chzzk-haha', name: '하하', price: 100, totalVolume: 0 },
-  { id: 'chzzk-doodoo', name: '한동숙', price: 100, totalVolume: 0 },
-  { id: 'chzzk-haeverlin', name: '해블린', price: 100, totalVolume: 0 },
-  { id: 'chzzk-haetsal', name: '햇살살', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hangdol', name: '행돌', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hyang', name: '향아치', price: 100, totalVolume: 0 },
-  { id: 'chzzk-honeychu', name: '허니츄러스', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hejil', name: '헤징', price: 100, totalVolume: 0 },
-  { id: 'chzzk-huchu', name: '후추', price: 100, totalVolume: 0 },
-  { id: 'chzzk-hiren', name: '히렌', price: 100, totalVolume: 0 }
-];
+// ─── HomeView ─────────────────────────────────────────────────────────────────
+const HomeView = ({
+  streamers, portfolio, user, totalAssets, history, recentlyViewedIds,
+  onSelect, onNavigate, onRemoveRecent, liveTrades,
+}: {
+  streamers: Stock[];
+  portfolio: any;
+  user: User | null;
+  totalAssets: number;
+  history: any[];
+  recentlyViewedIds: string[];
+  onSelect: (s: Stock) => void;
+  onNavigate: (tab: AppTab) => void;
+  onRemoveRecent: (id: string) => void;
+  liveTrades: LiveTrade[];
+}) => {
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const totalReturn = totalAssets - INITIAL_BALANCE;
+  const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
+  const userGrade = grade(totalAssets);
 
+  // 보유 종목 (상위 3개)
+  const holdings = useMemo(() => {
+    if (!portfolio?.shares) return [];
+    return Object.entries(portfolio.shares as Record<string, number>)
+      .filter(([, qty]) => qty > 0)
+      .map(([id, qty]) => {
+        const s = streamers.find(st => st.id === id);
+        if (!s) return null;
+        return { streamer: s, qty, value: s.price * qty, pct: changePct(s.price, s.basePrice) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b!.value - a!.value)
+      .slice(0, 3) as { streamer: Stock; qty: number; value: number; pct: number }[];
+  }, [portfolio, streamers]);
+
+  const holdingCount = useMemo(() =>
+    Object.values(portfolio?.shares as Record<string, number> ?? {}).filter(q => q > 0).length,
+    [portfolio]);
+
+  // 최근 본 종목 (ID → 현재 가격으로 조회)
+  const recentlyViewed = useMemo(() =>
+    recentlyViewedIds.map(id => streamers.find(s => s.id === id)).filter(Boolean) as Stock[],
+    [recentlyViewedIds, streamers]);
+
+  // 실시간 거래량 상위 5
+  const top5 = useMemo(() =>
+    [...streamers].sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 5),
+    [streamers]);
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden relative">
+      {/* 급등/급락 실시간 티커 — 상단 고정 */}
+      <Ticker streamers={streamers} />
+
+      {/* 스크롤 영역 */}
+      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+
+        {/* ── 내 투자 ─────────────────────────────────────────────── */}
+        <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>
+          <p className="text-xs font-bold mb-1" style={{ color: '#8491A5' }}>내 투자</p>
+          {user ? (
+            <>
+              <button type="button" onClick={() => onNavigate('profile')}
+                className="flex items-baseline gap-2">
+                <span className="text-3xl font-black font-mono text-white">{fmt(totalAssets)}</span>
+                <span className="text-base" style={{ color: '#626B7A' }}>›</span>
+              </button>
+              <p className="text-sm font-bold mt-1" style={{ color: priceColor(totalReturnPct) }}>
+                {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn)}&nbsp;
+                ({totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)
+              </p>
+              <div className="mt-2">
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                  style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
+                  {userGrade.label}
+                </span>
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={() => onNavigate('profile')}
+              className="text-lg font-bold mt-1 flex items-center gap-1" style={{ color: '#626B7A' }}>
+              로그인 후 확인 가능 ›
+            </button>
+          )}
+        </div>
+
+        {/* ── 나의 종목 ────────────────────────────────────────────── */}
+        <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid #222A3A' }}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-white">나의 종목</p>
+            {user && <span className="text-xs" style={{ color: '#626B7A' }}>{holdingCount}개 보유</span>}
+          </div>
+          {user && holdings.length > 0 ? (
+            <>
+              <div className="space-y-3 mb-3">
+                {holdings.map(({ streamer: s, qty, value, pct }) => (
+                  <div key={s.id} className="flex items-center gap-3 cursor-pointer"
+                    onClick={() => { onSelect(s); onNavigate('prices'); }}>
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
+                      style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
+                      {s.profileImageUrl ? (
+                        <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
+                      ) : (
+                        s.name.slice(0, 2)
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{qty}주</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono font-bold text-sm text-white">{fmt(value)}</p>
+                      <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(pct) }}>
+                        {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => onNavigate('profile')}
+                className="w-full py-2 rounded-xl text-xs font-bold"
+                style={{ background: '#1A2232', color: '#BAC4D1' }}>
+                자세히 보기 ›
+              </button>
+            </>
+          ) : (
+            <p className="text-sm py-2" style={{ color: '#626B7A' }}>
+              {user ? '보유 종목이 없습니다. 첫 거래를 시작하세요.' : '로그인 후 확인 가능'}
+            </p>
+          )}
+        </div>
+
+        {/* ── 거래 현황 rows ───────────────────────────────────────── */}
+        <div style={{ borderBottom: '1px solid #222A3A' }}>
+          {([
+            { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
+            { label: '보유 종목', value: `${holdingCount}개`, sub: '' },
+            { label: '포트폴리오 수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
+          ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
+            <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
+              style={{ borderBottom: '1px solid #1A2232' }}
+              onClick={row.action}>
+              <span className="flex-1 text-sm" style={{ color: '#8491A5' }}>{row.label}</span>
+              <span className="text-sm font-bold font-mono text-white mr-1">{row.value}</span>
+              {row.sub && <span className="text-xs" style={{ color: '#626B7A' }}>{row.sub}</span>}
+              <span className="ml-2 text-xs" style={{ color: '#626B7A' }}>›</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── 최근 본 종목 ─────────────────────────────────────────── */}
+        {recentlyViewed.length > 0 && (
+          <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
+            <p className="text-sm font-bold text-white mb-3">최근 본 종목</p>
+            <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+              {recentlyViewed.map(s => {
+                const pct = changePct(s.price, s.basePrice);
+                return (
+                  <div key={s.id} className="flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-full border"
+                    style={{ background: '#131924', borderColor: '#222A3A' }}>
+                    <button type="button" onClick={() => { onSelect(s); onNavigate('prices'); }}
+                      className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-white">{s.name}</span>
+                      <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
+                        {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                      </span>
+                    </button>
+                    <button type="button" onClick={() => onRemoveRecent(s.id)}
+                      className="text-xs ml-0.5" style={{ color: '#626B7A' }}>×</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── 실시간 거래 피드 (Global Live Trades) ────────────────────── */}
+        <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-bold text-white">실시간 거래 피드</p>
+              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
+                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+                LIVE
+              </span>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {liveTrades.length === 0 ? (
+              <p className="text-xs py-2" style={{ color: '#626B7A' }}>
+                대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
+              </p>
+            ) : (
+              liveTrades.slice(0, 3).map((trade, idx) => {
+                const isBuy = trade.type === 'buy';
+                return (
+                  <div key={idx} className="flex items-center justify-between text-xs py-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold truncate text-white" style={{ maxWidth: '100px' }}>
+                        {trade.streamerName}
+                      </span>
+                      <span className="px-1 py-0.5 rounded text-[10px] font-bold shrink-0"
+                        style={{
+                          backgroundColor: isBuy ? '#FF525220' : '#3D8BFF20',
+                          color: isBuy ? '#FF5252' : '#3D8BFF'
+                        }}>
+                        {isBuy ? '매수' : '매도'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-mono" style={{ color: '#BAC4D1' }}>{trade.quantity}주</span>
+                      <span className="font-mono font-bold w-16 text-right" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
+                        {fmt(trade.price)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ── 실시간 거래량 차트 ───────────────────────────────────── */}
+        <div className="px-4 pt-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-white">실시간 거래량 차트</p>
+            <button type="button" onClick={() => onNavigate('chart')}
+              className="text-xs" style={{ color: '#626B7A' }}>
+              다른 차트 보기 ›
+            </button>
+          </div>
+          <div className="space-y-1">
+            {top5.map((s, i) => {
+              const pct = changePct(s.price);
+              return (
+                <div key={s.id} className="flex items-center gap-3 py-3 cursor-pointer"
+                  style={{ borderBottom: i < top5.length - 1 ? '1px solid #1A2232' : 'none' }}
+                  onClick={() => { onSelect(s); onNavigate('prices'); }}>
+                  <span className="w-5 text-sm font-bold shrink-0 text-center"
+                    style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>{i + 1}</span>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
+                    style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
+                    {s.profileImageUrl ? (
+                      <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
+                    ) : (
+                      s.name.slice(0, 2)
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>
+                      {fmt(s.price)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold" style={{ color: priceColor(pct) }}>
+                      {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>
+                      {fmtCompact(s.totalVolume)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+
+      {/* 주문내역 모달 */}
+      {showOrderHistory && (
+        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#080A0F' }}>
+          <div className="flex items-center justify-between px-4 py-4 shrink-0"
+            style={{ borderBottom: '1px solid #222A3A' }}>
+            <h2 className="text-white font-bold text-base">주문내역 ({history.length}건)</h2>
+            <button type="button" onClick={() => setShowOrderHistory(false)}
+              className="text-sm px-3 py-1.5 rounded-lg"
+              style={{ background: '#1A2232', color: '#BAC4D1' }}>
+              닫기
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
+            {history.length === 0 ? (
+              <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+                주문 내역이 없습니다
+              </div>
+            ) : (
+              [...history].reverse().map((item: any) => {
+                const s = streamers.find(st => st.id === item.streamerId);
+                const price = item.executedPrice ?? item.estimatedPrice;
+                const d = new Date(item.createdAt);
+                const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                return (
+                  <div key={item.id} className="flex items-center px-4 py-3.5"
+                    style={{ borderBottom: '1px solid #1A2232' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                          style={{
+                            background: item.type === 'buy' ? '#FF525226' : '#3D8BFF26',
+                            color: item.type === 'buy' ? '#FF5252' : '#3D8BFF',
+                          }}>
+                          {item.type === 'buy' ? '매수' : '매도'}
+                        </span>
+                        <p className="text-white text-sm font-bold truncate">{s?.name ?? item.streamerId}</p>
+                      </div>
+                      <p className="text-xs" style={{ color: '#626B7A' }}>{timeStr} · {item.status}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono font-bold text-sm text-white">{item.quantity}주</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: '#8491A5' }}>{fmt(price)}</p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── 캔들 차트 타입 및 유틸 ────────────────────────────────────────────────────
+interface Candle {
+  time: UTCTimestamp; // seconds since epoch (lightweight-charts 형식)
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+const formatCandleTime = (time: UTCTimestamp, interval: string): string => {
+  const d = new Date(time * 1000);
+  if (interval === '1m' || interval === '5m') {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  } else if (interval === '1h') {
+    return `${String(d.getHours()).padStart(2, '0')}:00`;
+  } else {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+};
+
+// 시리즈 전체 데이터 세팅
+function applySeriesData(
+  series: ISeriesApi<'Candlestick'> | ISeriesApi<'Area'>,
+  candles: Candle[],
+  chartType: 'candle' | 'line',
+) {
+  if (chartType === 'candle') {
+    (series as ISeriesApi<'Candlestick'>).setData(
+      candles.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })),
+    );
+  } else {
+    (series as ISeriesApi<'Area'>).setData(candles.map(c => ({ time: c.time, value: c.close })));
+  }
+}
+
+// 마지막 캔들만 업데이트 (실시간)
+function updateSeriesLast(
+  series: ISeriesApi<'Candlestick'> | ISeriesApi<'Area'>,
+  c: Candle,
+  chartType: 'candle' | 'line',
+) {
+  if (chartType === 'candle') {
+    (series as ISeriesApi<'Candlestick'>).update(
+      { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close },
+    );
+  } else {
+    (series as ISeriesApi<'Area'>).update({ time: c.time, value: c.close });
+  }
+}
+
+const InteractiveChart = ({
+  candles,
+  chartType,
+  color,
+  interval,
+}: {
+  candles: Candle[];
+  chartType: 'candle' | 'line';
+  color: string;
+  interval: string;
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | ISeriesApi<'Area'> | null>(null);
+  const [active, setActive] = useState<Candle | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
+  const candlesRef = useRef(candles);
+  const prevCandlesRef = useRef<Candle[]>([]);
+
+  useEffect(() => { candlesRef.current = candles; }, [candles]);
+
+  // 차트 인스턴스 초기화 (마운트 1회)
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0E121A' },
+        textColor: '#626B7A',
+        fontFamily: 'monospace',
+      },
+      grid: {
+        vertLines: { color: '#1A2232', style: LineStyle.Dashed },
+        horzLines: { color: '#1A2232', style: LineStyle.Dashed },
+      },
+      rightPriceScale: { borderColor: '#1A2232' },
+      timeScale: { borderColor: '#1A2232', timeVisible: true, secondsVisible: false },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: '#3D8BFF', style: LineStyle.Dashed, width: 1 },
+        horzLine: { color: '#3D8BFF', style: LineStyle.Dashed, width: 1 },
+      },
+    });
+    chartRef.current = chart;
+
+    chart.subscribeCrosshairMove((param) => {
+      const cs = candlesRef.current;
+      if (!param.time || cs.length === 0) {
+        setIsHovering(false);
+        setActive(cs[cs.length - 1] ?? null);
+        return;
+      }
+      setIsHovering(true);
+      const found = cs.find(c => c.time === (param.time as UTCTimestamp));
+      setActive(found ?? cs[cs.length - 1] ?? null);
+    });
+
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+    };
+  }, []);
+
+  // 차트 타입 변경 시 시리즈 재생성
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (seriesRef.current) chart.removeSeries(seriesRef.current);
+
+    const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
+    if (chartType === 'candle') {
+      seriesRef.current = chart.addCandlestickSeries({
+        upColor: '#FF3B30', downColor: '#007AFF',
+        borderUpColor: '#FF3B30', borderDownColor: '#007AFF',
+        wickUpColor: '#FF3B30', wickDownColor: '#007AFF',
+      });
+    } else {
+      seriesRef.current = chart.addAreaSeries({
+        lineColor, topColor: lineColor + '40', bottomColor: lineColor + '00', lineWidth: 2,
+      });
+    }
+
+    const current = candlesRef.current;
+    if (current.length > 0) {
+      applySeriesData(seriesRef.current, current, chartType);
+      setActive(current[current.length - 1]);
+    }
+    prevCandlesRef.current = current;
+  }, [chartType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 선차트 색상이 상승/하락 방향에 따라 바뀔 때 반영
+  useEffect(() => {
+    if (!seriesRef.current || chartType !== 'line') return;
+    const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
+    (seriesRef.current as ISeriesApi<'Area'>).applyOptions({
+      lineColor, topColor: lineColor + '40', bottomColor: lineColor + '00',
+    });
+  }, [color, chartType]);
+
+  // 캔들 데이터 변경 시 업데이트
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    if (candles.length === 0) { prevCandlesRef.current = []; return; }
+
+    const prev = prevCandlesRef.current;
+    const isIncremental =
+      prev.length > 0 &&
+      prev[0].time === candles[0].time &&
+      candles.length <= prev.length + 1;
+
+    if (isIncremental) {
+      updateSeriesLast(series, candles[candles.length - 1], chartType);
+    } else {
+      applySeriesData(series, candles, chartType);
+    }
+    prevCandlesRef.current = candles;
+    setActive(candles[candles.length - 1]);
+  }, [candles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const displayActive = active ?? (candles.length > 0 ? candles[candles.length - 1] : null);
+  const isUp = displayActive ? displayActive.close >= displayActive.open : true;
+  const activeColor = isUp ? '#FF3B30' : '#007AFF';
+
+  return (
+    <div className="w-full flex flex-col gap-2 relative select-none">
+      {/* ── OHLC Info Bar ── */}
+      <div className="flex items-center gap-3 text-[11px] font-mono select-none px-1" style={{ color: '#BAC4D1' }}>
+        {displayActive ? (
+          <>
+            <span className="font-bold font-sans text-xs shrink-0" style={{ color: activeColor }}>
+              {isUp ? '▲ 양봉' : '▼ 음봉'}
+            </span>
+            <div className="flex gap-2.5">
+              <span>시<strong className="ml-1 text-[#FF3B30]">{Math.round(displayActive.open).toLocaleString()}</strong></span>
+              <span>고<strong className="ml-1 text-[#FF3B30]">{Math.round(displayActive.high).toLocaleString()}</strong></span>
+              <span>저<strong className="ml-1 text-[#007AFF]">{Math.round(displayActive.low).toLocaleString()}</strong></span>
+              <span>종<strong className="ml-1" style={{ color: activeColor }}>{Math.round(displayActive.close).toLocaleString()}</strong></span>
+            </div>
+            {isHovering && (
+              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-[#1A2232] text-[#626B7A]">
+                {formatCandleTime(displayActive.time, interval)}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="font-bold font-sans text-xs shrink-0 text-[#626B7A]">○ 대기 중</span>
+            <div className="flex gap-2.5" style={{ color: '#4E5664' }}>
+              <span>시<strong className="ml-1 text-[#4E5664]">-</strong></span>
+              <span>고<strong className="ml-1 text-[#4E5664]">-</strong></span>
+              <span>저<strong className="ml-1 text-[#4E5664]">-</strong></span>
+              <span>종<strong className="ml-1 text-[#4E5664]">-</strong></span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 차트 컨테이너 (항상 렌더링 — empty state는 overlay로 처리) */}
+      <div className="h-56 relative w-full">
+        <div ref={containerRef} className="w-full h-full rounded-xl border border-[#1A2232] overflow-hidden" />
+        {candles.length === 0 && (
+          <div className="absolute inset-0 bg-[#0E121A] rounded-xl border border-[#1A2232] flex flex-col items-center justify-center gap-2.5 p-6 text-center">
+            <div className="w-11 h-11 rounded-full bg-[#161D28] flex items-center justify-center text-lg text-[#626B7A] border border-[#222A3A] animate-pulse">
+              📊
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[#00E6761A] text-[#00E676] mb-1">
+                신규 상장 종목
+              </div>
+              <h4 className="text-white text-xs font-bold mb-1">거래 내역이 존재하지 않습니다</h4>
+              <p className="text-[10px]" style={{ color: '#626B7A' }}>
+                아직 체결된 거래가 없습니다. 실시간으로 매수/매도 주문을<br />
+                체결하여 이 종목의 첫 번째 역사적 캔들을 생성해보세요!
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── StockDetail (PricesView 내부) ────────────────────────────────────────────
+const StockDetail = ({
+  streamer, onBack, onOrder, liveTrades,
+}: {
+  streamer: Stock;
+  onBack: () => void;
+  onOrder: () => void;
+  liveTrades: LiveTrade[];
+}) => {
+  const { currentPrice, direction } = useStockPrice(streamer.id, streamer.price);
+  const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
+  const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
+  const [candles, setCandles] = useState<Candle[]>([]);
+
+  // 서버에서 초기 캔들 목록 로드
+  useEffect(() => {
+    setCandles([]);
+    apiFetch(`/api/stocks/${streamer.id}/candles?interval=${interval}&count=50`)
+      .then(res => res.ok ? res.json() : [])
+      .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[]) => {
+        setCandles(data.map(c => ({
+          time: Math.floor(c.bucketStart / 1000) as UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        })));
+      })
+      .catch(() => setCandles([]));
+  }, [streamer.id, interval]);
+
+  // 서버 STOMP에서 실시간 캔들 업데이트 수신
+  useEffect(() => {
+    const subscription = subscribeStomp(`/topic/candles/${streamer.id}`, (message) => {
+      try {
+        const updates = JSON.parse(message.body) as Record<string, { bucketStart: number; open: number; high: number; low: number; close: number }>;
+        const updated = updates[interval];
+        if (!updated) return;
+        const newCandle: Candle = {
+          time: Math.floor(updated.bucketStart / 1000) as UTCTimestamp,
+          open: updated.open,
+          high: updated.high,
+          low: updated.low,
+          close: updated.close,
+        };
+        setCandles(prev => {
+          if (prev.length === 0) return [newCandle];
+          const last = prev[prev.length - 1];
+          if (last.time === newCandle.time) {
+            return [...prev.slice(0, -1), newCandle];
+          }
+          return [...prev.slice(-49), newCandle];
+        });
+      } catch (e) {
+        console.error('Failed to parse candle update', e);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [streamer.id, interval]);
+
+  const pct = changePct(currentPrice, streamer.basePrice);
+
+  const streamerTrades = useMemo(() => {
+    return liveTrades.filter(t => t.streamerId === streamer.id);
+  }, [liveTrades, streamer.id]);
+
+  return (
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+      <button type="button" onClick={onBack} className="text-sm mb-4 flex items-center gap-1" style={{ color: '#626B7A' }}>
+        ← 목록으로
+      </button>
+
+      <div className="mb-4">
+        <h1 className="text-white text-xl font-bold">{streamer.name}</h1>
+        <div className="flex items-baseline gap-3 mt-1">
+          <span className="text-2xl font-black font-mono" style={{ color: priceColor(pct) }}>
+            {fmt(currentPrice)}
+          </span>
+          <span className="text-sm font-bold" style={{ color: priceColor(pct) }}>
+            {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+          </span>
+          {direction !== 'none' && (
+            <span className="text-xs" style={{ color: priceColor(pct) }}>
+              {direction === 'up' ? '▲' : '▼'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 차트 컨트롤러 및 차트 영역 */}
+      <div className="rounded-xl border p-4 mb-4 flex flex-col gap-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+        {/* 컨트롤 헤더 */}
+        <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid #1A2232' }}>
+          {/* 봉 주기 버튼 */}
+          <div className="flex gap-1 bg-[#0E121A] p-0.5 rounded-lg border border-[#222A3A]">
+            {(['1m', '5m', '1h', '1d', '1w'] as const).map(i => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setInterval(i)}
+                className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
+                style={{
+                  background: interval === i ? '#1A2232' : 'transparent',
+                  color: interval === i ? '#00E676' : '#626B7A',
+                }}
+              >
+                {i === '1m' ? '1분' : i === '5m' ? '5분' : i === '1h' ? '1시' : i === '1d' ? '일봉' : '주봉'}
+              </button>
+            ))}
+          </div>
+
+          {/* 차트 타입 토글 */}
+          <div className="flex gap-1 bg-[#0E121A] p-0.5 rounded-lg border border-[#222A3A]">
+            {(['candle', 'line'] as const).map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setChartType(type)}
+                className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
+                style={{
+                  background: chartType === type ? '#1A2232' : 'transparent',
+                  color: chartType === type ? '#00E676' : '#626B7A',
+                }}
+              >
+                {type === 'candle' ? '봉차트 🕯️' : '선차트 📈'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* HTS 차트 본체 */}
+        <InteractiveChart
+          candles={candles}
+          chartType={chartType}
+          color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
+          interval={interval}
+        />
+      </div>
+
+      {/* 실시간 체결 내역 */}
+      <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-white text-sm font-bold">실시간 체결 내역</h3>
+          <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+            LIVE
+          </span>
+        </div>
+        <div className="space-y-2 max-h-48 overflow-y-auto hide-scrollbar">
+          {streamerTrades.length === 0 ? (
+            <div className="text-center py-6 text-xs" style={{ color: '#626B7A' }}>
+              새로운 거래 체결을 대기하고 있습니다...
+            </div>
+          ) : (
+            streamerTrades.map((trade, idx) => {
+              const d = new Date(trade.timestamp);
+              const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+              const isBuy = trade.type === 'buy';
+              return (
+                <div key={idx} className="flex items-center justify-between py-1.5 text-xs border-b border-dashed" style={{ borderColor: '#1A2232' }}>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono" style={{ color: '#626B7A' }}>{timeStr}</span>
+                    <span className="font-bold px-1.5 py-0.5 rounded text-[10px]"
+                      style={{
+                        backgroundColor: isBuy ? '#FF525220' : '#3D8BFF20',
+                        color: isBuy ? '#FF5252' : '#3D8BFF'
+                      }}>
+                      {isBuy ? '매수' : '매도'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono text-white">{trade.quantity.toLocaleString()}주</span>
+                    <span className="font-mono font-bold text-right w-20" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
+                      {fmt(trade.price)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* 통계 */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="rounded-xl border p-3" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <p className="text-xs" style={{ color: '#8491A5' }}>총 거래량</p>
+          <p className="text-white font-bold font-mono mt-1">{fmtCompact(streamer.totalVolume)}</p>
+        </div>
+        <div className="rounded-xl border p-3" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <p className="text-xs" style={{ color: '#8491A5' }}>시초가 대비</p>
+          <p className="font-bold font-mono mt-1" style={{ color: priceColor(pct) }}>
+            {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+          </p>
+        </div>
+      </div>
+
+      <button type="button" onClick={onOrder}
+        className="w-full rounded-xl py-4 text-white font-bold text-base"
+        style={{ backgroundColor: '#FF5252' }}>
+        주문하기
+      </button>
+    </div>
+  );
+};
+
+// ─── PricesView ───────────────────────────────────────────────────────────────
+const PricesView = ({
+  streamers, selectedStreamer, onSelectStreamer, onNavigate, liveTrades,
+}: {
+  streamers: Stock[];
+  selectedStreamer: Stock | null;
+  onSelectStreamer: (s: Stock | null) => void;
+  onNavigate: (tab: AppTab) => void;
+  liveTrades: LiveTrade[];
+}) => {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    let s = streamers;
+    if (search) s = s.filter(st => st.name.toLowerCase().includes(search.toLowerCase()));
+    return [...s].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  }, [streamers, search]);
+
+  if (selectedStreamer) {
+    return (
+      <StockDetail
+        streamer={selectedStreamer}
+        onBack={() => onSelectStreamer(null)}
+        onOrder={() => onNavigate('order')}
+        liveTrades={liveTrades}
+      />
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+      {/* 검색 */}
+      <div className="relative mb-4">
+        <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#626B7A' }}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="종목명으로 검색..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 rounded-xl border text-white text-sm focus:outline-none"
+          style={{ background: '#131924', borderColor: '#222A3A' }}
+        />
+      </div>
+
+      {/* 헤더 */}
+      <div className="flex items-center text-xs font-bold uppercase tracking-wider px-4 mb-2" style={{ color: '#626B7A' }}>
+        <span className="flex-1">종목명</span>
+        <span className="w-28 text-right">현재가</span>
+        <span className="w-16 text-right">등락률</span>
+      </div>
+
+      <div className="space-y-1">
+        {filtered.map(s => {
+          const pct = changePct(s.price, s.basePrice);
+          return (
+            <div key={s.id} onClick={() => onSelectStreamer(s)}
+              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
+              style={{ background: '#131924', borderColor: '#222A3A' }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{fmtCompact(s.totalVolume)}</p>
+              </div>
+              <div className="w-28 text-right">
+                <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+              </div>
+              <div className="w-16 text-right">
+                <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
+                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── OrderForm (hook 안전: 항상 streamer가 존재할 때만 렌더됨) ─────────────────
+const OrderForm = ({
+  streamer, user,
+}: {
+  streamer: Stock;
+  user: User | null;
+}) => {
+  const { currentPrice } = useStockPrice(streamer.id, streamer.price);
+  const tradeMutation = useTrade(user?.uid || 'spectator');
+  const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(user?.uid);
+  const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
+  const [qtyStr, setQtyStr] = useState('1');
+
+  const qty = Math.max(0, parseInt(qtyStr, 10) || 0);
+  const balance: number = Number(portfolio?.balance ?? 0);
+  const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
+
+  const PRICE_IMPACT_FACTOR = 0.0005;
+  const calcCost = (n: number, buy: boolean) => {
+    if (n <= 0) return 0;
+    const u = buy ? 1 + PRICE_IMPACT_FACTOR : 1 - PRICE_IMPACT_FACTOR;
+    const fm = Math.pow(u, n);
+    const sumMult = buy ? u * (fm - 1) / PRICE_IMPACT_FACTOR : u * (1 - fm) / PRICE_IMPACT_FACTOR;
+    return Math.max(0, currentPrice * sumMult);
+  };
+  const totalCost = calcCost(qty, orderType === 'buy');
+  const avgPrice = qty > 0 ? totalCost / qty : currentPrice; // 주문서 표시용 평균 체결 단가
+  const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
+  const pct = changePct(currentPrice, streamer.basePrice);
+
+  const getMaxBuy = () => {
+    let low = 0, high = Math.floor(balance / currentPrice) + 1, ans = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      if (calcCost(mid, true) <= balance) { ans = mid; low = mid + 1; }
+      else high = mid - 1;
+    }
+    return ans;
+  };
+
+  const maxBuy = balance > 0 ? getMaxBuy() : 0;
+  const maxSell = held;
+
+  const setQuick = (ratio: number) => {
+    const max = orderType === 'buy' ? maxBuy : maxSell;
+    setQtyStr(String(Math.max(1, Math.floor(max * ratio))));
+  };
+
+  const canBuy = !!user && qty > 0 && balance >= totalCost;
+  const canSell = !!user && qty > 0 && held >= qty;
+  const canSubmit = orderType === 'buy' ? canBuy : canSell;
+
+  if (portfolioLoading) {
+    return (
+      <div className="h-full flex items-center justify-center text-sm" style={{ color: '#626B7A' }}>
+        포트폴리오 불러오는 중...
+      </div>
+    );
+  }
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    tradeMutation.mutate({ streamerId: streamer.id, type: orderType, quantity: qty, estimatedPrice: currentPrice });
+  };
+
+  return (
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+      {/* 매수/매도 토글 */}
+      <div className="rounded-xl p-1 flex mb-5" style={{ background: '#131924' }}>
+        <button type="button" onClick={() => setOrderType('buy')}
+          className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors"
+          style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : 'transparent', color: orderType === 'buy' ? '#fff' : '#626B7A' }}>
+          매수
+        </button>
+        <button type="button" onClick={() => setOrderType('sell')}
+          className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors"
+          style={{ backgroundColor: orderType === 'sell' ? '#3D8BFF' : 'transparent', color: orderType === 'sell' ? '#fff' : '#626B7A' }}>
+          매도
+        </button>
+      </div>
+
+      {/* 선택 종목 */}
+      <div className="mb-4">
+        <p className="text-xs mb-1" style={{ color: '#8491A5' }}>선택 종목</p>
+        <div className="rounded-xl border px-4 py-3" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <p className="text-white font-bold text-sm">{streamer.name}
+            <span className="font-mono ml-2" style={{ color: priceColor(pct) }}>({fmt(currentPrice)})</span>
+          </p>
+        </div>
+      </div>
+
+      {/* 주문 가격 */}
+      <div className="mb-4">
+        <p className="text-xs mb-1" style={{ color: '#8491A5' }}>예상 체결 단가 (슬리피지 포함)</p>
+        <div className="rounded-xl border px-4 py-3 flex justify-between items-center" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <p className="font-mono font-bold text-lg" style={{ color: priceColor(pct) }}>{fmt(avgPrice)}</p>
+          <span className="text-xs" style={{ color: '#626B7A' }}>{qty > 0 ? '예상 단가' : '현재가'}</span>
+        </div>
+      </div>
+
+      {/* 주문 수량 */}
+      <div className="mb-3">
+        <p className="text-xs mb-1" style={{ color: '#8491A5' }}>주문 수량 (주)</p>
+        <input
+          type="number"
+          value={qtyStr}
+          onChange={e => setQtyStr(e.target.value)}
+          min="1"
+          disabled={!user}
+          placeholder={!user ? '로그인 필요' : '수량 입력'}
+          className="w-full rounded-xl border py-3 px-4 text-white font-mono text-lg focus:outline-none disabled:opacity-50"
+          style={{ background: '#131924', borderColor: '#222A3A' }}
+        />
+      </div>
+
+      {/* 퀵 % 버튼 */}
+      <div className="grid grid-cols-4 gap-2 mb-5">
+        {([0.1, 0.25, 0.5, 1.0] as const).map(r => (
+          <button key={r} type="button" onClick={() => setQuick(r)}
+            className="rounded-lg py-2 text-xs font-bold transition-colors"
+            style={{ background: '#1A2232', color: '#BAC4D1' }}>
+            {r * 100}%
+          </button>
+        ))}
+      </div>
+
+      {/* 주문 요약 */}
+      <div className="pt-4 mb-5" style={{ borderTop: '1px solid #222A3A' }}>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm" style={{ color: '#8491A5' }}>주문 총액</span>
+          <span className="font-mono text-xl font-bold" style={{ color: orderType === 'buy' ? '#FF5252' : '#3D8BFF' }}>
+            {fmt(totalCost)}
+          </span>
+        </div>
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-xs" style={{ color: '#8491A5' }}>주문 후 잔액</span>
+          <span className="text-xs font-mono font-bold text-white">{fmt(Math.max(0, postBalance))}</span>
+        </div>
+        {orderType === 'sell' && (
+          <div className="flex justify-between items-center">
+            <span className="text-xs" style={{ color: '#8491A5' }}>현재 보유량</span>
+            <span className="text-xs font-mono font-bold text-white">{held}주</span>
+          </div>
+        )}
+      </div>
+
+      {/* 잔고 부족 안내 */}
+      {orderType === 'buy' && !!user && qty > 0 && balance < totalCost && (
+        <p className="text-xs text-center mb-3" style={{ color: '#FF5252' }}>
+          잔고가 부족합니다 (필요: {fmt(totalCost)}, 보유: {fmt(balance)})
+        </p>
+      )}
+
+      {/* 실행 버튼 */}
+      <button type="button" onClick={handleSubmit}
+        disabled={tradeMutation.isPending || !canSubmit}
+        className="w-full rounded-xl py-4 text-white font-bold text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : '#3D8BFF' }}>
+        {tradeMutation.isPending
+          ? '주문 처리 중...'
+          : orderType === 'buy' && !!user && qty > 0 && balance < totalCost
+            ? '잔고 부족'
+            : `${orderType === 'buy' ? '매수' : '매도'} 주문하기`}
+      </button>
+    </div>
+  );
+};
+
+// ─── OrderView ────────────────────────────────────────────────────────────────
+const OrderView = ({
+  streamers, selectedStreamer, user, onSelectStreamer,
+}: {
+  streamers: Stock[];
+  selectedStreamer: Stock | null;
+  user: User | null;
+  onSelectStreamer: (s: Stock) => void;
+}) => {
+  if (selectedStreamer) {
+    return <OrderForm streamer={selectedStreamer} user={user} />;
+  }
+
+  // 종목 미선택 시 picker
+  const sorted = useMemo(() => [...streamers].sort((a, b) => b.totalVolume - a.totalVolume), [streamers]);
+  return (
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+      <p className="text-white font-bold text-sm mb-4">주문할 종목을 선택하세요</p>
+      <div className="space-y-2">
+        {sorted.map(s => {
+          const pct = changePct(s.price);
+          return (
+            <div key={s.id} onClick={() => onSelectStreamer(s)}
+              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
+              style={{ background: '#131924', borderColor: '#222A3A' }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold text-sm truncate">{s.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{fmtCompact(s.totalVolume)}</p>
+              </div>
+              <div className="text-right ml-3 shrink-0">
+                <p className="font-mono font-bold text-sm" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+                <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(pct) }}>
+                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── ChartView ────────────────────────────────────────────────────────────────
+type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new';
+
+const ChartView = ({
+  streamers,
+  onSelect,
+}: {
+  streamers: Stock[];
+  onSelect: (s: Stock) => void;
+}) => {
+  const [category, setCategory] = useState<ChartCategory>('volume');
+
+  const CATEGORIES: { key: ChartCategory; label: string }[] = [
+    { key: 'volume', label: '거래량↑' },
+    { key: 'value', label: '거래대금↑' },
+    { key: 'surge', label: '급상승' },
+    { key: 'drop', label: '급하락' },
+    { key: 'new', label: '신규상장' },
+  ];
+
+  const list = useMemo(() => {
+    const s = [...streamers];
+    switch (category) {
+      case 'volume': return s.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 30);
+      case 'value': return s.sort((a, b) => b.price * b.totalVolume - a.price * a.totalVolume).slice(0, 30);
+      case 'surge': return s.filter(st => changePct(st.price, st.basePrice) > 0).sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice)).slice(0, 30);
+      case 'drop': return s.filter(st => changePct(st.price, st.basePrice) < 0).sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice)).slice(0, 30);
+      case 'new': return s.filter(st => st.totalVolume === 0).slice(0, 30);
+      default: return s.slice(0, 30);
+    }
+  }, [streamers, category]);
+
+  const colLabel = category === 'value' ? '거래대금' : '거래량';
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* 카테고리 탭 */}
+      <div className="flex gap-2 px-4 py-3 shrink-0 overflow-x-auto hide-scrollbar"
+        style={{ borderBottom: '1px solid #222A3A' }}>
+        {CATEGORIES.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setCategory(key)}
+            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+            style={{
+              background: category === key ? '#00E676' : '#131924',
+              color: category === key ? '#080A0F' : '#8491A5',
+              border: '1px solid',
+              borderColor: category === key ? '#00E676' : '#222A3A',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 리스트 헤더 */}
+      <div className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
+        style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}>
+        <span className="w-6 mr-3 text-center">#</span>
+        <span className="flex-1">스트리머</span>
+        <span className="w-24 text-right">현재가</span>
+        <span className="w-16 text-right">등락률</span>
+        <span className="w-20 text-right">{colLabel}</span>
+      </div>
+
+      {/* 리스트 */}
+      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+        {list.length === 0 ? (
+          <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+            데이터가 없습니다
+          </div>
+        ) : list.map((s, i) => {
+          const pct = changePct(s.price, s.basePrice);
+          return (
+            <div key={s.id} onClick={() => onSelect(s)}
+              className="flex items-center px-4 py-3 cursor-pointer"
+              style={{ borderBottom: '1px solid #1A2232' }}>
+              <span className="w-6 mr-3 text-sm font-bold text-center shrink-0"
+                style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>
+                {i + 1}
+              </span>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
+                  style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
+                  {s.profileImageUrl ? (
+                    <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
+                  ) : (
+                    s.name.slice(0, 2)
+                  )}
+                </div>
+                <p className="text-white text-sm font-bold truncate">{s.name}</p>
+              </div>
+              <div className="w-24 text-right shrink-0">
+                <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+              </div>
+              <div className="w-16 text-right shrink-0">
+                <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
+                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                </p>
+              </div>
+              <div className="w-20 text-right shrink-0">
+                <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
+                  {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── ProfileView ──────────────────────────────────────────────────────────────
+const ProfileView = ({
+  user, portfolio, history, streamers, totalAssets, isAdmin,
+  onLoginGoogle, onLoginGuest, onLogout, onReset, isResetting,
+}: {
+  user: User | null;
+  portfolio: any;
+  history: any[];
+  streamers: Stock[];
+  totalAssets: number;
+  isAdmin: boolean;
+  onLoginGoogle: () => void;
+  onLoginGuest: () => void;
+  onLogout: () => void;
+  onReset: () => void;
+  isResetting: boolean;
+}) => {
+  const userGrade = grade(totalAssets);
+  const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
+  const orderCount = history?.length ?? 0;
+
+  // 종목 추가 상태
+  const [addUrl, setAddUrl] = useState('');
+  const [addStatus, setAddStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [addMsg, setAddMsg] = useState('');
+
+  const handleAddStock = async () => {
+    if (!addUrl.trim()) return;
+
+    // URL에서 채널 ID 추출
+    let channelId = addUrl.trim();
+    if (channelId.includes("chzzk.naver.com")) {
+      try {
+        const urlStr = channelId.startsWith('http') ? channelId : `https://${channelId}`;
+        const urlObj = new URL(urlStr);
+        let path = urlObj.pathname.replace(/^\/|\/$/g, "");
+        if (path.startsWith("live/")) {
+          channelId = path.substring("live/".length);
+        } else {
+          channelId = path;
+        }
+      } catch (e) {
+        setAddStatus('error');
+        setAddMsg('올바르지 않은 URL 형식입니다.');
+        setTimeout(() => setAddStatus('idle'), 3000);
+        return;
+      }
+    }
+    channelId = channelId.replace(/[?#].*/g, "").trim();
+
+    // 이미 등록된 종목인지 검증
+    const alreadyExists = streamers.some(s => s.id === channelId);
+    if (alreadyExists) {
+      setAddStatus('error');
+      setAddMsg('이미 추가된 종목입니다.');
+      setTimeout(() => setAddStatus('idle'), 3000);
+      return;
+    }
+
+    setAddStatus('loading');
+    try {
+      const { apiFetch } = await import('./lib/api');
+      const res = await apiFetch('/api/stocks', {
+        method: 'POST',
+        body: JSON.stringify({ channelUrl: addUrl.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddStatus('error');
+        setAddMsg(json.error || '추가 실패');
+      } else {
+        setAddStatus('ok');
+        setAddMsg(`'${json.name}' 종목이 추가되었습니다.`);
+        setAddUrl('');
+      }
+    } catch {
+      setAddStatus('error');
+      setAddMsg('서버 연결 실패');
+    }
+    setTimeout(() => setAddStatus('idle'), 3000);
+  };
+
+  if (!user) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 border"
+          style={{ background: '#1A2232', borderColor: '#222A3A' }}>
+          <svg className="w-8 h-8" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </div>
+        <h2 className="text-white text-lg font-bold mb-2">로그인이 필요합니다</h2>
+        <p className="text-sm mb-6" style={{ color: '#8491A5' }}>로그인하여 내 포트폴리오를 확인하세요</p>
+        <div className="w-full space-y-3">
+          <button type="button" onClick={onLoginGoogle}
+            className="w-full bg-white text-gray-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2">
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+            Google 로그인
+          </button>
+          <button type="button" onClick={onLoginGuest}
+            className="w-full font-bold px-6 py-3 rounded-xl border"
+            style={{ background: '#1A2232', borderColor: '#222A3A', color: '#BAC4D1' }}>
+            게스트로 플레이
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+      {/* 프로필 카드 */}
+      <div className="rounded-2xl border p-5 mb-4 flex items-center gap-4"
+        style={{ background: '#1A2232', borderColor: '#26334D' }}>
+        <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
+          style={{ background: '#131924', borderColor: '#222A3A' }}>
+          {user.photoURL
+            ? <img src={user.photoURL} alt="profile" className="w-full h-full object-cover" />
+            : <svg className="w-7 h-7" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold truncate">
+            {user.isAnonymous ? '게스트 투자자' : user.displayName || '트레이더'}
+          </p>
+          <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>UID: {user.uid.slice(0, 8)}</p>
+          <div className="mt-2 flex gap-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
+              {userGrade.label}
+            </span>
+          </div>
+        </div>
+        <button type="button" onClick={onLogout}
+          className="text-xs px-3 py-1.5 rounded-lg border shrink-0"
+          style={{ background: '#131924', borderColor: '#222A3A', color: '#626B7A' }}>
+          로그아웃
+        </button>
+      </div>
+
+      {/* 보유 주식 */}
+      <div className="mb-4">
+        <h2 className="text-white text-sm font-bold mb-3">나의 스트리머 보유 주식</h2>
+        {portfolio && Object.entries(portfolio.shares as Record<string, number>).filter(([, q]) => q > 0).length > 0 ? (
+          <div className="space-y-2">
+            {Object.entries(portfolio.shares as Record<string, number>)
+              .filter(([, qty]) => qty > 0)
+              .map(([id, qty]) => {
+                const s = streamers.find(st => st.id === id) || DEFAULT_STOCKS.find(ds => ds.id === id);
+                if (!s) return null;
+                const value = s.price * qty;
+                const pct = changePct(s.price, s.basePrice);
+                return (
+                  <div key={id} className="rounded-xl border p-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-white text-sm font-bold">{s.name}</p>
+                        <p className="text-xs mt-1" style={{ color: '#8491A5' }}>
+                          {qty}주 보유 · 현재가 {fmt(s.price)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-sm font-mono" style={{ color: priceColor(pct) }}>{fmt(value)}</p>
+                        <p className="text-xs font-bold mt-1" style={{ color: priceColor(pct) }}>
+                          {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed p-8 text-center text-sm"
+            style={{ background: '#131924', borderColor: '#222A3A', color: '#626B7A' }}>
+            보유 종목 없음. 거래를 시작하세요.
+          </div>
+        )}
+      </div>
+
+      {/* 모의투자 요약 */}
+      <div className="rounded-xl border p-5 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+        <h3 className="text-sm font-bold mb-4" style={{ color: '#BAC4D1' }}>스트리머 투자 요약</h3>
+        {[
+          { label: '총 스트리머 자산', value: fmt(totalAssets) },
+          { label: '캐시', value: fmt(portfolio?.balance ?? 0) },
+          { label: '주식 평가액', value: fmt(holdingsValue) },
+          { label: '누적 매매 횟수', value: `${orderCount}회` },
+        ].map(row => (
+          <div key={row.label} className="flex justify-between items-center mb-3 last:mb-0">
+            <span className="text-sm" style={{ color: '#8491A5' }}>{row.label}</span>
+            <span className="font-mono text-sm font-bold text-white">{row.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 종목 추가 */}
+      {user.providerData.some(p => p.providerId === 'google.com') ? (
+        <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <h3 className="text-sm font-bold mb-3" style={{ color: '#BAC4D1' }}>종목 추가</h3>
+          <p className="text-xs mb-3" style={{ color: '#626B7A' }}>
+            치지직 채널 URL 또는 채널 ID를 입력하세요
+          </p>
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="https://chzzk.naver.com/channel/abc123"
+              value={addUrl}
+              onChange={e => setAddUrl(e.target.value)}
+              className="w-full rounded-xl border py-2.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500"
+              style={{ background: '#0E121A', borderColor: '#222A3A' }}
+            />
+            <button
+              type="button"
+              onClick={handleAddStock}
+              disabled={addStatus === 'loading' || !addUrl.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+              style={{ background: '#3D8BFF', color: '#fff' }}
+            >
+              {addStatus === 'loading' ? '추가 중...' : '+ 종목 추가'}
+            </button>
+            {addStatus !== 'idle' && addMsg && (
+              <p className="text-xs text-center" style={{ color: addStatus === 'ok' ? '#00E676' : '#FF5252' }}>
+                {addMsg}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <h3 className="text-sm font-bold mb-2" style={{ color: '#BAC4D1' }}>종목 추가</h3>
+          <p className="text-xs" style={{ color: '#626B7A' }}>
+            종목 추가는 Google 로그인 후 이용할 수 있습니다.
+          </p>
+        </div>
+      )}
+
+      {/* 투자 자금 초기화 */}
+      <button
+        type="button"
+        onClick={onReset}
+        disabled={isResetting}
+        className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ background: '#1A2232', borderColor: '#222A3A' }}>
+        <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
+        <span className="text-sm font-bold" style={{ color: isResetting ? '#626B7A' : '#FF5252' }}>
+          {isResetting ? '초기화 중...' : '초기화 ›'}
+        </span>
+      </button>
+    </div>
+  );
+};
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const streamers = useStreamers();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeStreamer, setActiveStreamer] = useState<Streamer | null>(null);
+  const streamers = useStocks();
+  const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+  const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
+
+  // 초기 실시간 거래 피드 로드 (DB에서 최근 50건의 거래 내역을 pre-populate)
+  useEffect(() => {
+    apiFetch('/api/orders/recent')
+      .then(res => res.ok ? res.json() : null)
+      .then((rawOrders: any[] | null) => {
+        if (!rawOrders) return;
+        const initialTrades: LiveTrade[] = rawOrders.map(item => {
+          const streamer = streamers.find(s => s.id === item.streamerId);
+          return {
+            streamerId: item.streamerId,
+            streamerName: streamer ? streamer.name : item.streamerId,
+            type: item.type as 'buy' | 'sell',
+            quantity: item.quantity,
+            price: item.executedPrice ?? item.estimatedPrice,
+            timestamp: item.createdAt,
+          };
+        });
+        setLiveTrades(initialTrades.slice(0, 50));
+      })
+      .catch(err => console.error('Failed to load recent orders', err));
+  }, [streamers]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthChecking(false);
+    const subscription = subscribeStomp('/topic/trades', (message) => {
+      try {
+        const trade = JSON.parse(message.body) as LiveTrade;
+        setLiveTrades(prev => [trade, ...prev].slice(0, 50));
+      } catch (e) {
+        console.error('Failed to parse trade message', e);
+      }
     });
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => { setUser(u); setAuthChecking(false); });
+    return () => unsub();
   }, []);
 
   const handleGoogleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch(err) {
-      console.error(err);
-      alert("Login Error: Is your Firebase Auth Domain setup securely?");
-    }
+    try { await signInWithPopup(auth, googleProvider); }
+    catch (err) { console.error(err); alert('Google 로그인에 실패했습니다.'); }
   };
 
   const handleGuestLogin = async () => {
     try {
-      const { user } = await signInAnonymously(auth);
-
-      // 브라우저 fingerprint로 동일 디바이스를 식별 → 세션이 달라도 동일 포트폴리오 유지
-      const FingerprintJS = await import('@fingerprintjs/fingerprintjs');
-      const fp = await FingerprintJS.load();
-      const fpResult = await fp.get();
-      const fingerprint = fpResult.visitorId;
-
-      const res = await fetch('http://localhost:3000/register-guest', {
+      const { user: anonUser } = await signInAnonymously(auth);
+      const FP = await import('@fingerprintjs/fingerprintjs');
+      const fp = await FP.load();
+      const { visitorId: fingerprint } = await fp.get();
+      const { API_BASE } = await import('./lib/api');
+      const res = await fetch(`${API_BASE}/api/guest/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fingerprint, uid: user.uid }),
+        body: JSON.stringify({ fingerprint, uid: anonUser.uid }),
       });
-
       if (res.ok) {
         const { customToken } = await res.json();
-        if (customToken) {
-          // 동일 디바이스의 재방문 — canonical UID로 재로그인
-          await signOut(auth);
-          await signInWithCustomToken(auth, customToken);
-        }
+        if (customToken) { await signOut(auth); await signInWithCustomToken(auth, customToken); }
       }
-    } catch(err) {
+    } catch (err) {
       console.error(err);
-      alert("Guest Login Error: Navigate to Firebase Console > Authentication > Sign-in Method and ENABLE 'Anonymous' provider!");
+      alert('게스트 로그인 오류: Firebase Console에서 익명 로그인을 활성화하세요.');
     }
   };
 
-  const handleLogout = async () => {
-    await signOut(auth);
+  const handleLogout = async () => { await signOut(auth); };
+
+  const { data: portfolio } = usePortfolio(user?.uid);
+  const { data: history } = useTransactionHistory(user?.uid);
+  const resetMutation = useResetPortfolio(user?.uid);
+
+  const handleReset = () => {
+    if (!window.confirm('투자 자금을 1천만원으로 초기화하시겠습니까?\n보유 주식이 모두 삭제됩니다.')) return;
+    resetMutation.mutate();
   };
 
-  const userId = user?.uid;
-  const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(userId);
-  const { data: history, isLoading: historyLoading } = useTransactionHistory(userId);
+  const totalAssets = useMemo(() => {
+    if (!portfolio) return 0;
+    const held = Object.entries(portfolio.shares as Record<string, number>).reduce((sum, [id, qty]) => {
+      const s = streamers.find(st => st.id === id);
+      return sum + (s?.price ?? 0) * qty;
+    }, 0);
+    return portfolio.balance + held;
+  }, [portfolio, streamers]);
 
-  const filteredStreamers = useMemo(() => {
-    let s = streamers;
-    if (searchQuery.trim()) {
-      s = s.filter(st => st.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    return s.sort((a, b) => b.totalVolume - a.totalVolume);
-  }, [streamers, searchQuery]);
+  const handleSelectStreamer = (s: Stock) => {
+    setSelectedStreamer(s);
+    setActiveTab('prices');
+    setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
+  };
+
+  const handleRemoveRecent = (id: string) => {
+    setRecentlyViewedIds(prev => prev.filter(rid => rid !== id));
+  };
 
   if (authChecking) {
-    return <div className="h-screen bg-gray-950 text-white flex items-center justify-center font-mono">Initializing High-Speed Exchange Engine...</div>;
+    return (
+      <div className="h-screen flex items-center justify-center font-mono" style={{ background: '#080A0F', color: '#626B7A' }}>
+        거래소 엔진 초기화 중...
+      </div>
+    );
   }
 
+  // 데스크탑: 내 정보 탭 선택 시 우측은 홈 표시
+  const rightTab: Exclude<AppTab, 'profile'> = activeTab === 'profile' ? 'home' : activeTab;
+
+  const NAV_ITEMS: { tab: AppTab; label: string; path: string }[] = [
+    { tab: 'home', label: '홈', path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+    { tab: 'prices', label: '시세', path: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z' },
+    { tab: 'chart', label: '차트', path: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { tab: 'profile', label: '내 정보', path: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  ];
+
   return (
-    <div className="h-screen bg-gray-950 text-white flex overflow-hidden font-sans">
-      
-      {/* LEFT SIDEBAR - Account Frame */}
-      <div className="w-full md:w-1/4 max-w-sm bg-gray-900 border-r border-gray-800 flex flex-col h-full shadow-2xl relative z-10 shrink-0">
-         <div className="p-6 border-b border-gray-800">
-             <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 tracking-tighter mb-1">
-               Spotchzxk
-             </h1>
-             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Global Streamer Exchange</p>
-         </div>
+    <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
 
-         {!user ? (
-           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-900/50">
-             <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center mb-6 shadow-inner border border-gray-700">
-               <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-             </div>
-             <h2 className="text-2xl font-bold mb-2 text-gray-100">Spectator Mode</h2>
-             <p className="text-sm text-gray-400 mb-8 leading-relaxed">You are viewing the open market. Log in to claim your wallet and begin trading instantly with live volumes.</p>
-             
-             <div className="w-full space-y-4">
-               <button onClick={handleGoogleLogin} className="w-full bg-white text-gray-950 font-black tracking-wide py-4 px-4 rounded-xl shadow-lg hover:bg-gray-100 transition-all flex items-center justify-center gap-2 hover:scale-[1.02]">
-                 <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-                 Google Auth
-               </button>
-               <button onClick={handleGuestLogin} className="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-4 px-4 rounded-xl shadow transition-all border border-gray-700 hover:border-gray-500 hover:scale-[1.02]">
-                 Play as Anonymous Guest
-               </button>
-             </div>
-           </div>
-         ) : (
-           <div className="p-6 overflow-y-auto flex-1 flex flex-col hide-scrollbar">
-             <div className="flex items-center justify-between mb-8 bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-sm">
-               <div>
-                 <p className="font-bold text-gray-100 max-w-28 truncate">{user.isAnonymous ? 'Guest' : user.displayName || 'Trader'}</p>
-                 <p className="text-xs text-gray-500 font-mono mt-0.5">UID: {user.uid.slice(0, 6)}</p>
-               </div>
-               <button onClick={handleLogout} className="bg-gray-900 hover:bg-red-900/40 text-xs px-3 py-2 border border-gray-700 rounded-lg transition-colors text-gray-300 hover:text-red-400 font-bold uppercase tracking-wider">
-                  Out
-               </button>
-             </div>
-
-             <div className="mb-10 pl-1">
-               <h2 className="text-gray-500 text-xs font-black uppercase tracking-widest mb-3">Treasury Cash</h2>
-               <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-2xl border border-gray-700 shadow-xl relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-green-500/20 transition-colors"></div>
-                 <p className="text-gray-400 text-sm mb-1 font-medium relative z-10">Available Reserve</p>
-                 {portfolioLoading ? (
-                    <div className="h-10 w-32 bg-gray-700 animate-pulse rounded mt-2 relative z-10"></div>
-                 ) : (
-                    <p className="text-4xl font-mono font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-300 relative z-10">${portfolio?.balance?.toFixed(2) || '0.00'}</p>
-                 )}
-               </div>
-             </div>
-
-             <div className="mb-8 flex-1 pl-1">
-               <h2 className="text-gray-500 text-xs font-black uppercase tracking-widest mb-3 flex items-center justify-between">
-                 <span>Vault Assets</span>
-                 <span className="bg-gray-800 px-2 py-0.5 rounded text-[10px] border border-gray-700">SA</span>
-               </h2>
-               {portfolio && Object.keys(portfolio.shares).length > 0 ? (
-                 <div className="space-y-3">
-                   {Object.entries(portfolio.shares).filter(([_, qty]) => qty > 0).map(([sId, qty]) => {
-                     const s = streamers.find(st => st.id === sId) || DEFAULT_STREAMERS.find(ds => ds.id === sId);
-                     if (!s) return null;
-                     return (
-                       <div key={sId} onClick={() => setActiveStreamer(s)} className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex justify-between items-center cursor-pointer hover:border-blue-500 transition-colors group shadow-sm">
-                          <div>
-                            <p className="font-bold text-gray-200 group-hover:text-blue-400 transition-colors">{s.name}</p>
-                            <p className="text-xs text-gray-500 font-mono mt-1">${s.price.toFixed(2)} / share</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-blue-400 font-mono bg-blue-500/10 px-2 py-1 rounded inline-block">{qty}</p>
-                            <p className="text-xs text-green-400 font-mono mt-1 pr-1">${(s.price * qty).toFixed(2)}</p>
-                          </div>
-                       </div>
-                     );
-                   })}
-                 </div>
-               ) : (
-                 <div className="text-gray-600 text-sm font-medium text-center p-8 bg-gray-800/30 rounded-2xl border border-gray-800 border-dashed">Wallet empty. Start trading.</div>
-               )}
-             </div>
-           </div>
-         )}
+      {/* 좌측 사이드바 - 내 정보 (데스크탑 항상, 모바일 내정보 탭) */}
+      <div className={`${activeTab === 'profile' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[300px] md:shrink-0 h-full overflow-hidden`}
+        style={{ background: '#0E121A', borderRight: '1px solid #222A3A' }}>
+        {/* 로고 */}
+        <div className="p-5" style={{ borderBottom: '1px solid #222A3A' }}>
+          <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 tracking-tighter">
+            Spotchzxk
+          </h1>
+          <p className="text-xs font-bold uppercase tracking-widest mt-1" style={{ color: '#626B7A' }}>
+            Global Streamer Exchange
+          </p>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <ProfileView
+            user={user}
+            portfolio={portfolio}
+            history={history ?? []}
+            streamers={streamers}
+            totalAssets={totalAssets}
+            isAdmin={false}
+            onLoginGoogle={handleGoogleLogin}
+            onLoginGuest={handleGuestLogin}
+            onLogout={handleLogout}
+            onReset={handleReset}
+            isResetting={resetMutation.isPending}
+          />
+        </div>
       </div>
 
-      {/* RIGHT MAIN - Dashboard */}
-      <div className="flex-1 bg-[#090e14] p-6 lg:p-10 flex flex-col h-full overflow-y-auto w-full relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
-        {!activeStreamer ? (
-          <div className="flex flex-col h-full max-w-6xl mx-auto w-full animate-in fade-in duration-300 relative z-10">
-             
-             <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-10 gap-6">
-                <div>
-                   <h2 className="text-5xl font-black text-white tracking-tight">Market Live</h2>
-                   <p className="text-gray-400 text-sm mt-3 font-medium uppercase tracking-widest">Volume-driven dynamic pricing</p>
-                </div>
-                <div className="relative w-full md:w-96">
-                   <svg className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                   <input 
-                     type="text" 
-                     placeholder="Search stocks by name..." 
-                     value={searchQuery}
-                     onChange={e => setSearchQuery(e.target.value)}
-                     className="w-full bg-gray-900/80 backdrop-blur-sm text-white pl-12 pr-4 py-4 rounded-2xl border border-gray-700 focus:outline-none focus:border-blue-500 shadow-xl transition-all font-medium text-lg placeholder-gray-600"
-                   />
-                </div>
-             </div>
+      {/* 우측 콘텐츠 영역 */}
+      <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
+        style={{ background: '#080A0F' }}>
+        {/* 데스크탑 탭 바 */}
+        <div className="hidden md:flex items-center px-5 shrink-0"
+          style={{ background: '#0E121A', borderBottom: '1px solid #222A3A' }}>
+          {(['home', 'prices', 'chart'] as const).map(tab => {
+            const labels = { home: '홈', prices: '시세', chart: '차트' };
+            const active = rightTab === tab;
+            return (
+              <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+                className="py-4 px-5 text-sm font-bold border-b-2 transition-colors"
+                style={{
+                  borderBottomColor: active ? '#00E676' : 'transparent',
+                  color: active ? '#00E676' : '#626B7A',
+                }}>
+                {labels[tab]}
+              </button>
+            );
+          })}
+        </div>
 
-             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 auto-rows-max mb-10">
-                {filteredStreamers.length > 0 ? filteredStreamers.map(streamer => (
-                   <div 
-                     key={streamer.id} 
-                     onClick={() => setActiveStreamer(streamer)}
-                     className="bg-gray-900/80 backdrop-blur border border-gray-800 p-6 rounded-3xl shadow-xl cursor-pointer transition-all hover:-translate-y-2 hover:border-blue-500 group relative overflow-hidden flex flex-col justify-between min-h-[160px]"
-                   >
-                      <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/10 transition-colors pointer-events-none"></div>
-                      <div className="flex justify-between items-start mb-4 relative z-10">
-                         <h3 className="font-bold text-2xl text-gray-100 group-hover:text-blue-400 transition-colors tracking-tight">{streamer.name}</h3>
-                         <div className="bg-gray-950 px-3 py-1.5 rounded-lg text-xs font-mono font-bold text-gray-400 border border-gray-800 flex items-center gap-2 shadow-inner">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
-                            VOL: {streamer.totalVolume.toLocaleString()}
-                         </div>
-                      </div>
-                      <div className="flex justify-between items-end relative z-10 mt-auto">
-                         <div>
-                            <p className="text-4xl font-mono font-black text-green-400 drop-shadow-sm">${streamer.price.toFixed(2)}</p>
-                         </div>
-                         <button className="text-white text-sm font-bold bg-blue-600/20 group-hover:bg-blue-600 px-6 py-3 rounded-xl transition-all shadow-md group-hover:shadow-blue-500/30 backdrop-blur-sm">
-                            Trade →
-                         </button>
-                      </div>
-                   </div>
-                )) : (
-                   <div className="col-span-full py-16 text-center text-gray-500 font-medium bg-gray-900/30 rounded-3xl border border-gray-800 border-dashed">Market Empty. No assets found matching "{searchQuery}".</div>
-                )}
-             </div>
-             
-             {/* Transaction Trace History Log Panel */}
-             <div className="bg-gray-900/80 backdrop-blur p-8 rounded-3xl shadow-2xl border border-gray-800 overflow-hidden flex flex-col w-full relative z-10">
-                 <h2 className="text-2xl font-black mb-6 text-gray-100 flex items-center gap-3 tracking-tight">
-                 	<svg className="w-7 h-7 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                 	Live Global Ledger <span className="text-sm font-medium text-gray-500 tracking-normal hidden md:inline">{user ? '- Active Output traces' : '- Please login to view trace logs'}</span>
-                 </h2>
-                 {historyLoading ? (
-                   <p className="text-blue-400/50 animate-pulse text-sm font-mono tracking-widest">CONNECTING TO NODES...</p>
-                 ) : history && history.length > 0 ? (
-                   <div className="space-y-3 pb-2">
-                     {history.map(order => {
-                       const refName = streamers.find(s => s.id === order.streamerId)?.name || order.streamerId;
-                       return (
-                       <div key={order.id} className="bg-gray-950/60 border border-gray-800 flex flex-col sm:flex-row sm:justify-between sm:items-center p-5 rounded-2xl text-sm transition-all hover:bg-gray-800 w-full group">
-                         <div className="flex items-center gap-5 mb-3 sm:mb-0">
-                            <span className={`font-black uppercase px-4 py-2 rounded-lg text-xs tracking-widest shadow-inner ${order.type === 'buy' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                               {order.type}
-                            </span>
-                            <span className="text-gray-200 font-mono tracking-tight font-medium text-lg">{order.quantity} x <span className="text-gray-500 group-hover:text-blue-400 transition-colors">{refName}</span></span>
-                         </div>
-                         <div className="sm:text-right flex justify-between sm:block w-full sm:w-auto items-center">
-                            <div className="font-mono text-gray-100 text-xl font-bold">${(order.executedPrice || order.estimatedPrice).toFixed(2)}</div>
-                            <div className={`text-xs font-black uppercase tracking-widest mt-1 ${order.status === 'completed' ? 'text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]' : order.status === 'failed' ? 'text-red-500' : 'text-yellow-500 animate-pulse'}`}>
-                               {order.status}
-                            </div>
-                         </div>
-                       </div>
-                     )})}
-                   </div>
-                 ) : (
-                   <div className="text-gray-500 font-medium italic flex items-center h-48 justify-center bg-gray-950/40 rounded-2xl border border-dashed border-gray-800 shadow-inner">
-                      {user ? "No finalized blocks found on ledger." : "Spectators are restricted from querying private ledgers."}
-                   </div>
-                 )}
-             </div>
-          </div>
-        ) : (
-          <div className="max-w-3xl mx-auto w-full h-full flex flex-col items-center justify-center relative z-10 px-4">
-               <TradeInterface 
-                 streamer={activeStreamer} 
-                 user={user} 
-                 portfolio={portfolio} 
-                 onBack={() => setActiveStreamer(null)} 
-               />
-          </div>
-        )}
+        {/* 탭 콘텐츠 */}
+        <div className="flex-1 overflow-hidden">
+          {rightTab === 'home' && (
+            <HomeView
+              streamers={streamers}
+              portfolio={portfolio}
+              user={user}
+              totalAssets={totalAssets}
+              history={history ?? []}
+              recentlyViewedIds={recentlyViewedIds}
+              onSelect={handleSelectStreamer}
+              onNavigate={setActiveTab}
+              onRemoveRecent={handleRemoveRecent}
+              liveTrades={liveTrades}
+            />
+          )}
+          {rightTab === 'prices' && (
+            <PricesView
+              streamers={streamers}
+              selectedStreamer={selectedStreamer}
+              onSelectStreamer={s => setSelectedStreamer(s)}
+              onNavigate={setActiveTab}
+              liveTrades={liveTrades}
+            />
+          )}
+          {rightTab === 'chart' && (
+            <ChartView
+              streamers={streamers}
+              onSelect={handleSelectStreamer}
+            />
+          )}
+          {rightTab === 'order' && (
+            <OrderView
+              streamers={streamers}
+              selectedStreamer={selectedStreamer}
+              user={user}
+              onSelectStreamer={s => setSelectedStreamer(s)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* 하단 탭 네비게이션 (모바일) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 flex z-50"
+        style={{ background: '#131924CC', backdropFilter: 'blur(8px)', borderTop: '1px solid #222A3A' }}>
+        {NAV_ITEMS.map(({ tab, label, path }) => {
+          const active = activeTab === tab;
+          return (
+            <button key={tab} type="button" onClick={() => setActiveTab(tab)}
+              className="flex-1 py-3 flex flex-col items-center gap-1 transition-colors"
+              style={{ color: active ? '#00E676' : '#626B7A' }}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={path} />
+              </svg>
+              <span className="text-[10px] font-bold">{label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

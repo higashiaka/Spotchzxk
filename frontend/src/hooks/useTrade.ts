@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Portfolio } from './usePortfolio';
+import { apiFetch } from '../lib/api';
 
 export interface TradeDetails {
   streamerId: string;
@@ -15,9 +16,8 @@ export const useTrade = (userId: string) => {
     mutationFn: async (tradeDetails: TradeDetails) => {
       // Instead of writing a 'pending' state identically into Firestore (which wastes a write quota),
       // we fire it instantaneously into our node.js server's RAM buffer.
-      const res = await fetch('http://localhost:3000/trade', {
+      const res = await apiFetch('/api/trade', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, ...tradeDetails }),
       });
       
@@ -32,10 +32,17 @@ export const useTrade = (userId: string) => {
       const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
-        const cost = newTrade.estimatedPrice * newTrade.quantity;
-        const state = old || { balance: 10000, shares: {} };
+        const PRICE_IMPACT_FACTOR = 0.0005;
+        const isBuy = newTrade.type === 'buy';
+        const u  = isBuy ? 1 + PRICE_IMPACT_FACTOR : 1 - PRICE_IMPACT_FACTOR;
+        const fm = Math.pow(u, newTrade.quantity);
+        const cost = Math.max(0, newTrade.estimatedPrice * (isBuy
+          ? u * (fm - 1) / PRICE_IMPACT_FACTOR
+          : u * (1 - fm) / PRICE_IMPACT_FACTOR));
+        
+        const state = old || { balance: 10000000, shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
-        let newBalance = state.balance || 10000;
+        let newBalance = state.balance ?? 10000000;
 
         if (newTrade.type === 'buy') {
           newBalance -= cost;
