@@ -9,7 +9,8 @@ import { useResetPortfolio } from './hooks/useResetPortfolio';
 import { auth, googleProvider } from './firebase';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
-  User, signInAnonymously, signInWithCustomToken,
+  User, signInAnonymously, signInWithCustomToken, updateProfile,
+  linkWithPopup, signInWithCredential,
 } from 'firebase/auth';
 import { subscribeStomp } from './lib/stompClient';
 import { apiFetch } from './lib/api';
@@ -1277,7 +1278,7 @@ const ChartView = ({
 // ─── ProfileView ──────────────────────────────────────────────────────────────
 const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin,
-  onLoginGoogle, onLoginGuest, onLogout, onReset, isResetting,
+  onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
 }: {
   user: User | null;
   portfolio: any;
@@ -1289,11 +1290,47 @@ const ProfileView = ({
   onLoginGuest: () => void;
   onLogout: () => void;
   onReset: () => void;
+  onLinkGoogle: () => void;
   isResetting: boolean;
+  remainingResets: number;
 }) => {
   const userGrade = grade(totalAssets);
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
   const orderCount = history?.length ?? 0;
+
+  // 이름 편집 상태
+  const [nameOverride, setNameOverride] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameUpdating, setNameUpdating] = useState(false);
+
+  const currentName = nameOverride ?? (user?.displayName || '트레이더');
+
+  const startEditName = () => {
+    setNameInput(currentName);
+    setIsEditingName(true);
+  };
+
+  const cancelEditName = () => {
+    setIsEditingName(false);
+    setNameInput('');
+  };
+
+  const saveEditName = async () => {
+    if (!user) return;
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === currentName) { cancelEditName(); return; }
+    setNameUpdating(true);
+    try {
+      await updateProfile(user, { displayName: trimmed });
+      setNameOverride(trimmed);
+      setIsEditingName(false);
+    } catch {
+      alert('이름 변경에 실패했습니다.');
+    } finally {
+      setNameUpdating(false);
+    }
+  };
 
   // 종목 추가 상태
   const [addUrl, setAddUrl] = useState('');
@@ -1404,9 +1441,42 @@ const ProfileView = ({
             </svg>}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-white font-bold truncate">
-            {user.isAnonymous ? '게스트 투자자' : user.displayName || '트레이더'}
-          </p>
+          {user.isAnonymous ? (
+            <p className="text-white font-bold truncate">게스트 투자자</p>
+          ) : isEditingName ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') cancelEditName(); }}
+                maxLength={20}
+                placeholder="닉네임 입력"
+                aria-label="닉네임 변경"
+                className="text-white font-bold bg-transparent border-b outline-none w-full min-w-0"
+                style={{ borderColor: '#00E676' }}
+                disabled={nameUpdating}
+              />
+              <button type="button" onClick={saveEditName} disabled={nameUpdating}
+                className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded"
+                style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
+              <button type="button" onClick={cancelEditName} disabled={nameUpdating}
+                className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group">
+              <p className="text-white font-bold truncate">{currentName}</p>
+              <button type="button" onClick={startEditName}
+                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="이름 변경">
+                <svg className="w-3.5 h-3.5" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            </div>
+          )}
           <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>UID: {user.uid.slice(0, 8)}</p>
           <div className="mt-2 flex gap-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
@@ -1421,6 +1491,28 @@ const ProfileView = ({
           로그아웃
         </button>
       </div>
+
+      {/* 게스트 → Google 계정 연동 배너 */}
+      {(user.isAnonymous || !user.providerData.some(p => p.providerId === 'google.com')) && (
+        <div className="rounded-2xl border p-4 mb-4 flex items-center gap-3"
+          style={{ background: '#1A2232', borderColor: '#26334D' }}>
+          <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-bold">Google 계정 연동</p>
+            <p className="text-xs mt-0.5" style={{ color: '#8491A5' }}>포트폴리오를 안전하게 보관하세요</p>
+          </div>
+          <button type="button" onClick={onLinkGoogle}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
+            style={{ background: '#4285F426', color: '#7BAAF7' }}>
+            연동하기
+          </button>
+        </div>
+      )}
 
       {/* 보유 주식 */}
       <div className="mb-4">
@@ -1523,12 +1615,17 @@ const ProfileView = ({
       <button
         type="button"
         onClick={onReset}
-        disabled={isResetting}
+        disabled={isResetting || remainingResets <= 0}
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: '#1A2232', borderColor: '#222A3A' }}>
-        <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
-        <span className="text-sm font-bold" style={{ color: isResetting ? '#626B7A' : '#FF5252' }}>
-          {isResetting ? '초기화 중...' : '초기화 ›'}
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
+          <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : '#626B7A' }}>
+            오늘 남은 횟수: {remainingResets}회
+          </span>
+        </div>
+        <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? '#626B7A' : '#FF5252' }}>
+          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
         </span>
       </button>
     </div>
@@ -1613,6 +1710,37 @@ function App() {
 
   const handleLogout = async () => { await signOut(auth); };
 
+  const handleLinkGoogle = async () => {
+    if (!user) return;
+    try {
+      // 현재 게스트 계정에 Google 프로바이더를 연결 (UID 유지)
+      await linkWithPopup(user, googleProvider);
+      // 성공: UID 그대로 유지되므로 백엔드 변경 불필요
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') return;
+
+      if (err.code === 'auth/credential-already-in-use') {
+        // Google 계정이 이미 Firebase에 별도 UID로 존재하는 경우 → 데이터 이전
+        const guestUid = user.uid;
+        try {
+          await signInWithCredential(auth, err.credential);
+          const res = await apiFetch('/api/auth/link-google', {
+            method: 'POST',
+            body: JSON.stringify({ guestUid }),
+          });
+          if (!res.ok) throw new Error('서버 오류');
+        } catch (mergeErr) {
+          console.error(mergeErr);
+          alert('계정 연동 중 오류가 발생했습니다. 다시 시도해 주세요.');
+        }
+        return;
+      }
+
+      console.error(err);
+      alert('Google 연동에 실패했습니다: ' + (err.message ?? ''));
+    }
+  };
+
   const { data: portfolio } = usePortfolio(user?.uid);
   const { data: history } = useTransactionHistory(user?.uid);
   const resetMutation = useResetPortfolio(user?.uid);
@@ -1686,7 +1814,9 @@ function App() {
             onLoginGuest={handleGuestLogin}
             onLogout={handleLogout}
             onReset={handleReset}
+            onLinkGoogle={handleLinkGoogle}
             isResetting={resetMutation.isPending}
+            remainingResets={portfolio?.remainingResets ?? 3}
           />
         </div>
       </div>
