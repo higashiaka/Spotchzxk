@@ -1,0 +1,24 @@
+package com.spotchzxk.repository;
+
+import com.spotchzxk.entity.UserShare;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface UserShareRepository extends JpaRepository<UserShare, Long> {
+    
+    List<UserShare> findByUserId(String userId);
+
+    Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
+
+    @Modifying
+    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + (s.quantity * :calculatedRate) WHERE s.channel_id = :activeChannelId", nativeQuery = true)
+    int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
+}

@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/spotchzxk?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+    username: root
+    password: wjsrhd47!
+
+app:
+  cors-origin: http://localhost:5173
+  admin-api-key: local-admin-key
+  firebase:
+    service-account-path: serviceAccountKey.json
