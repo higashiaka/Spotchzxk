@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.exception.ChannelNotFoundException;
+import com.spotchzxk.exception.InsufficientFollowerCountException;
 import com.spotchzxk.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -21,6 +22,8 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class StockService {
+
+    private static final int MIN_FOLLOWER_COUNT = 100;
 
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
@@ -58,6 +61,11 @@ public class StockService {
         boolean channelFound = fetchChzzkChannelInfo(stock);
         if (!channelFound) {
             throw new ChannelNotFoundException(channelId);
+        }
+
+        // 팔로워 100명 미만 채널은 상장 불가
+        if (stock.getFollowerCount() < MIN_FOLLOWER_COUNT) {
+            throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
         }
 
         Stock savedStock = stockRepository.save(stock);

@@ -2,6 +2,7 @@ package com.spotchzxk.controller;
 
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.exception.ChannelNotFoundException;
+import com.spotchzxk.exception.InsufficientFollowerCountException;
 import com.spotchzxk.service.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -79,6 +80,9 @@ public class StockController {
             ));
         } catch (ChannelNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (InsufficientFollowerCountException e) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                     .body(Map.of("error", e.getMessage()));
         }
     }
