@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api';
 export interface Portfolio {
   balance: number;
   shares: Record<string, number>;
+  remainingResets: number;
 }
 
 export const usePortfolio = (userId: string | undefined): UseQueryResult<Portfolio, Error> => {

@@ -3,6 +3,7 @@ package com.spotchzxk.service;
 import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
 import com.spotchzxk.entity.Order;
+import com.spotchzxk.exception.ResetLimitExceededException;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import com.spotchzxk.repository.OrderRepository;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -20,6 +23,8 @@ import java.util.stream.Collectors;
 public class PortfolioService {
 
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
+    private static final int MAX_DAILY_RESETS = 3;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -48,13 +53,34 @@ public class PortfolioService {
     @Transactional
     public void resetPortfolio(String userId) {
         User p = getOrCreate(userId);
+
+        LocalDate todayKst = LocalDate.now(KST);
+        if (!todayKst.equals(p.getLastResetDate())) {
+            p.setResetCount(0);
+            p.setLastResetDate(todayKst);
+        }
+
+        if (p.getResetCount() >= MAX_DAILY_RESETS) {
+            throw new ResetLimitExceededException();
+        }
+
+        p.setResetCount(p.getResetCount() + 1);
         p.setCoinBalance(INITIAL_BALANCE);
         userRepository.save(p);
-        
+
         List<UserShare> shares = userShareRepository.findByUserId(userId);
         userShareRepository.deleteAll(shares);
 
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
         orderRepository.deleteAll(orders);
+    }
+
+    public int getRemainingResets(String userId) {
+        User p = getOrCreate(userId);
+        LocalDate todayKst = LocalDate.now(KST);
+        if (!todayKst.equals(p.getLastResetDate())) {
+            return MAX_DAILY_RESETS;
+        }
+        return Math.max(0, MAX_DAILY_RESETS - p.getResetCount());
     }
 }

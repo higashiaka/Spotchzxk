@@ -9,7 +9,7 @@ import { useResetPortfolio } from './hooks/useResetPortfolio';
 import { auth, googleProvider } from './firebase';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
-  User, signInAnonymously, signInWithCustomToken,
+  User, signInAnonymously, signInWithCustomToken, updateProfile,
 } from 'firebase/auth';
 import { subscribeStomp } from './lib/stompClient';
 import { apiFetch } from './lib/api';
@@ -1277,7 +1277,7 @@ const ChartView = ({
 // ─── ProfileView ──────────────────────────────────────────────────────────────
 const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin,
-  onLoginGoogle, onLoginGuest, onLogout, onReset, isResetting,
+  onLoginGoogle, onLoginGuest, onLogout, onReset, isResetting, remainingResets,
 }: {
   user: User | null;
   portfolio: any;
@@ -1290,10 +1290,45 @@ const ProfileView = ({
   onLogout: () => void;
   onReset: () => void;
   isResetting: boolean;
+  remainingResets: number;
 }) => {
   const userGrade = grade(totalAssets);
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
   const orderCount = history?.length ?? 0;
+
+  // 이름 편집 상태
+  const [nameOverride, setNameOverride] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameUpdating, setNameUpdating] = useState(false);
+
+  const currentName = nameOverride ?? (user?.displayName || '트레이더');
+
+  const startEditName = () => {
+    setNameInput(currentName);
+    setIsEditingName(true);
+  };
+
+  const cancelEditName = () => {
+    setIsEditingName(false);
+    setNameInput('');
+  };
+
+  const saveEditName = async () => {
+    if (!user) return;
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === currentName) { cancelEditName(); return; }
+    setNameUpdating(true);
+    try {
+      await updateProfile(user, { displayName: trimmed });
+      setNameOverride(trimmed);
+      setIsEditingName(false);
+    } catch {
+      alert('이름 변경에 실패했습니다.');
+    } finally {
+      setNameUpdating(false);
+    }
+  };
 
   // 종목 추가 상태
   const [addUrl, setAddUrl] = useState('');
@@ -1404,9 +1439,42 @@ const ProfileView = ({
             </svg>}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-white font-bold truncate">
-            {user.isAnonymous ? '게스트 투자자' : user.displayName || '트레이더'}
-          </p>
+          {user.isAnonymous ? (
+            <p className="text-white font-bold truncate">게스트 투자자</p>
+          ) : isEditingName ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') cancelEditName(); }}
+                maxLength={20}
+                placeholder="닉네임 입력"
+                aria-label="닉네임 변경"
+                className="text-white font-bold bg-transparent border-b outline-none w-full min-w-0"
+                style={{ borderColor: '#00E676' }}
+                disabled={nameUpdating}
+              />
+              <button type="button" onClick={saveEditName} disabled={nameUpdating}
+                className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded"
+                style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
+              <button type="button" onClick={cancelEditName} disabled={nameUpdating}
+                className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group">
+              <p className="text-white font-bold truncate">{currentName}</p>
+              <button type="button" onClick={startEditName}
+                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="이름 변경">
+                <svg className="w-3.5 h-3.5" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            </div>
+          )}
           <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>UID: {user.uid.slice(0, 8)}</p>
           <div className="mt-2 flex gap-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
@@ -1523,12 +1591,17 @@ const ProfileView = ({
       <button
         type="button"
         onClick={onReset}
-        disabled={isResetting}
+        disabled={isResetting || remainingResets <= 0}
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: '#1A2232', borderColor: '#222A3A' }}>
-        <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
-        <span className="text-sm font-bold" style={{ color: isResetting ? '#626B7A' : '#FF5252' }}>
-          {isResetting ? '초기화 중...' : '초기화 ›'}
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
+          <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : '#626B7A' }}>
+            오늘 남은 횟수: {remainingResets}회
+          </span>
+        </div>
+        <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? '#626B7A' : '#FF5252' }}>
+          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
         </span>
       </button>
     </div>
@@ -1687,6 +1760,7 @@ function App() {
             onLogout={handleLogout}
             onReset={handleReset}
             isResetting={resetMutation.isPending}
+            remainingResets={portfolio?.remainingResets ?? 3}
           />
         </div>
       </div>
