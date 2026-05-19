@@ -1550,7 +1550,6 @@ const ProfileView = ({
               .map(([id, qty]) => {
                 const s = streamers.find(st => st.id === id) || DEFAULT_STOCKS.find(ds => ds.id === id);
                 if (!s) return null;
-                const value = s.price * qty;
                 const avgPrice = portfolio.avgPrices?.[id] ?? 0;
                 const profitRate = avgPrice > 0 ? ((s.price - avgPrice) / avgPrice) * 100 : 0;
                 return (
@@ -1560,14 +1559,11 @@ const ProfileView = ({
                       <div>
                         <p className="text-white text-sm font-bold">{s.name}</p>
                         <p className="text-xs mt-1" style={{ color: '#8491A5' }}>
-                          {qty}주 보유 · 평단 {fmt(avgPrice)}
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>
-                          현재가 {fmt(s.price)}
+                          {qty}주 · 평단 {fmt(avgPrice)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-sm font-mono" style={{ color: priceColor(profitRate) }}>{fmt(value)}</p>
+                        <p className="font-bold text-sm font-mono text-white">{fmt(avgPrice)}</p>
                         <p className="text-xs font-bold mt-1" style={{ color: priceColor(profitRate) }}>
                           {profitRate >= 0 ? '+' : ''}{profitRate.toFixed(2)}%
                         </p>
