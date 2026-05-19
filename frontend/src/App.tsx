@@ -1236,7 +1236,7 @@ const ChartView = ({
     }
   }, [streamers, category]);
 
-  const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '배당풀' : '거래량';
+  const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '누적 배당' : '거래량';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -1267,8 +1267,8 @@ const ChartView = ({
             <span className="w-6 mr-3 text-center">#</span>
             <span className="flex-1">스트리머</span>
             <span className="w-24 text-right">현재가</span>
-            <span className="w-16 text-right">등락률</span>
-            <span className="w-20 text-right">{colLabel}</span>
+            {category !== 'dividend' && <span className="w-16 text-right">등락률</span>}
+            <span className="w-24 text-right">{colLabel}</span>
           </div>
 
           {/* 리스트 */}
@@ -1301,14 +1301,16 @@ const ChartView = ({
                   <div className="w-24 text-right shrink-0">
                     <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
                   </div>
-                  <div className="w-16 text-right shrink-0">
-                    <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
-                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="w-20 text-right shrink-0">
+                  {category !== 'dividend' && (
+                    <div className="w-16 text-right shrink-0">
+                      <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
+                        {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                      </p>
+                    </div>
+                  )}
+                  <div className="w-24 text-right shrink-0">
                     <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
-                      {category === 'value' ? fmt(s.price * s.totalVolume) : category === 'dividend' ? fmtCompact(s.dividendPool ?? 0) : fmtCompact(s.totalVolume)}
+                      {category === 'value' ? fmt(s.price * s.totalVolume) : category === 'dividend' ? fmt(s.dividendPool ?? 0) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>
                 </div>
