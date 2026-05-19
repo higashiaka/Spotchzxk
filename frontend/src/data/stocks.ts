@@ -6,6 +6,7 @@ export interface Stock {
   basePrice?: number;
   followers?: number;
   profileImageUrl?: string;
+  isLive?: boolean;
 }
 
 // 기존 더미 종목을 다 지우고 빈 배열로 세팅합니다.
