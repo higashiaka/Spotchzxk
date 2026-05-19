@@ -5,6 +5,7 @@ export interface Portfolio {
   balance: number;
   shares: Record<string, number>;
   avgPrices: Record<string, number>;
+  dividendTotal: number;
   remainingResets: number;
 }
 

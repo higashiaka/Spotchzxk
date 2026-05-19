@@ -19,7 +19,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
 
     @Modifying
-    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + (s.quantity * :calculatedRate) WHERE s.channel_id = :activeChannelId", nativeQuery = true)
+    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + (s.quantity * :calculatedRate), u.dividend_total = u.dividend_total + (s.quantity * :calculatedRate) WHERE s.channel_id = :activeChannelId", nativeQuery = true)
     int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
 
     @Modifying

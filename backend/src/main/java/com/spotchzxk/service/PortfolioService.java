@@ -53,7 +53,7 @@ public class PortfolioService {
                         s -> s.getStock().getChannelId(),
                         s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
                 ));
-        return Map.of("balance", p.getCoinBalance(), "shares", shares, "avgPrices", avgPrices);
+        return Map.of("balance", p.getCoinBalance(), "shares", shares, "avgPrices", avgPrices, "dividendTotal", p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO);
     }
 
     @Transactional

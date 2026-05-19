@@ -52,6 +52,9 @@ public class Stock {
     @Column
     private LocalDateTime liveStartedAt;
 
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long dividendAccumulationCount;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
