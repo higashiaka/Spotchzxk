@@ -137,7 +137,13 @@ public class TradeEngine {
                         .orElseGet(() -> UserShare.builder()
                                 .user(userRepository.getReferenceById(userId))
                                 .stock(stock)
+                                .avgPrice(BigDecimal.ZERO)
                                 .build());
+                if (isBuy) {
+                    BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
+                    BigDecimal prevTotal = prevAvg.multiply(BigDecimal.valueOf(currentQty));
+                    share.setAvgPrice(prevTotal.add(cost).divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP));
+                }
                 share.setQuantity(newQty);
                 userShareRepository.save(share);
             }

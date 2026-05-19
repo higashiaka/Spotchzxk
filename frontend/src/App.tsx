@@ -152,11 +152,13 @@ const HomeView = ({
       .map(([id, qty]) => {
         const s = streamers.find(st => st.id === id);
         if (!s) return null;
-        return { streamer: s, qty, value: s.price * qty, pct: changePct(s.price, s.basePrice) };
+        const avgPrice = portfolio.avgPrices?.[id] ?? 0;
+        const profitRate = avgPrice > 0 ? ((s.price - avgPrice) / avgPrice) * 100 : 0;
+        return { streamer: s, qty, value: s.price * qty, pct: profitRate, avgPrice };
       })
       .filter(Boolean)
       .sort((a, b) => b!.value - a!.value)
-      .slice(0, 3) as { streamer: Stock; qty: number; value: number; pct: number }[];
+      .slice(0, 3) as { streamer: Stock; qty: number; value: number; pct: number; avgPrice: number }[];
   }, [portfolio, streamers]);
 
   const holdingCount = useMemo(() =>
@@ -1549,7 +1551,8 @@ const ProfileView = ({
                 const s = streamers.find(st => st.id === id) || DEFAULT_STOCKS.find(ds => ds.id === id);
                 if (!s) return null;
                 const value = s.price * qty;
-                const pct = changePct(s.price, s.basePrice);
+                const avgPrice = portfolio.avgPrices?.[id] ?? 0;
+                const profitRate = avgPrice > 0 ? ((s.price - avgPrice) / avgPrice) * 100 : 0;
                 return (
                   <div key={id} className="rounded-xl border p-4 cursor-pointer" style={{ background: '#131924', borderColor: '#222A3A' }}
                     onClick={() => { onSelect(s); onNavigate('prices'); }}>
@@ -1557,13 +1560,16 @@ const ProfileView = ({
                       <div>
                         <p className="text-white text-sm font-bold">{s.name}</p>
                         <p className="text-xs mt-1" style={{ color: '#8491A5' }}>
-                          {qty}주 보유 · 현재가 {fmt(s.price)}
+                          {qty}주 보유 · 평단 {fmt(avgPrice)}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>
+                          현재가 {fmt(s.price)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-sm font-mono" style={{ color: priceColor(pct) }}>{fmt(value)}</p>
-                        <p className="text-xs font-bold mt-1" style={{ color: priceColor(pct) }}>
-                          {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                        <p className="font-bold text-sm font-mono" style={{ color: priceColor(profitRate) }}>{fmt(value)}</p>
+                        <p className="text-xs font-bold mt-1" style={{ color: priceColor(profitRate) }}>
+                          {profitRate >= 0 ? '+' : ''}{profitRate.toFixed(2)}%
                         </p>
                       </div>
                     </div>
