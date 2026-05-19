@@ -1,0 +1,1 @@
+ALTER TABLE stocks ADD COLUMN live_started_at DATETIME NULL;

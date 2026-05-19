@@ -29,6 +29,9 @@ public class DividendLog {
     private String payoutReason;
 
     @Column
+    private Long streamMinutes;
+
+    @Column
     private LocalDateTime createdAt;
 
     @PrePersist

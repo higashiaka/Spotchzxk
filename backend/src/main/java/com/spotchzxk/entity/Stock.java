@@ -45,6 +45,9 @@ public class Stock {
     @Column
     private boolean isLive;
 
+    @Column
+    private LocalDateTime liveStartedAt;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
