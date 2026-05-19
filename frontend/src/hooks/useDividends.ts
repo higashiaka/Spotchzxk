@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api';
+import { subscribeStomp } from '../lib/stompClient';
 
 export interface DividendEntry {
   channelId: string;
@@ -18,6 +19,18 @@ export function useDividends() {
       .then(r => r.json())
       .then(setDividends)
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const subscription = subscribeStomp('/topic/dividends', (message) => {
+      try {
+        const entry: DividendEntry = JSON.parse(message.body);
+        setDividends(prev => [entry, ...prev].slice(0, 30));
+      } catch (e) {
+        console.error('Failed to parse dividend message', e);
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   return dividends;

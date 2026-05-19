@@ -57,7 +57,7 @@ public class ChzzkLivePollingService {
             if (!wasLive && isLiveNow) {
                 stock.setLive(true);
                 stock.setLiveStartedAt(LocalDateTime.now());
-                accumulateDividendPool(stock);
+                stock.setDividendAccumulationCount(0);
                 stockRepository.save(stock);
                 anyChanged = true;
                 log.info("Stream started: channel={}", stock.getChannelId());
@@ -79,6 +79,7 @@ public class ChzzkLivePollingService {
                 }
                 stock.setLive(false);
                 stock.setLiveStartedAt(null);
+                stock.setDividendAccumulationCount(0);
                 stockRepository.save(stock);
                 anyChanged = true;
                 log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
@@ -91,9 +92,24 @@ public class ChzzkLivePollingService {
     }
 
     private void accumulateDividendPool(Stock stock) {
+        if (stock.getLiveStartedAt() == null) return;
+
+        long elapsedMinutes = java.time.temporal.ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
+        long completedIntervals = elapsedMinutes / 10;
+        long alreadyAccumulated = stock.getDividendAccumulationCount();
+
+        if (completedIntervals <= alreadyAccumulated) return;
+
+        long newIntervals = completedIntervals - alreadyAccumulated;
+        java.math.BigDecimal add = java.math.BigDecimal.valueOf(stock.getCurrentPrice())
+                .multiply(java.math.BigDecimal.valueOf(0.05))
+                .multiply(java.math.BigDecimal.valueOf(newIntervals))
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+
         java.math.BigDecimal current = stock.getDividendPool() != null ? stock.getDividendPool() : java.math.BigDecimal.ZERO;
-        java.math.BigDecimal add = java.math.BigDecimal.valueOf(stock.getCurrentPrice() * 0.05);
-        stock.setDividendPool(current.add(add).setScale(2, java.math.RoundingMode.HALF_UP));
+        stock.setDividendPool(current.add(add));
+        stock.setDividendAccumulationCount(completedIntervals);
+        log.info("Dividend accumulated for channel {}: +{} (intervals {} → {})", stock.getChannelId(), add, alreadyAccumulated, completedIntervals);
     }
 
     /**

@@ -1304,13 +1304,14 @@ const ChartView = ({
           {/* 배당 헤더 */}
           <div className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
             style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}>
+            <span className="w-6 mr-3 text-center">#</span>
             <span className="flex-1">스트리머</span>
-            <span className="w-20 text-right">방송 시간</span>
             <span className="w-24 text-right">배당 총액</span>
-            <span className="w-16 text-right">지급 시각</span>
+            <span className="w-16 text-right">방송 시간</span>
+            <span className="w-20 text-right">지급 시각</span>
           </div>
           {/* 배당 리스트 */}
-          <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-24 hide-scrollbar">
             {dividends.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 gap-2"
                 style={{ color: '#626B7A' }}>
@@ -1319,8 +1320,13 @@ const ChartView = ({
               </div>
             ) : dividends.map((d, i) => (
               <div key={i}
-                className="flex items-center px-4 py-3"
+                className="flex items-center px-4 py-3 cursor-pointer"
+                onClick={() => { const s = streamers.find(st => st.id === d.channelId); if (s) onSelect(s); }}
                 style={{ borderBottom: '1px solid #1A2232' }}>
+                <span className="w-6 mr-3 text-sm font-bold text-center shrink-0"
+                  style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>
+                  {i + 1}
+                </span>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
                     style={{ backgroundColor: d.profileImageUrl ? 'transparent' : avatarColor(d.streamerName) }}>
@@ -1332,17 +1338,17 @@ const ChartView = ({
                   </div>
                   <p className="text-white text-sm font-bold truncate">{d.streamerName}</p>
                 </div>
-                <div className="w-20 text-right shrink-0">
-                  <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
-                    {fmtDuration(d.streamMinutes)}
-                  </p>
-                </div>
                 <div className="w-24 text-right shrink-0">
                   <p className="text-sm font-bold font-mono" style={{ color: '#FFD700' }}>
                     {d.totalDividendPool.toLocaleString('ko-KR')}
                   </p>
                 </div>
                 <div className="w-16 text-right shrink-0">
+                  <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
+                    {fmtDuration(d.streamMinutes)}
+                  </p>
+                </div>
+                <div className="w-20 text-right shrink-0">
                   <p className="text-xs" style={{ color: '#626B7A' }}>
                     {fmtRelTime(d.createdAt)}
                   </p>

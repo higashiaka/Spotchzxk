@@ -28,4 +28,8 @@ public class User {
 
     @Column(nullable = true)
     private LocalDate lastResetDate;
+
+    @Column(nullable = false, precision = 14, scale = 2)
+    @Builder.Default
+    private BigDecimal dividendTotal = BigDecimal.ZERO;
 }

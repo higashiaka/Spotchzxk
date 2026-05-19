@@ -6,11 +6,13 @@ import com.spotchzxk.repository.DividendLogRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +21,7 @@ public class DividendService {
 
     private final UserShareRepository userShareRepository;
     private final DividendLogRepository dividendLogRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public void payStreamEndDividend(Stock stock, long streamMinutes) {
@@ -39,6 +42,15 @@ public class DividendService {
             dividendLogRepository.save(logEntry);
             log.info("Stream-end dividend for channel {}: pool={}, rate={}, {} users",
                     stock.getChannelId(), pool, calculatedRate, updatedUsers);
+
+            messagingTemplate.convertAndSend("/topic/dividends", Map.of(
+                    "channelId", stock.getChannelId(),
+                    "streamerName", stock.getStreamerName(),
+                    "profileImageUrl", stock.getProfileImageUrl() != null ? stock.getProfileImageUrl() : "",
+                    "totalDividendPool", pool.intValue(),
+                    "streamMinutes", streamMinutes,
+                    "createdAt", logEntry.getCreatedAt().toString()
+            ));
         }
 
         stock.setDividendPool(BigDecimal.ZERO);

@@ -41,6 +41,8 @@ export const useStocks = () => {
         totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
         basePrice: r.basePrice ?? 1000,
         profileImageUrl: r.profileImageUrl,
+        isLive: r.isLive ?? false,
+        dividendPool: Number(r.dividendPool ?? 0),
       }));
       const dbMap = new Map(dbStocks.map(s => [s.id, s]));
 
