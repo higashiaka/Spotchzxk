@@ -47,7 +47,13 @@ public class PortfolioService {
                         s -> s.getStock().getChannelId(),
                         s -> s.getQuantity()
                 ));
-        return Map.of("balance", p.getCoinBalance(), "shares", shares);
+        Map<String, BigDecimal> avgPrices = userShares.stream()
+                .filter(s -> s.getQuantity() > 0)
+                .collect(Collectors.toMap(
+                        s -> s.getStock().getChannelId(),
+                        s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
+                ));
+        return Map.of("balance", p.getCoinBalance(), "shares", shares, "avgPrices", avgPrices);
     }
 
     @Transactional

@@ -1,0 +1,2 @@
+ALTER TABLE user_shares
+    ADD COLUMN avg_price DECIMAL(12, 2) NOT NULL DEFAULT 0;
