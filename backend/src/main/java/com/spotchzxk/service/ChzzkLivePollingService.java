@@ -101,8 +101,6 @@ public class ChzzkLivePollingService {
                     .header("Origin", "https://chzzk.naver.com")
                     .header("DNT", "1")
                     .header("Sec-GPC", "1")
-                    .header("Connection", "keep-alive")
-                    .header("Referer", "")
                     .GET()
                     .build();
 
