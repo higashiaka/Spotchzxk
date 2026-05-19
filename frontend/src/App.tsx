@@ -67,13 +67,32 @@ const avatarColor = (name: string): string => {
 
 
 // ─── Ticker ───────────────────────────────────────────────────────────────────
-const Ticker = ({ streamers }: { streamers: Stock[] }) => {
+const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrades: LiveTrade[] }) => {
   const items = useMemo(() => {
-    const active = streamers.filter(s => s.totalVolume > 0);
-    const list = active.length >= 6 ? active : streamers.slice(0, 20);
-    const sorted = [...list].sort((a, b) => Math.abs(changePct(b.price, b.basePrice)) - Math.abs(changePct(a.price, a.basePrice)));
-    return [...sorted, ...sorted]; // 무한 루프를 위해 복제
-  }, [streamers]);
+    // 최근 체결 순서대로 unique streamer ID 최대 30개 추출
+    const recentIds: string[] = [];
+    const seen = new Set<string>();
+    for (const t of liveTrades) {
+      if (!seen.has(t.streamerId)) {
+        seen.add(t.streamerId);
+        recentIds.push(t.streamerId);
+        if (recentIds.length === 30) break;
+      }
+    }
+
+    let list: Stock[];
+    if (recentIds.length >= 6) {
+      // 최근 체결된 종목 순서 유지
+      list = recentIds.map(id => streamers.find(s => s.id === id)).filter(Boolean) as Stock[];
+    } else {
+      // 체결 데이터 부족 시 거래량 상위 20개 fallback
+      const active = streamers.filter(s => s.totalVolume > 0);
+      list = (active.length >= 6 ? active : streamers.slice(0, 20))
+        .sort((a, b) => Math.abs(changePct(b.price, b.basePrice)) - Math.abs(changePct(a.price, a.basePrice)));
+    }
+
+    return [...list, ...list]; // 무한 루프를 위해 복제
+  }, [streamers, liveTrades]);
 
   if (items.length === 0) return null;
 
@@ -155,7 +174,7 @@ const HomeView = ({
   return (
     <div className="h-full flex flex-col overflow-hidden relative">
       {/* 급등/급락 실시간 티커 — 상단 고정 */}
-      <Ticker streamers={streamers} />
+      <Ticker streamers={streamers} liveTrades={liveTrades} />
 
       {/* 스크롤 영역 */}
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
