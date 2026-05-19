@@ -24,6 +24,9 @@ public class GuestService {
         Optional<DeviceMapping> existing = deviceMappingRepository.findById(fingerprint);
 
         if (existing.isEmpty()) {
+            if (uid == null || uid.trim().isEmpty()) {
+                return Map.of("exists", "false");
+            }
             deviceMappingRepository.save(DeviceMapping.builder()
                     .fingerprint(fingerprint)
                     .uid(uid)
@@ -32,7 +35,7 @@ public class GuestService {
         }
 
         String canonicalUid = existing.get().getUid();
-        if (canonicalUid.equals(uid)) {
+        if (uid != null && !uid.trim().isEmpty() && canonicalUid.equals(uid)) {
             return Map.of("canonicalUid", canonicalUid);
         }
 
