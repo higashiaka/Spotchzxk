@@ -10,5 +10,6 @@ public class GuestRegisterRequest {
     @NotBlank
     private String fingerprint;
 
+    @NotBlank
     private String uid;
 }

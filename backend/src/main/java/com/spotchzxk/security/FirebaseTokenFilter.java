@@ -33,7 +33,6 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             try {
                 FirebaseToken decoded = FirebaseAuth.getInstance().verifyIdToken(token);
                 String uid = decoded.getUid();
-                log.info("FirebaseTokenFilter - Decoded UID: {}, claims: {}", uid, decoded.getClaims());
 
                 List<GrantedAuthority> authorities = new ArrayList<>();
                 Object firebaseObj = decoded.getClaims().get("firebase");
