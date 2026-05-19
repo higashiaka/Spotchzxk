@@ -1279,6 +1279,7 @@ const ChartView = ({
 const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin,
   onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
+  onSelect, onNavigate,
 }: {
   user: User | null;
   portfolio: any;
@@ -1293,6 +1294,8 @@ const ProfileView = ({
   onLinkGoogle: () => void;
   isResetting: boolean;
   remainingResets: number;
+  onSelect: (s: Stock) => void;
+  onNavigate: (tab: AppTab) => void;
 }) => {
   const userGrade = grade(totalAssets);
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
@@ -1527,7 +1530,8 @@ const ProfileView = ({
                 const value = s.price * qty;
                 const pct = changePct(s.price, s.basePrice);
                 return (
-                  <div key={id} className="rounded-xl border p-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+                  <div key={id} className="rounded-xl border p-4 cursor-pointer" style={{ background: '#131924', borderColor: '#222A3A' }}
+                    onClick={() => { onSelect(s); onNavigate('prices'); }}>
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-white text-sm font-bold">{s.name}</p>
@@ -1817,6 +1821,8 @@ function App() {
             onLinkGoogle={handleLinkGoogle}
             isResetting={resetMutation.isPending}
             remainingResets={portfolio?.remainingResets ?? 3}
+            onSelect={handleSelectStreamer}
+            onNavigate={setActiveTab}
           />
         </div>
       </div>
