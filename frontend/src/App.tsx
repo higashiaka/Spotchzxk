@@ -463,9 +463,9 @@ interface Candle {
 const formatCandleTime = (time: UTCTimestamp, interval: string): string => {
   const d = new Date(time * 1000);
   if (interval === '1m' || interval === '5m') {
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
   } else if (interval === '1h') {
-    return `${String(d.getHours()).padStart(2, '0')}:00`;
+    return `${String(d.getUTCHours()).padStart(2, '0')}:00`;
   } else {
     return `${d.getMonth() + 1}/${d.getDate()}`;
   }
@@ -706,7 +706,7 @@ const StockDetail = ({
       .then(res => res.ok ? res.json() : [])
       .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[]) => {
         setCandles(data.map(c => ({
-          time: Math.floor(c.bucketStart / 1000) as UTCTimestamp,
+          time: (Math.floor(c.bucketStart / 1000) + 9 * 3600) as UTCTimestamp,
           open: c.open,
           high: c.high,
           low: c.low,
@@ -724,7 +724,7 @@ const StockDetail = ({
         const updated = updates[interval];
         if (!updated) return;
         const newCandle: Candle = {
-          time: Math.floor(updated.bucketStart / 1000) as UTCTimestamp,
+          time: (Math.floor(updated.bucketStart / 1000) + 9 * 3600) as UTCTimestamp,
           open: updated.open,
           high: updated.high,
           low: updated.low,
