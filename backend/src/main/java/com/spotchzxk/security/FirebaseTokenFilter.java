@@ -34,7 +34,14 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 List<GrantedAuthority> authorities = new ArrayList<>();
                 Object firebaseObj = decoded.getClaims().get("firebase");
                 if (firebaseObj instanceof Map<?, ?> firebaseClaims) {
-                    if ("google.com".equals(firebaseClaims.get("sign_in_provider"))) {
+                    boolean isGoogle = "google.com".equals(firebaseClaims.get("sign_in_provider"));
+                    if (!isGoogle) {
+                        Object identitiesObj = firebaseClaims.get("identities");
+                        if (identitiesObj instanceof Map<?, ?> identities) {
+                            isGoogle = identities.containsKey("google.com");
+                        }
+                    }
+                    if (isGoogle) {
                         authorities.add(new SimpleGrantedAuthority("ROLE_GOOGLE"));
                     }
                 }
