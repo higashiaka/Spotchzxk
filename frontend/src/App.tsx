@@ -1862,6 +1862,8 @@ function App() {
     try {
       // 현재 게스트 계정에 Google 프로바이더를 연결 (UID 유지)
       await linkWithPopup(user, googleProvider);
+      // 연동 성공 후 토큰을 강제 갱신하여 google.com identity 정보가 백엔드 토큰에 즉시 반영되도록 함
+      await user.getIdToken(true);
       // 성공: UID 그대로 유지되므로 백엔드 변경 불필요
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') return;

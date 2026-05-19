@@ -13,11 +13,14 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     @Override
@@ -30,6 +33,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             try {
                 FirebaseToken decoded = FirebaseAuth.getInstance().verifyIdToken(token);
                 String uid = decoded.getUid();
+                log.info("FirebaseTokenFilter - Decoded UID: {}, claims: {}", uid, decoded.getClaims());
 
                 List<GrantedAuthority> authorities = new ArrayList<>();
                 Object firebaseObj = decoded.getClaims().get("firebase");
