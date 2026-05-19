@@ -11,6 +11,7 @@ export interface Stock {
   totalSupply?: number;
   liveStartedAt?: string;
   dividendAccumulationCount?: number;
+  listedAt?: string;
 }
 
 // 기존 더미 종목을 다 지우고 빈 배열로 세팅합니다.
