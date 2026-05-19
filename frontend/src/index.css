@@ -18,6 +18,7 @@
 
 .font-mono {
   font-family: "Gulim", "GulimChe", "굴림", "굴림체", monospace !important;
+  font-weight: 500 !important;
 }
 
 *,
