@@ -22,6 +22,7 @@ export const useStocks = () => {
           totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
           basePrice: r.basePrice ?? 1000,
           profileImageUrl: r.profileImageUrl,
+          isLive: r.isLive ?? false,
         }));
         setStocks(dbStocks);
       })
@@ -45,7 +46,7 @@ export const useStocks = () => {
       setStocks(prev => {
         const merged = prev.map(s => {
           const db = dbMap.get(s.id);
-          return db ? { ...s, price: db.price, totalVolume: db.totalVolume, basePrice: db.basePrice, profileImageUrl: db.profileImageUrl } : s;
+          return db ? { ...s, price: db.price, totalVolume: db.totalVolume, basePrice: db.basePrice, profileImageUrl: db.profileImageUrl, isLive: db.isLive } : s;
         });
         // DB에만 있는 새 종목 추가 (prev에 없는 것)
         const prevIds = new Set(prev.map(s => s.id));

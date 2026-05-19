@@ -954,8 +954,25 @@ const PricesView = ({
             <div key={s.id} onClick={() => onSelectStreamer(s)}
               className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
               style={{ background: '#131924', borderColor: '#222A3A' }}>
+              <div className="shrink-0 mr-3"
+                style={{ padding: 2, borderRadius: '50%', background: s.isLive ? '#22C55E' : 'transparent' }}>
+                <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-black"
+                  style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
+                  {s.profileImageUrl
+                    ? <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
+                    : s.name.slice(0, 2)
+                  }
+                </div>
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                  {s.isLive && (
+                    <span className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#FF3B3B26', color: '#FF3B3B' }}>
+                      LIVE
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{fmtCompact(s.totalVolume)}</p>
               </div>
               <div className="w-28 text-right">
