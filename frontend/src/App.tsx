@@ -14,7 +14,6 @@ import {
 } from 'firebase/auth';
 import { subscribeStomp } from './lib/stompClient';
 import { apiFetch } from './lib/api';
-import { useDividends } from './hooks/useDividends';
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile';
@@ -1205,22 +1204,6 @@ const OrderView = ({
 // ─── ChartView ────────────────────────────────────────────────────────────────
 type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
 
-const fmtDuration = (minutes: number): string => {
-  if (minutes < 60) return `${minutes}분`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
-};
-
-const fmtRelTime = (isoStr: string): string => {
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return '방금';
-  if (mins < 60) return `${mins}분 전`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}시간 전`;
-  return `${Math.floor(hrs / 24)}일 전`;
-};
 
 const ChartView = ({
   streamers,
@@ -1230,7 +1213,6 @@ const ChartView = ({
   onSelect: (s: Stock) => void;
 }) => {
   const [category, setCategory] = useState<ChartCategory>('volume');
-  const dividends = useDividends();
 
   const CATEGORIES: { key: ChartCategory; label: string }[] = [
     { key: 'volume', label: '거래량↑' },
@@ -1249,11 +1231,12 @@ const ChartView = ({
       case 'surge': return s.filter(st => changePct(st.price, st.basePrice) > 0).sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice)).slice(0, 30);
       case 'drop': return s.filter(st => changePct(st.price, st.basePrice) < 0).sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice)).slice(0, 30);
       case 'new': return s.filter(st => st.totalVolume === 0).slice(0, 30);
+      case 'dividend': return s.sort((a, b) => (b.dividendPool ?? 0) - (a.dividendPool ?? 0)).slice(0, 30);
       default: return s.slice(0, 30);
     }
   }, [streamers, category]);
 
-  const colLabel = category === 'value' ? '거래대금' : '거래량';
+  const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '배당풀' : '거래량';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -1277,88 +1260,7 @@ const ChartView = ({
         ))}
       </div>
 
-      {category === 'dividend' ? (
-        <>
-          {/* 라이브 중 누적 배당 풀 */}
-          {streamers.filter(s => s.isLive && (s.dividendPool ?? 0) > 0).length > 0 && (
-            <div className="px-4 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid #222A3A', background: '#0E121A' }}>
-              <p className="text-xs font-bold mb-2" style={{ color: '#8491A5' }}>🔴 방송 중 — 종료 시 지급 예정</p>
-              <div className="space-y-2">
-                {streamers.filter(s => s.isLive && (s.dividendPool ?? 0) > 0).map(s => (
-                  <div key={s.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-black shrink-0"
-                        style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
-                        {s.profileImageUrl ? <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" /> : s.name.slice(0, 2)}
-                      </div>
-                      <p className="text-sm font-bold text-white truncate">{s.name}</p>
-                    </div>
-                    <p className="font-mono font-bold text-sm shrink-0" style={{ color: '#FFD700' }}>
-                      {fmt(s.dividendPool ?? 0)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* 배당 헤더 */}
-          <div className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
-            style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}>
-            <span className="w-6 mr-3 text-center">#</span>
-            <span className="flex-1">스트리머</span>
-            <span className="w-24 text-right">배당 총액</span>
-            <span className="w-16 text-right">방송 시간</span>
-            <span className="w-20 text-right">지급 시각</span>
-          </div>
-          {/* 배당 리스트 */}
-          <div className="flex-1 min-h-0 overflow-y-auto pb-24 hide-scrollbar">
-            {dividends.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-2"
-                style={{ color: '#626B7A' }}>
-                <span className="text-2xl">📭</span>
-                <span className="text-sm">아직 배당 이력이 없습니다</span>
-              </div>
-            ) : dividends.map((d, i) => (
-              <div key={i}
-                className="flex items-center px-4 py-3 cursor-pointer"
-                onClick={() => { const s = streamers.find(st => st.id === d.channelId); if (s) onSelect(s); }}
-                style={{ borderBottom: '1px solid #1A2232' }}>
-                <span className="w-6 mr-3 text-sm font-bold text-center shrink-0"
-                  style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>
-                  {i + 1}
-                </span>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
-                    style={{ backgroundColor: d.profileImageUrl ? 'transparent' : avatarColor(d.streamerName) }}>
-                    {d.profileImageUrl ? (
-                      <img src={d.profileImageUrl} alt={d.streamerName} className="w-full h-full object-cover" />
-                    ) : (
-                      d.streamerName.slice(0, 2)
-                    )}
-                  </div>
-                  <p className="text-white text-sm font-bold truncate">{d.streamerName}</p>
-                </div>
-                <div className="w-24 text-right shrink-0">
-                  <p className="text-sm font-bold font-mono" style={{ color: '#FFD700' }}>
-                    {d.totalDividendPool.toLocaleString('ko-KR')}
-                  </p>
-                </div>
-                <div className="w-16 text-right shrink-0">
-                  <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
-                    {fmtDuration(d.streamMinutes)}
-                  </p>
-                </div>
-                <div className="w-20 text-right shrink-0">
-                  <p className="text-xs" style={{ color: '#626B7A' }}>
-                    {fmtRelTime(d.createdAt)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
+      <>
           {/* 리스트 헤더 */}
           <div className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
             style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}>
@@ -1406,7 +1308,7 @@ const ChartView = ({
                   </div>
                   <div className="w-20 text-right shrink-0">
                     <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
-                      {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
+                      {category === 'value' ? fmt(s.price * s.totalVolume) : category === 'dividend' ? fmtCompact(s.dividendPool ?? 0) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>
                 </div>
@@ -1414,7 +1316,6 @@ const ChartView = ({
             })}
           </div>
         </>
-      )}
     </div>
   );
 };
