@@ -8,6 +8,9 @@ export interface Stock {
   profileImageUrl?: string;
   isLive?: boolean;
   dividendPool?: number;
+  totalSupply?: number;
+  liveStartedAt?: string;
+  dividendAccumulationCount?: number;
 }
 
 // 기존 더미 종목을 다 지우고 빈 배열로 세팅합니다.

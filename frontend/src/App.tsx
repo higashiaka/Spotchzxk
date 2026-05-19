@@ -1215,6 +1215,13 @@ const ChartView = ({
   const [category, setCategory] = useState<ChartCategory>('volume');
   const [volumeAsc, setVolumeAsc] = useState(false);
   const [valueAsc, setValueAsc] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (category !== 'dividend') return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [category]);
 
   const handleCategoryClick = (key: ChartCategory) => {
     if (key === 'volume' && category === 'volume') {
@@ -1255,7 +1262,29 @@ const ChartView = ({
     }
   }, [streamers, category, volumeAsc, valueAsc]);
 
-  const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '누적 배당' : '거래량';
+  const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '다음 배당' : '거래량';
+
+  const dividendRemainingMs = (s: Stock): number => {
+    if (!s.isLive || !s.liveStartedAt) return -1;
+    void tick; // force re-render each tick
+    const startMs = new Date(s.liveStartedAt).getTime();
+    const nextMs = ((s.dividendAccumulationCount ?? 0) + 1) * 10 * 60 * 1000;
+    return nextMs - (Date.now() - startMs);
+  };
+
+  const fmtRemaining = (ms: number): string => {
+    if (ms <= 0) return '곧 지급';
+    const totalSecs = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const expectedPerShare = (s: Stock): string => {
+    const supply = s.totalSupply && s.totalSupply > 0 ? s.totalSupply : 1;
+    const val = (s.price * 0.05) / supply;
+    return val >= 1 ? `+${Math.floor(val)}코인` : `+${val.toFixed(2)}`;
+  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -1287,7 +1316,7 @@ const ChartView = ({
             <span className="flex-1">스트리머</span>
             <span className="w-24 text-right">현재가</span>
             {category !== 'dividend' && <span className="w-16 text-right">등락률</span>}
-            <span className="w-24 text-right">{colLabel}</span>
+            <span className={`${category === 'dividend' ? 'w-28' : 'w-24'} text-right`}>{colLabel}</span>
           </div>
 
           {/* 리스트 */}
@@ -1327,11 +1356,22 @@ const ChartView = ({
                       </p>
                     </div>
                   )}
-                  <div className="w-24 text-right shrink-0">
-                    <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
-                      {category === 'value' ? fmt(s.price * s.totalVolume) : category === 'dividend' ? fmt(s.dividendPool ?? 0) : fmtCompact(s.totalVolume)}
-                    </p>
-                  </div>
+                  {category === 'dividend' ? (
+                    <div className="w-28 text-right shrink-0">
+                      <p className="text-xs font-bold font-mono" style={{ color: '#00E676' }}>
+                        {fmtRemaining(dividendRemainingMs(s))}
+                      </p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: '#8491A5' }}>
+                        {expectedPerShare(s)}/주
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="w-24 text-right shrink-0">
+                      <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
+                        {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1400,6 +1440,18 @@ const ProfileView = ({
       setNameUpdating(false);
     }
   };
+
+  // 배당 내역
+  const [dividendHistory, setDividendHistory] = useState<any[]>([]);
+  const [dividendHistoryLoaded, setDividendHistoryLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    apiFetch('/api/dividends/my')
+      .then(res => res.ok ? res.json() : [])
+      .then((data: any[]) => { setDividendHistory(data); setDividendHistoryLoaded(true); })
+      .catch(() => setDividendHistoryLoaded(true));
+  }, [user]);
 
   // 종목 추가 상태
   const [addUrl, setAddUrl] = useState('');
@@ -1639,6 +1691,44 @@ const ProfileView = ({
           </div>
         ))}
       </div>
+
+      {/* 배당 내역 */}
+      {!user.isAnonymous && (
+        <div className="rounded-xl border p-5 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+          <h3 className="text-sm font-bold mb-4" style={{ color: '#BAC4D1' }}>배당 내역</h3>
+          {!dividendHistoryLoaded ? (
+            <p className="text-xs text-center py-4" style={{ color: '#626B7A' }}>불러오는 중...</p>
+          ) : dividendHistory.length === 0 ? (
+            <p className="text-xs text-center py-4" style={{ color: '#626B7A' }}>배당 수령 내역이 없습니다.</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto hide-scrollbar">
+              {dividendHistory.map((d, i) => {
+                const s = streamers.find(st => st.id === d.channelId);
+                const date = new Date(d.createdAt);
+                const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                return (
+                  <div key={i} className="flex items-center gap-3 py-2"
+                    style={{ borderBottom: '1px solid #1A2232' }}>
+                    <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-white text-xs font-bold"
+                      style={{ background: s?.profileImageUrl ? 'transparent' : '#2A3448' }}>
+                      {s?.profileImageUrl
+                        ? <img src={s.profileImageUrl} alt="" className="w-full h-full object-cover" />
+                        : d.streamerName.slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{d.quantity}주 · {dateStr}</p>
+                    </div>
+                    <p className="text-sm font-bold font-mono shrink-0" style={{ color: '#00E676' }}>
+                      +{Number(d.amount).toFixed(2)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 종목 추가 */}
       {user.providerData.some(p => p.providerId === 'google.com') ? (

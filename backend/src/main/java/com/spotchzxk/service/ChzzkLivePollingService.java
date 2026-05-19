@@ -63,23 +63,18 @@ public class ChzzkLivePollingService {
                 log.info("Stream started: channel={}", stock.getChannelId());
 
             } else if (wasLive && isLiveNow) {
-                accumulateDividendPool(stock);
+                payIntervalIfDue(stock);
                 stockRepository.save(stock);
                 anyChanged = true;
 
             } else if (wasLive && !isLiveNow) {
-                if (!isBlocked) {
-                    LocalDateTime startedAt = stock.getLiveStartedAt();
-                    long streamMinutes = startedAt != null
-                            ? Duration.between(startedAt, LocalDateTime.now()).toMinutes() : 0;
-                    dividendService.payStreamEndDividend(stock, streamMinutes);
-                } else {
+                if (isBlocked) {
                     log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
-                    stock.setDividendPool(java.math.BigDecimal.ZERO);
                 }
                 stock.setLive(false);
                 stock.setLiveStartedAt(null);
                 stock.setDividendAccumulationCount(0);
+                stock.setDividendPool(java.math.BigDecimal.ZERO);
                 stockRepository.save(stock);
                 anyChanged = true;
                 log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
@@ -91,25 +86,21 @@ public class ChzzkLivePollingService {
         }
     }
 
-    private void accumulateDividendPool(Stock stock) {
+    private void payIntervalIfDue(Stock stock) {
         if (stock.getLiveStartedAt() == null) return;
 
         long elapsedMinutes = java.time.temporal.ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
         long completedIntervals = elapsedMinutes / 10;
-        long alreadyAccumulated = stock.getDividendAccumulationCount();
+        long alreadyPaid = stock.getDividendAccumulationCount();
 
-        if (completedIntervals <= alreadyAccumulated) return;
+        if (completedIntervals <= alreadyPaid) return;
 
-        long newIntervals = completedIntervals - alreadyAccumulated;
-        java.math.BigDecimal add = java.math.BigDecimal.valueOf(stock.getCurrentPrice())
-                .multiply(java.math.BigDecimal.valueOf(0.05))
-                .multiply(java.math.BigDecimal.valueOf(newIntervals))
-                .setScale(2, java.math.RoundingMode.HALF_UP);
-
-        java.math.BigDecimal current = stock.getDividendPool() != null ? stock.getDividendPool() : java.math.BigDecimal.ZERO;
-        stock.setDividendPool(current.add(add));
+        long newIntervals = completedIntervals - alreadyPaid;
+        for (long i = 0; i < newIntervals; i++) {
+            dividendService.payIntervalDividend(stock);
+        }
         stock.setDividendAccumulationCount(completedIntervals);
-        log.info("Dividend accumulated for channel {}: +{} (intervals {} → {})", stock.getChannelId(), add, alreadyAccumulated, completedIntervals);
+        log.info("Interval dividend paid for channel {}: intervals {} → {}", stock.getChannelId(), alreadyPaid, completedIntervals);
     }
 
     /**

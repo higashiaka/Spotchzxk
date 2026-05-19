@@ -1,9 +1,12 @@
 package com.spotchzxk.controller;
 
 import com.spotchzxk.entity.DividendLog;
+import com.spotchzxk.entity.UserDividendLog;
 import com.spotchzxk.repository.DividendLogRepository;
+import com.spotchzxk.repository.UserDividendLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,6 +21,7 @@ import java.util.stream.Collectors;
 public class DividendController {
 
     private final DividendLogRepository dividendLogRepository;
+    private final UserDividendLogRepository userDividendLogRepository;
 
     @GetMapping("/recent")
     public ResponseEntity<List<Map<String, Object>>> getRecentDividends() {
@@ -28,6 +32,23 @@ public class DividendController {
                 "profileImageUrl", log.getStock().getProfileImageUrl() != null ? log.getStock().getProfileImageUrl() : "",
                 "totalDividendPool", log.getTotalDividendPool(),
                 "streamMinutes", log.getStreamMinutes() != null ? log.getStreamMinutes() : 0L,
+                "createdAt", log.getCreatedAt().toString()
+        )).collect(Collectors.toList());
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/my")
+    public ResponseEntity<List<Map<String, Object>>> getMyDividends(@AuthenticationPrincipal String uid) {
+        if (uid == null) return ResponseEntity.status(401).build();
+
+        List<UserDividendLog> logs = userDividendLogRepository.findTop50ByUserIdOrderByCreatedAtDesc(uid);
+        List<Map<String, Object>> result = logs.stream().map(log -> Map.<String, Object>of(
+                "channelId", log.getChannelId(),
+                "streamerName", log.getStreamerName(),
+                "profileImageUrl", log.getProfileImageUrl() != null ? log.getProfileImageUrl() : "",
+                "quantity", log.getQuantity(),
+                "ratePerShare", log.getRatePerShare(),
+                "amount", log.getAmount(),
                 "createdAt", log.getCreatedAt().toString()
         )).collect(Collectors.toList());
         return ResponseEntity.ok(result);
