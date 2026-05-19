@@ -94,6 +94,8 @@ const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrades: Liv
     return [...list, ...list]; // 무한 루프를 위해 복제
   }, [streamers, liveTrades]);
 
+  const duration = Math.max(20, (items.length / 2) * 4); // 종목당 4초, 최소 20초
+
   if (items.length === 0) return null;
 
   return (
@@ -103,7 +105,7 @@ const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrades: Liv
         style={{ background: 'linear-gradient(to right, #0E121A, transparent)' }} />
       <div className="absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none"
         style={{ background: 'linear-gradient(to left, #0E121A, transparent)' }} />
-      <div className="flex py-2" style={{ width: 'max-content', animation: 'ticker-scroll 60s linear infinite' }}>
+      <div className="flex py-2" style={{ width: 'max-content', animation: `ticker-scroll ${duration}s linear infinite` }}>
         {items.map((s, i) => {
           const pct = changePct(s.price, s.basePrice);
           return (
