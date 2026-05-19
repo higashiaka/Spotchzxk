@@ -43,6 +43,7 @@ public class Stock {
     private int currentPrice;
 
     @Column
+    @com.fasterxml.jackson.annotation.JsonProperty("isLive")
     private boolean isLive;
 
     @Column
