@@ -15,6 +15,12 @@ export const useStockPrice = (channelId: string, fallbackPrice: number = 100): S
   });
 
   useEffect(() => {
+    setPriceData({
+      currentPrice: fallbackPrice,
+      previousPrice: null,
+      direction: 'none',
+    });
+
     const subscription = subscribeStomp(`/topic/prices/${channelId}`, (message) => {
       try {
         const { price } = JSON.parse(message.body);
@@ -33,6 +39,8 @@ export const useStockPrice = (channelId: string, fallbackPrice: number = 100): S
     });
 
     return () => subscription.unsubscribe();
+    // fallbackPrice는 의도적으로 제외: channelId 변경 시에만 초기화, 가격 업데이트마다 리셋 방지
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId]);
 
   return priceData;
