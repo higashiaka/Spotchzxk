@@ -1668,7 +1668,7 @@ const ProfileView = ({
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-sm font-mono text-white">{fmt(avgPrice)}</p>
+                        <p className="font-bold text-sm font-mono text-white">{fmt(s.price)}</p>
                         <p className="text-xs font-bold mt-1" style={{ color: priceColor(profitRate) }}>
                           {profitRate >= 0 ? '+' : ''}{profitRate.toFixed(2)}%
                         </p>
