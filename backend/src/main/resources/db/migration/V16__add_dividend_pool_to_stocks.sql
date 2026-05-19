@@ -1,0 +1,2 @@
+ALTER TABLE stocks
+    ADD COLUMN dividend_pool DECIMAL(12, 2) NOT NULL DEFAULT 0;
