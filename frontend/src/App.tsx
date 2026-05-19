@@ -1848,20 +1848,36 @@ function App() {
 
   const handleGuestLogin = async () => {
     try {
-      const { user: anonUser } = await signInAnonymously(auth);
       const FP = await import('@fingerprintjs/fingerprintjs');
       const fp = await FP.load();
       const { visitorId: fingerprint } = await fp.get();
       const { API_BASE } = await import('./lib/api');
-      const res = await fetch(`${API_BASE}/api/guest/register`, {
+
+      // 1. 먼저 핑거프린트 정보만으로 기존 게스트 계정(CustomToken)이 존재하는지 조회
+      const checkRes = await fetch(`${API_BASE}/api/guest/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint, uid: '' }),
+      });
+
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        // 2. 기존 계정이 존재하는 경우 -> 커스텀 토큰으로 로그인 (신규 익명 계정 생성 및 DB 삽입 방지)
+        if (checkData.customToken) {
+          await signInWithCustomToken(auth, checkData.customToken);
+          return;
+        }
+      }
+
+      // 3. 기존 계정이 존재하지 않는 경우 -> 최초 익명 로그인 계정 생성
+      const { user: anonUser } = await signInAnonymously(auth);
+      
+      // 4. 생성된 익명 계정의 UID를 해당 핑거프린트에 매핑 등록
+      await fetch(`${API_BASE}/api/guest/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fingerprint, uid: anonUser.uid }),
       });
-      if (res.ok) {
-        const { customToken } = await res.json();
-        if (customToken) { await signOut(auth); await signInWithCustomToken(auth, customToken); }
-      }
     } catch (err) {
       console.error(err);
       alert('게스트 로그인 오류: Firebase Console에서 익명 로그인을 활성화하세요.');
