@@ -1,6 +1,7 @@
 package com.spotchzxk.service;
 
 import com.spotchzxk.entity.User;
+import com.spotchzxk.repository.DeviceMappingRepository;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
@@ -17,6 +18,7 @@ public class AccountLinkService {
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
     private final OrderRepository orderRepository;
+    private final DeviceMappingRepository deviceMappingRepository;
 
     /**
      * 게스트 계정 데이터를 Google 계정으로 이전한다.
@@ -50,6 +52,7 @@ public class AccountLinkService {
         // FK가 게스트를 바라보는 레코드를 Google 계정으로 일괄 이전
         userShareRepository.updateUserId(guestUid, googleUid);
         orderRepository.updateUserId(guestUid, googleUid);
+        deviceMappingRepository.updateUid(guestUid, googleUid);
 
         // 게스트 유저 삭제 (user_shares, orders ON DELETE CASCADE 적용)
         userRepository.deleteById(guestUid);
