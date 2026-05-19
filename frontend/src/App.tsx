@@ -1213,10 +1213,25 @@ const ChartView = ({
   onSelect: (s: Stock) => void;
 }) => {
   const [category, setCategory] = useState<ChartCategory>('volume');
+  const [volumeAsc, setVolumeAsc] = useState(false);
+  const [valueAsc, setValueAsc] = useState(false);
+
+  const handleCategoryClick = (key: ChartCategory) => {
+    if (key === 'volume' && category === 'volume') {
+      setVolumeAsc(v => !v);
+    } else if (key === 'value' && category === 'value') {
+      setValueAsc(v => !v);
+    } else {
+      setCategory(key);
+    }
+  };
+
+  const volumeLabel = `거래량${volumeAsc ? '↓' : '↑'}`;
+  const valueLabel = `거래대금${valueAsc ? '↓' : '↑'}`;
 
   const CATEGORIES: { key: ChartCategory; label: string }[] = [
-    { key: 'volume', label: '거래량↑' },
-    { key: 'value', label: '거래대금↑' },
+    { key: 'volume', label: volumeLabel },
+    { key: 'value', label: valueLabel },
     { key: 'surge', label: '급상승' },
     { key: 'drop', label: '급하락' },
     { key: 'new', label: '신규상장' },
@@ -1226,15 +1241,19 @@ const ChartView = ({
   const list = useMemo(() => {
     const s = [...streamers];
     switch (category) {
-      case 'volume': return s.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 30);
-      case 'value': return s.sort((a, b) => b.price * b.totalVolume - a.price * a.totalVolume).slice(0, 30);
+      case 'volume': return volumeAsc
+        ? s.sort((a, b) => a.totalVolume - b.totalVolume).slice(0, 30)
+        : s.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 30);
+      case 'value': return valueAsc
+        ? s.sort((a, b) => a.price * a.totalVolume - b.price * b.totalVolume).slice(0, 30)
+        : s.sort((a, b) => b.price * b.totalVolume - a.price * a.totalVolume).slice(0, 30);
       case 'surge': return s.filter(st => changePct(st.price, st.basePrice) > 0).sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice)).slice(0, 30);
       case 'drop': return s.filter(st => changePct(st.price, st.basePrice) < 0).sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice)).slice(0, 30);
       case 'new': return s.filter(st => st.totalVolume === 0).slice(0, 30);
       case 'dividend': return s.filter(st => st.isLive).sort((a, b) => (b.dividendPool ?? 0) - (a.dividendPool ?? 0));
       default: return s.slice(0, 30);
     }
-  }, [streamers, category]);
+  }, [streamers, category, volumeAsc, valueAsc]);
 
   const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '누적 배당' : '거래량';
 
@@ -1247,7 +1266,7 @@ const ChartView = ({
           <button
             key={key}
             type="button"
-            onClick={() => setCategory(key)}
+            onClick={() => handleCategoryClick(key)}
             className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
             style={{
               background: category === key ? '#00E676' : '#131924',
