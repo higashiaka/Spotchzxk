@@ -1231,7 +1231,7 @@ const ChartView = ({
       case 'surge': return s.filter(st => changePct(st.price, st.basePrice) > 0).sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice)).slice(0, 30);
       case 'drop': return s.filter(st => changePct(st.price, st.basePrice) < 0).sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice)).slice(0, 30);
       case 'new': return s.filter(st => st.totalVolume === 0).slice(0, 30);
-      case 'dividend': return s.sort((a, b) => (b.dividendPool ?? 0) - (a.dividendPool ?? 0)).slice(0, 30);
+      case 'dividend': return s.filter(st => st.isLive).sort((a, b) => (b.dividendPool ?? 0) - (a.dividendPool ?? 0));
       default: return s.slice(0, 30);
     }
   }, [streamers, category]);
