@@ -46,6 +46,9 @@ public class Stock {
     @com.fasterxml.jackson.annotation.JsonProperty("isLive")
     private boolean isLive;
 
+    @Column(precision = 12, scale = 2)
+    private java.math.BigDecimal dividendPool;
+
     @Column
     private LocalDateTime liveStartedAt;
 

@@ -1279,6 +1279,28 @@ const ChartView = ({
 
       {category === 'dividend' ? (
         <>
+          {/* 라이브 중 누적 배당 풀 */}
+          {streamers.filter(s => s.isLive && (s.dividendPool ?? 0) > 0).length > 0 && (
+            <div className="px-4 pt-3 pb-2 shrink-0" style={{ borderBottom: '1px solid #222A3A', background: '#0E121A' }}>
+              <p className="text-xs font-bold mb-2" style={{ color: '#8491A5' }}>🔴 방송 중 — 종료 시 지급 예정</p>
+              <div className="space-y-2">
+                {streamers.filter(s => s.isLive && (s.dividendPool ?? 0) > 0).map(s => (
+                  <div key={s.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-black shrink-0"
+                        style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
+                        {s.profileImageUrl ? <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" /> : s.name.slice(0, 2)}
+                      </div>
+                      <p className="text-sm font-bold text-white truncate">{s.name}</p>
+                    </div>
+                    <p className="font-mono font-bold text-sm shrink-0" style={{ color: '#FFD700' }}>
+                      {fmt(s.dividendPool ?? 0)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* 배당 헤더 */}
           <div className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
             style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}>

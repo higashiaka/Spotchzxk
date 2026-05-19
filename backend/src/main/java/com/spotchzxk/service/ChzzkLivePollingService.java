@@ -57,19 +57,25 @@ public class ChzzkLivePollingService {
             if (!wasLive && isLiveNow) {
                 stock.setLive(true);
                 stock.setLiveStartedAt(LocalDateTime.now());
+                accumulateDividendPool(stock);
                 stockRepository.save(stock);
                 anyChanged = true;
                 log.info("Stream started: channel={}", stock.getChannelId());
 
+            } else if (wasLive && isLiveNow) {
+                accumulateDividendPool(stock);
+                stockRepository.save(stock);
+                anyChanged = true;
+
             } else if (wasLive && !isLiveNow) {
                 if (!isBlocked) {
                     LocalDateTime startedAt = stock.getLiveStartedAt();
-                    if (startedAt != null) {
-                        long streamMinutes = Duration.between(startedAt, LocalDateTime.now()).toMinutes();
-                        dividendService.payStreamEndDividend(stock, streamMinutes);
-                    }
+                    long streamMinutes = startedAt != null
+                            ? Duration.between(startedAt, LocalDateTime.now()).toMinutes() : 0;
+                    dividendService.payStreamEndDividend(stock, streamMinutes);
                 } else {
                     log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
+                    stock.setDividendPool(java.math.BigDecimal.ZERO);
                 }
                 stock.setLive(false);
                 stock.setLiveStartedAt(null);
@@ -82,6 +88,12 @@ public class ChzzkLivePollingService {
         if (anyChanged) {
             messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
         }
+    }
+
+    private void accumulateDividendPool(Stock stock) {
+        java.math.BigDecimal current = stock.getDividendPool() != null ? stock.getDividendPool() : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal add = java.math.BigDecimal.valueOf(stock.getCurrentPrice() * 0.05);
+        stock.setDividendPool(current.add(add).setScale(2, java.math.RoundingMode.HALF_UP));
     }
 
     /**
