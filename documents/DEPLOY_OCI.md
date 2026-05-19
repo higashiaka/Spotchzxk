@@ -535,3 +535,158 @@ curl http://localhost:8080/api/stocks  # 직접 접근 테스트
 ### OCI 포트 접근 불가
 - OCI 콘솔 Security List Ingress Rules 확인
 - `sudo iptables -L INPUT -n` 으로 방화벽 규칙 확인
+
+---
+
+## 14. Cloudflare 연결
+
+> **전제 조건**: 도메인이 있어야 합니다. Cloudflare는 공인 IP만으로는 사용 불가.
+
+전체 흐름:
+
+```
+사용자 → Cloudflare (HTTPS) → OCI VM Nginx (HTTP) → Spring Boot
+```
+
+---
+
+### 14-1. Cloudflare에 도메인 등록
+
+1. [cloudflare.com](https://cloudflare.com) 가입 → **Add a Site** → 도메인 입력
+2. **Free** 플랜 선택
+3. Cloudflare가 기존 DNS 레코드를 자동 스캔 → **Continue**
+
+---
+
+### 14-2. 네임서버 변경 (도메인 등록업체에서)
+
+Cloudflare가 제시하는 네임서버 2개를 도메인 구매처(가비아, 후이즈, Namecheap 등)에서 교체합니다.
+
+```
+변경 전: ns1.registrar.com, ns2.registrar.com
+변경 후: aria.ns.cloudflare.com, bob.ns.cloudflare.com  ← Cloudflare 대시보드에서 확인
+```
+
+> 전파 시간: 몇 분 ~ 최대 24시간
+
+---
+
+### 14-3. DNS A 레코드 설정
+
+Cloudflare 대시보드 → **DNS** 탭에서 아래 레코드 추가:
+
+| Type | Name | Content | Proxy Status |
+|------|------|---------|--------------|
+| A | `@` | `<OCI 공인IP>` | **Proxied (주황 구름)** |
+| A | `www` | `<OCI 공인IP>` | Proxied |
+
+---
+
+### 14-4. SSL/TLS 모드 설정
+
+Cloudflare 대시보드 → **SSL/TLS** → Encryption Mode → **Flexible** 선택
+
+| 모드 | 설명 |
+|------|------|
+| Flexible | 사용자↔Cloudflare는 HTTPS, Cloudflare↔VM은 HTTP. VM에 인증서 불필요. |
+| Full | Cloudflare↔VM도 HTTPS. VM에 자체 서명 인증서 필요. |
+| Full (Strict) | Cloudflare↔VM도 HTTPS + 유효한 인증서 필요 (Cloudflare Origin Certificate 발급 가능). |
+
+> VM에 SSL 인증서를 별도로 설치하지 않는다면 **Flexible**로 시작하세요.
+
+---
+
+### 14-5. WebSocket 활성화
+
+Cloudflare 대시보드 → **Network** → **WebSockets** → **On**
+
+---
+
+### 14-6. VM 설정 업데이트
+
+Cloudflare 연결 후 도메인에 맞게 아래 3곳을 수정합니다.
+
+**① Nginx server_name 변경**
+
+```bash
+sudo nano /etc/nginx/sites-available/spotchzxk
+```
+
+```nginx
+# 변경 전
+server_name <VM_공인IP>;
+
+# 변경 후
+server_name yourdomain.com www.yourdomain.com;
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**② 백엔드 .env 수정**
+
+```bash
+sudo nano /opt/spotchzxk/backend/.env
+```
+
+```dotenv
+# 변경 전
+CORS_ORIGIN=http://<VM_공인IP>
+
+# 변경 후
+CORS_ORIGIN=https://yourdomain.com
+```
+
+```bash
+sudo systemctl restart spotchzxk
+```
+
+**③ 프론트엔드 .env 수정 후 재빌드**
+
+```bash
+nano /opt/spotchzxk/frontend/.env
+```
+
+```dotenv
+# 변경 전
+VITE_API_BASE_URL=http://<VM_공인IP>
+VITE_WS_URL=http://<VM_공인IP>/ws
+
+# 변경 후
+VITE_API_BASE_URL=https://yourdomain.com
+VITE_WS_URL=https://yourdomain.com/ws
+```
+
+```bash
+cd /opt/spotchzxk/frontend
+npm run build
+```
+
+---
+
+### 14-7. 동작 확인
+
+```bash
+# 브라우저에서 확인
+# https://yourdomain.com          → 프론트엔드 로드
+# https://yourdomain.com/api/stocks → API 응답
+
+# 자물쇠 아이콘(HTTPS) 확인 → Cloudflare SSL 적용됨
+```
+
+---
+
+### Cloudflare 트러블슈팅
+
+**도메인 접속이 안 될 때**
+- Cloudflare DNS 탭에서 A 레코드 Proxy 상태 확인 (주황 구름이어야 함)
+- 네임서버 변경이 전파되지 않은 경우 → `nslookup yourdomain.com` 으로 확인
+
+**WebSocket 연결 실패**
+- Cloudflare Network → WebSockets 활성화 여부 확인
+- Nginx `/ws` location의 `proxy_http_version 1.1` 과 Upgrade 헤더 설정 확인
+
+**CORS 에러**
+- 백엔드 `.env`의 `CORS_ORIGIN` 값이 `https://yourdomain.com` 으로 정확히 설정되어 있는지 확인
+- 변경 후 `sudo systemctl restart spotchzxk` 필수
