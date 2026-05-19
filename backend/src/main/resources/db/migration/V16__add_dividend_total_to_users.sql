@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN dividend_total DECIMAL(14, 2) NOT NULL DEFAULT 0;

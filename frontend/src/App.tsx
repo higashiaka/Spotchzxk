@@ -1848,20 +1848,7 @@ function App() {
 
   const handleGuestLogin = async () => {
     try {
-      const { user: anonUser } = await signInAnonymously(auth);
-      const FP = await import('@fingerprintjs/fingerprintjs');
-      const fp = await FP.load();
-      const { visitorId: fingerprint } = await fp.get();
-      const { API_BASE } = await import('./lib/api');
-      const res = await fetch(`${API_BASE}/api/guest/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fingerprint, uid: anonUser.uid }),
-      });
-      if (res.ok) {
-        const { customToken } = await res.json();
-        if (customToken) { await signOut(auth); await signInWithCustomToken(auth, customToken); }
-      }
+      await signInAnonymously(auth);
     } catch (err) {
       console.error(err);
       alert('게스트 로그인 오류: Firebase Console에서 익명 로그인을 활성화하세요.');
