@@ -46,6 +46,7 @@ public class AccountLinkService {
                 .coinBalance(guestUser.getCoinBalance())
                 .resetCount(guestUser.getResetCount())
                 .lastResetDate(guestUser.getLastResetDate())
+                .dividendTotal(guestUser.getDividendTotal())
                 .build();
         userRepository.save(googleUser);
 

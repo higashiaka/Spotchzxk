@@ -1847,7 +1847,25 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, u => { setUser(u); setAuthChecking(false); });
+    const unsub = onAuthStateChanged(auth, async u => {
+      setUser(u);
+      setAuthChecking(false);
+
+      const pendingGuestUid = localStorage.getItem('pendingGuestMerge');
+      if (pendingGuestUid && u && u.providerData.some(p => p.providerId === 'google.com')) {
+        try {
+          const res = await apiFetch('/api/auth/link-google', {
+            method: 'POST',
+            body: JSON.stringify({ guestUid: pendingGuestUid }),
+          });
+          if (res.ok || res.status === 404) {
+            localStorage.removeItem('pendingGuestMerge');
+          }
+        } catch {
+          // 다음 auth 상태 변경 시 재시도
+        }
+      }
+    });
     return () => unsub();
   }, []);
 
@@ -1894,15 +1912,13 @@ function App() {
       if (err.code === 'auth/credential-already-in-use') {
         // Google 계정이 이미 Firebase에 별도 UID로 존재하는 경우 → 데이터 이전
         const guestUid = user.uid;
+        localStorage.setItem('pendingGuestMerge', guestUid);
         try {
           await signInWithCredential(auth, err.credential);
-          const res = await apiFetch('/api/auth/link-google', {
-            method: 'POST',
-            body: JSON.stringify({ guestUid }),
-          });
-          if (!res.ok) throw new Error('서버 오류');
-        } catch (mergeErr) {
-          console.error(mergeErr);
+          // 백엔드 병합은 onAuthStateChanged에서 처리됨 (실패 시 재시도 가능)
+        } catch (signInErr) {
+          localStorage.removeItem('pendingGuestMerge');
+          console.error(signInErr);
           alert('계정 연동 중 오류가 발생했습니다. 다시 시도해 주세요.');
         }
         return;
