@@ -29,6 +29,7 @@ public class DividendService {
     private final UserDividendLogRepository userDividendLogRepository;
     private final DividendLogRepository dividendLogRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final TradeEngine tradeEngine;
 
     @Transactional
     public void payIntervalDividend(Stock stock) {
@@ -57,6 +58,8 @@ public class DividendService {
                             .build())
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
+
+            shares.forEach(us -> tradeEngine.evictUserCache(us.getUser().getId()));
 
             DividendLog logEntry = DividendLog.builder()
                     .stock(stock)
