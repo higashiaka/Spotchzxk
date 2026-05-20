@@ -25,6 +25,9 @@ echo ""
 
 if [ -n "$DB_PASS" ]; then
     mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$SQL_FILE"
+elif [ "$DB_HOST" = "localhost" ] || [ "$DB_HOST" = "127.0.0.1" ]; then
+    # 로컬 root는 auth_socket 인증 → sudo 필요
+    sudo mysql -P "$DB_PORT" "$DB_NAME" < "$SQL_FILE"
 else
     mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME" < "$SQL_FILE"
 fi
