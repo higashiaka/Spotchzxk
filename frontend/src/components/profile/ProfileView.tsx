@@ -349,7 +349,7 @@ export const ProfileView = ({
                       <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{d.quantity}주 · {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: '#00E676' }}>
-                      +{Math.max(0, Number(d.amount)).toFixed(2)}
+                      +{Math.abs(Number(d.amount)).toFixed(2)}
                     </p>
                   </div>
                 );
