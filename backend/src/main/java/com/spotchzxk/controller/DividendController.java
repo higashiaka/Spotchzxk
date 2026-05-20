@@ -43,14 +43,14 @@ public class DividendController {
 
         List<UserDividendLog> logs = userDividendLogRepository.findTop50ByUserIdOrderByCreatedAtDesc(uid);
         List<Map<String, Object>> result = logs.stream()
-                .filter(log -> log.getAmount() != null && log.getAmount().compareTo(java.math.BigDecimal.ZERO) > 0)
+                .filter(log -> log.getAmount() != null && log.getAmount().compareTo(java.math.BigDecimal.ZERO) != 0)
                 .map(log -> Map.<String, Object>of(
                 "channelId", log.getChannelId(),
                 "streamerName", log.getStreamerName(),
                 "profileImageUrl", log.getProfileImageUrl() != null ? log.getProfileImageUrl() : "",
-                "quantity", log.getQuantity(),
-                "ratePerShare", log.getRatePerShare(),
-                "amount", log.getAmount(),
+                "quantity", Math.abs(log.getQuantity()),
+                "ratePerShare", log.getRatePerShare().abs(),
+                "amount", log.getAmount().abs(),
                 "createdAt", log.getCreatedAt().toString()
         )).collect(Collectors.toList());
         return ResponseEntity.ok(result);
