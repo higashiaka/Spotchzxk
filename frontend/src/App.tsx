@@ -20,6 +20,7 @@ import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
 import { OrderView } from './components/order/OrderView';
+import AnnouncementPopup from './components/AnnouncementPopup';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -181,6 +182,7 @@ function App() {
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
+      <AnnouncementPopup />
 
       {/* 좌측 사이드바 */}
       <Sidebar
