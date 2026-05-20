@@ -92,13 +92,16 @@ public class TradeEngine {
         // 매도: finalPrice = P × (1-k)^n,  totalRevenue = P × (1-k) × (1 − (1-k)^n) / k
         BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
         long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
-        // 발행량이 늘수록 가격충격 선형 증가 → 신규 발행 억제
-        double dynamicFactor = BASE_PRICE_IMPACT * (1.0 + currentSupply / SUPPLY_BASE);
-        double unitFactor   = isBuy ? (1.0 + dynamicFactor) : (1.0 - dynamicFactor);
+        // 매수: 발행량 비례로 충격 증가 → 신규 발행 억제
+        // 매도: 고정 충격 유지 → 매도 폭락 방지
+        double impact = isBuy
+                ? BASE_PRICE_IMPACT * (1.0 + currentSupply / SUPPLY_BASE)
+                : BASE_PRICE_IMPACT;
+        double unitFactor   = isBuy ? (1.0 + impact) : (1.0 - impact);
         double finalMult    = Math.pow(unitFactor, qty);
         double sumMult      = isBuy
-                ? unitFactor * (finalMult - 1.0) / dynamicFactor
-                : unitFactor * (1.0 - finalMult) / dynamicFactor;
+                ? unitFactor * (finalMult - 1.0) / impact
+                : unitFactor * (1.0 - finalMult) / impact;
 
         BigDecimal finalPrice    = currentPrice.multiply(BigDecimal.valueOf(finalMult)).max(MIN_PRICE).setScale(2, RoundingMode.HALF_UP);
         BigDecimal cost          = currentPrice.multiply(BigDecimal.valueOf(sumMult)).setScale(2, RoundingMode.HALF_UP);

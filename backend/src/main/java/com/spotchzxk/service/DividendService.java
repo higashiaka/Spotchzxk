@@ -25,8 +25,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
-    // 종목당 10분 배당의 기준 단위 (baseBroadcastHours 비례)
-    private static final BigDecimal BASE_DIVIDEND_UNIT = BigDecimal.valueOf(100);
     // 배당세: 총 풀의 20%를 소각하여 코인 순증 억제
     private static final BigDecimal DIVIDEND_TAX_RATE = new BigDecimal("0.20");
 
@@ -40,9 +38,13 @@ public class DividendService {
     public void payIntervalDividend(Stock stock) {
         if (stock.getTotalSupply() <= 0) return;
 
-        // 고정 풀: baseBroadcastHours에 비례, totalSupply로 희석 → 발행량 증가 시 1주당 배당 자동 감소
+        // 풀 = price × 0.10 × hours → supply로 희석
+        // supply = hours 일 때 기존 공식과 동일, supply 증가할수록 1주당 배당 자동 감소
         int hours = Math.max(1, stock.getBaseBroadcastHours());
-        BigDecimal fixedPool = BASE_DIVIDEND_UNIT.multiply(BigDecimal.valueOf(hours));
+        BigDecimal fixedPool = BigDecimal.valueOf(stock.getCurrentPrice())
+                .multiply(BigDecimal.valueOf(0.10))
+                .multiply(BigDecimal.valueOf(hours))
+                .setScale(4, RoundingMode.HALF_UP);
         BigDecimal grossRatePerShare = fixedPool
                 .divide(BigDecimal.valueOf(stock.getTotalSupply()), 4, RoundingMode.HALF_UP);
 
