@@ -91,7 +91,7 @@ export const ChartView = ({
 
   const expectedPerShare = (s: Stock): string => {
     const supply = s.totalSupply ?? 0;
-    if (supply <= 0) return '-';
+    if (supply <= 0) return '계산 중';
     const hours = Math.max(1, s.baseBroadcastHours ?? 1);
     // price × 0.10 × hours / supply × (1 - 배당세 0.20)
     const val = s.price * 0.10 * hours / supply * 0.80;
@@ -174,7 +174,7 @@ export const ChartView = ({
                       {fmtRemaining(dividendRemainingMs(s))}
                     </p>
                     <p className="text-xs font-mono mt-0.5" style={{ color: '#8491A5' }}>
-                      {expectedPerShare(s)}/주
+                      {(() => { const v = expectedPerShare(s); return v === '계산 중' ? v : `${v}/주`; })()}
                     </p>
                   </div>
                 ) : (
