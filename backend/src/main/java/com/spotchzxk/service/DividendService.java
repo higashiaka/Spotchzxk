@@ -35,8 +35,8 @@ public class DividendService {
         if (stock.getTotalSupply() <= 0) return;
 
         BigDecimal ratePerShare = BigDecimal.valueOf(stock.getCurrentPrice())
-                .multiply(BigDecimal.valueOf(0.05))
-                .divide(BigDecimal.valueOf(stock.getTotalSupply()), 4, RoundingMode.HALF_UP);
+                .multiply(BigDecimal.valueOf(0.10))
+                .setScale(4, RoundingMode.HALF_UP);
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
 
