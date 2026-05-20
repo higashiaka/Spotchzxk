@@ -4,6 +4,7 @@ import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
 import com.spotchzxk.entity.Order;
 import com.spotchzxk.exception.ResetLimitExceededException;
+import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import com.spotchzxk.repository.OrderRepository;
@@ -28,7 +29,9 @@ public class PortfolioService {
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
+    private final StockRepository stockRepository;
     private final OrderRepository orderRepository;
+    private final TradeEngine tradeEngine;
 
     @Transactional
     public User getOrCreate(String userId) {
@@ -75,7 +78,18 @@ public class PortfolioService {
         userRepository.save(p);
 
         List<UserShare> shares = userShareRepository.findByUserId(userId);
+
+        // 보유 주식만큼 totalSupply 차감 (소각) — 팬텀 supply 방지
+        shares.stream()
+                .filter(s -> s.getQuantity() > 0)
+                .forEach(s -> stockRepository.findById(s.getStock().getChannelId()).ifPresent(stock -> {
+                    stock.setTotalSupply(Math.max(0, stock.getTotalSupply() - s.getQuantity()));
+                    stockRepository.save(stock);
+                    tradeEngine.evictSupplyCache(stock.getChannelId());
+                }));
+
         userShareRepository.deleteAll(shares);
+        tradeEngine.evictUserCache(userId);
 
         List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
         orderRepository.deleteAll(orders);

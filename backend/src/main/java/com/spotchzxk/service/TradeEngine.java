@@ -228,6 +228,10 @@ public class TradeEngine {
         sharesCache.remove(userId);
     }
 
+    public void evictSupplyCache(String channelId) {
+        supplyCache.remove(channelId);
+    }
+
     // ---------------------------------------------------------------
     // 캐시 로드 (락 보호 하에 호출 → 동시 접근 없음)
     // ---------------------------------------------------------------
