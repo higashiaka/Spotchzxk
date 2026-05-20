@@ -4,6 +4,7 @@ import { Stock, DEFAULT_STOCKS } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
 import { fmt, grade, priceColor } from '../../utils';
 import { apiFetch } from '../../lib/api';
+import { subscribeStomp } from '../../lib/stompClient';
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
@@ -66,12 +67,22 @@ export const ProfileView = ({
   const [dividendHistory, setDividendHistory] = useState<any[]>([]);
   const [dividendHistoryLoaded, setDividendHistoryLoaded] = useState(false);
 
-  useEffect(() => {
-    if (!user || user.isAnonymous) return;
+  const fetchDividendHistory = () => {
     apiFetch('/api/dividends/my')
       .then(res => res.ok ? res.json() : [])
       .then((data: any[]) => { setDividendHistory(data); setDividendHistoryLoaded(true); })
       .catch(() => setDividendHistoryLoaded(true));
+  };
+
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    fetchDividendHistory();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    const sub = subscribeStomp('/topic/dividends', fetchDividendHistory);
+    return () => sub.unsubscribe();
   }, [user]);
 
   const [addUrl, setAddUrl] = useState('');
