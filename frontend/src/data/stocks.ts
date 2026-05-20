@@ -9,6 +9,7 @@ export interface Stock {
   isLive?: boolean;
   dividendPool?: number;
   totalSupply?: number;
+  baseBroadcastHours?: number;
   liveStartedAt?: string;
   dividendAccumulationCount?: number;
   listedAt?: string;

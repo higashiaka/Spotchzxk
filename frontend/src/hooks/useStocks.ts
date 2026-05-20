@@ -25,6 +25,7 @@ export const useStocks = () => {
           isLive: r.isLive ?? false,
           dividendPool: Number(r.dividendPool ?? 0),
           totalSupply: Number(r.totalSupply ?? 0),
+          baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
           liveStartedAt: r.liveStartedAt ?? null,
           dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
           listedAt: r.listedAt ?? null,
@@ -48,6 +49,7 @@ export const useStocks = () => {
         isLive: r.isLive ?? false,
         dividendPool: Number(r.dividendPool ?? 0),
         totalSupply: Number(r.totalSupply ?? 0),
+        baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
         liveStartedAt: r.liveStartedAt ?? null,
         dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
         listedAt: r.listedAt ?? null,
@@ -57,7 +59,7 @@ export const useStocks = () => {
       setStocks(prev => {
         const merged = prev.map(s => {
           const db = dbMap.get(s.id);
-          return db ? { ...s, price: db.price, totalVolume: db.totalVolume, basePrice: db.basePrice, profileImageUrl: db.profileImageUrl, isLive: db.isLive, dividendPool: db.dividendPool, totalSupply: db.totalSupply, liveStartedAt: db.liveStartedAt, dividendAccumulationCount: db.dividendAccumulationCount, listedAt: db.listedAt } : s;
+          return db ? { ...s, price: db.price, totalVolume: db.totalVolume, basePrice: db.basePrice, profileImageUrl: db.profileImageUrl, isLive: db.isLive, dividendPool: db.dividendPool, totalSupply: db.totalSupply, baseBroadcastHours: db.baseBroadcastHours, liveStartedAt: db.liveStartedAt, dividendAccumulationCount: db.dividendAccumulationCount, listedAt: db.listedAt } : s;
         });
         // DB에만 있는 새 종목 추가 (prev에 없는 것)
         const prevIds = new Set(prev.map(s => s.id));
