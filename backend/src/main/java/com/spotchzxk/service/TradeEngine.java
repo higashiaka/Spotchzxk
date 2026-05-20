@@ -85,22 +85,16 @@ public class TradeEngine {
         int qty = req.getQuantity();
         BigDecimal estimatedPrice = req.getEstimatedPrice();
 
-        // 복리 market impact: 1주씩 n번 체결하는 것과 수학적으로 동일
-        // 분할 주문 exploit 방지 — 한 번 주문이든 쪼개든 비용이 같음
-        // 매수: finalPrice = P × (1+k)^n,  totalCost    = P × (1+k) × ((1+k)^n − 1) / k
-        // 매도: finalPrice = P × (1-k)^n,  totalRevenue = P × (1-k) × (1 − (1-k)^n) / k
+        // 단순 선형 market impact: price × (1 ± qty × k)
         BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
         long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
-        double impact = BASE_PRICE_IMPACT;
-        double unitFactor   = isBuy ? (1.0 + impact) : (1.0 - impact);
-        double finalMult    = Math.pow(unitFactor, qty);
-        double sumMult      = isBuy
-                ? unitFactor * (finalMult - 1.0) / impact
-                : unitFactor * (1.0 - finalMult) / impact;
+        double priceMultiplier = isBuy
+                ? 1.0 + qty * BASE_PRICE_IMPACT
+                : 1.0 - qty * BASE_PRICE_IMPACT;
 
-        BigDecimal finalPrice    = currentPrice.multiply(BigDecimal.valueOf(finalMult)).max(MIN_PRICE).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal cost          = currentPrice.multiply(BigDecimal.valueOf(sumMult)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal executedPrice = cost.divide(BigDecimal.valueOf(qty), 2, RoundingMode.HALF_UP); // 주문서용 평균 단가
+        BigDecimal finalPrice    = currentPrice.multiply(BigDecimal.valueOf(priceMultiplier)).max(MIN_PRICE).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cost          = finalPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal executedPrice = finalPrice;
 
         // 잔고 / 보유량 검증
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
