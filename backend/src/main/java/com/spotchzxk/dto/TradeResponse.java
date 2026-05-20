@@ -11,4 +11,5 @@ public class TradeResponse {
     private String status;
     private BigDecimal executedPrice;
     private BigDecimal newBalance;
+    private BigDecimal fee;
 }
