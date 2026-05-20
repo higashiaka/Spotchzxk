@@ -25,9 +25,6 @@ public class TradeEngine {
 
     private static final double BASE_PRICE_IMPACT = 0.0005;
     private static final double SUPPLY_BASE = 10_000.0;
-    // 매도 충격 배율 상한 — unitFactor(1-impact)가 음수가 되는 것 방지
-    // 상한 5배 → 주당 최대 0.25% 하락, 100주 매도 시 최대 22% 하락
-    private static final double MAX_SELL_IMPACT_MULTIPLIER = 5.0;
     private static final BigDecimal MIN_PRICE = BigDecimal.ONE;
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
@@ -94,12 +91,7 @@ public class TradeEngine {
         // 매도: finalPrice = P × (1-k)^n,  totalRevenue = P × (1-k) × (1 − (1-k)^n) / k
         BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
         long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
-        // 매수: 고정 충격 → 가격/발행량에 무관하게 상승폭 일정 (FOMO 증폭 방지)
-        // 매도: 발행량 비례 충격 (상한 MAX_SELL_IMPACT_MULTIPLIER) → 고발행 종목 하락 억제 + 음수 방지
-        double sellMultiplier = Math.min(1.0 + currentSupply / SUPPLY_BASE, MAX_SELL_IMPACT_MULTIPLIER);
-        double impact = isBuy
-                ? BASE_PRICE_IMPACT
-                : BASE_PRICE_IMPACT * sellMultiplier;
+        double impact = BASE_PRICE_IMPACT;
         double unitFactor   = isBuy ? (1.0 + impact) : (1.0 - impact);
         double finalMult    = Math.pow(unitFactor, qty);
         double sumMult      = isBuy
