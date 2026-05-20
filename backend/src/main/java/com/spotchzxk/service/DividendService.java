@@ -60,14 +60,15 @@ public class DividendService {
         if (updatedUsers > 0) {
             List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(stock.getChannelId());
             List<UserDividendLog> logs = shares.stream()
+                    .filter(us -> us.getPreStreamQuantity() > 0)
                     .map(us -> UserDividendLog.builder()
                             .userId(us.getUser().getId())
                             .channelId(stock.getChannelId())
                             .streamerName(stock.getStreamerName())
                             .profileImageUrl(stock.getProfileImageUrl())
-                            .quantity(us.getQuantity())
+                            .quantity(us.getPreStreamQuantity())
                             .ratePerShare(ratePerShare)
-                            .amount(ratePerShare.multiply(BigDecimal.valueOf(us.getQuantity()))
+                            .amount(ratePerShare.multiply(BigDecimal.valueOf(us.getPreStreamQuantity()))
                                     .setScale(2, RoundingMode.HALF_UP))
                             .build())
                     .collect(Collectors.toList());

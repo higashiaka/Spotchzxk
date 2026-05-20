@@ -29,6 +29,9 @@ public class UserShare {
     @Column
     private long quantity;
 
+    @Column
+    private long preStreamQuantity;
+
     @Column(precision = 12, scale = 2)
     private java.math.BigDecimal avgPrice;
 

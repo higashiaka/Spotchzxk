@@ -30,6 +30,7 @@ public class ChzzkLivePollingService {
     private final StockRepository stockRepository;
     private final DividendService dividendService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final com.spotchzxk.repository.UserShareRepository userShareRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -59,8 +60,9 @@ public class ChzzkLivePollingService {
                 stock.setLiveStartedAt(LocalDateTime.now());
                 stock.setDividendAccumulationCount(0);
                 stockRepository.save(stock);
+                userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
                 anyChanged = true;
-                log.info("Stream started: channel={}", stock.getChannelId());
+                log.info("Stream started: channel={}, pre-stream snapshot taken", stock.getChannelId());
 
             } else if (wasLive && isLiveNow) {
                 payIntervalIfDue(stock);
