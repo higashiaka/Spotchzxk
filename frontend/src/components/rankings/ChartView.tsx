@@ -90,8 +90,12 @@ export const ChartView = ({
   };
 
   const expectedPerShare = (s: Stock): string => {
-    const val = s.price * 0.10;
-    return val >= 1 ? `+${Math.floor(val)}코인` : `+${val.toFixed(2)}`;
+    const supply = s.totalSupply ?? 0;
+    if (supply <= 0) return '-';
+    const hours = Math.max(1, s.baseBroadcastHours ?? 1);
+    // price × 0.10 × hours / supply × (1 - 배당세 0.20)
+    const val = s.price * 0.10 * hours / supply * 0.80;
+    return val >= 1 ? `+${Math.floor(val)}코인` : `+${val.toFixed(4)}`;
   };
 
   return (
