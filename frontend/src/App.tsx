@@ -1291,8 +1291,7 @@ const ChartView = ({
   };
 
   const expectedPerShare = (s: Stock): string => {
-    const supply = s.totalSupply && s.totalSupply > 0 ? s.totalSupply : 1;
-    const val = (s.price * 0.05) / supply;
+    const val = s.price * 0.10;
     return val >= 1 ? `+${Math.floor(val)}코인` : `+${val.toFixed(2)}`;
   };
 
