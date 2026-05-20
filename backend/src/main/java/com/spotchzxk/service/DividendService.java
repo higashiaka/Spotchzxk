@@ -25,6 +25,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
+    // 종목당 10분 배당의 기준 단위 (baseBroadcastHours 비례)
+    private static final BigDecimal BASE_DIVIDEND_UNIT = BigDecimal.valueOf(100);
+    // 배당세: 총 풀의 20%를 소각하여 코인 순증 억제
+    private static final BigDecimal DIVIDEND_TAX_RATE = new BigDecimal("0.20");
+
     private final UserShareRepository userShareRepository;
     private final UserDividendLogRepository userDividendLogRepository;
     private final DividendLogRepository dividendLogRepository;
@@ -35,8 +40,15 @@ public class DividendService {
     public void payIntervalDividend(Stock stock) {
         if (stock.getTotalSupply() <= 0) return;
 
-        BigDecimal ratePerShare = BigDecimal.valueOf(stock.getCurrentPrice())
-                .multiply(BigDecimal.valueOf(0.10))
+        // 고정 풀: baseBroadcastHours에 비례, totalSupply로 희석 → 발행량 증가 시 1주당 배당 자동 감소
+        int hours = Math.max(1, stock.getBaseBroadcastHours());
+        BigDecimal fixedPool = BASE_DIVIDEND_UNIT.multiply(BigDecimal.valueOf(hours));
+        BigDecimal grossRatePerShare = fixedPool
+                .divide(BigDecimal.valueOf(stock.getTotalSupply()), 4, RoundingMode.HALF_UP);
+
+        // 배당세 20% 적용: 실제 지급액 = 총 풀의 80%
+        BigDecimal ratePerShare = grossRatePerShare
+                .multiply(BigDecimal.ONE.subtract(DIVIDEND_TAX_RATE))
                 .setScale(4, RoundingMode.HALF_UP);
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
@@ -68,10 +80,13 @@ public class DividendService {
                     .payoutReason("interval")
                     .streamMinutes(null)
                     .build();
+            BigDecimal taxBurned = grossRatePerShare.subtract(ratePerShare)
+                    .multiply(BigDecimal.valueOf(stock.getTotalSupply()))
+                    .setScale(0, RoundingMode.HALF_UP);
             dividendLogRepository.save(logEntry);
 
-            log.info("Interval dividend for channel {}: ratePerShare={}, {} users",
-                    stock.getChannelId(), ratePerShare, updatedUsers);
+            log.info("Interval dividend for channel {}: fixedPool={}, supply={}, ratePerShare={} (gross={}, taxBurned={}), {} users",
+                    stock.getChannelId(), fixedPool, stock.getTotalSupply(), ratePerShare, grossRatePerShare, taxBurned, updatedUsers);
 
             messagingTemplate.convertAndSend("/topic/dividends", Map.of(
                     "channelId", stock.getChannelId(),

@@ -23,9 +23,12 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class TradeEngine {
 
-    private static final double PRICE_IMPACT_FACTOR = 0.0005;
+    private static final double BASE_PRICE_IMPACT = 0.0005;
+    // 발행량이 SUPPLY_BASE에 도달하면 가격충격 2배, 이후 선형 증가
+    private static final double SUPPLY_BASE = 10_000.0;
     private static final BigDecimal MIN_PRICE = BigDecimal.ONE;
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
+    private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -39,6 +42,7 @@ public class TradeEngine {
     private final ConcurrentHashMap<String, BigDecimal> balanceCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<String, Long>> sharesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BigDecimal> priceCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> supplyCache = new ConcurrentHashMap<>();
 
     // ── 종목별 / 유저별 독립 락 (항상 user → stock 순서로 획득) ─────────────────
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
@@ -87,11 +91,14 @@ public class TradeEngine {
         // 매수: finalPrice = P × (1+k)^n,  totalCost    = P × (1+k) × ((1+k)^n − 1) / k
         // 매도: finalPrice = P × (1-k)^n,  totalRevenue = P × (1-k) × (1 − (1-k)^n) / k
         BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
-        double unitFactor   = isBuy ? (1.0 + PRICE_IMPACT_FACTOR) : (1.0 - PRICE_IMPACT_FACTOR);
+        long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
+        // 발행량이 늘수록 가격충격 선형 증가 → 신규 발행 억제
+        double dynamicFactor = BASE_PRICE_IMPACT * (1.0 + currentSupply / SUPPLY_BASE);
+        double unitFactor   = isBuy ? (1.0 + dynamicFactor) : (1.0 - dynamicFactor);
         double finalMult    = Math.pow(unitFactor, qty);
         double sumMult      = isBuy
-                ? unitFactor * (finalMult - 1.0) / PRICE_IMPACT_FACTOR
-                : unitFactor * (1.0 - finalMult) / PRICE_IMPACT_FACTOR;
+                ? unitFactor * (finalMult - 1.0) / dynamicFactor
+                : unitFactor * (1.0 - finalMult) / dynamicFactor;
 
         BigDecimal finalPrice    = currentPrice.multiply(BigDecimal.valueOf(finalMult)).max(MIN_PRICE).setScale(2, RoundingMode.HALF_UP);
         BigDecimal cost          = currentPrice.multiply(BigDecimal.valueOf(sumMult)).setScale(2, RoundingMode.HALF_UP);
@@ -102,13 +109,16 @@ public class TradeEngine {
         Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
         long currentQty = shares.getOrDefault(channelId, 0L);
 
-        if (isBuy && currentBalance.compareTo(cost) < 0) throw new IllegalStateException("잔고 부족");
+        // 거래세: 거래금액의 1%를 소각 (인플레이션 완화)
+        BigDecimal fee = cost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+        if (isBuy && currentBalance.compareTo(cost.add(fee)) < 0) throw new IllegalStateException("잔고 부족");
         if (!isBuy && currentQty < qty) throw new IllegalStateException("보유 주식 부족");
 
-        // 새 상태 (잔고는 총액 cost 기준, 가격은 finalPrice 기준)
+        // 새 상태 — 매수: 거래금액 + 수수료 차감 / 매도: 거래금액에서 수수료 차감 후 지급
         BigDecimal newBalance = isBuy
-                ? currentBalance.subtract(cost)
-                : currentBalance.add(cost);
+                ? currentBalance.subtract(cost).subtract(fee)
+                : currentBalance.add(cost).subtract(fee);
         long newQty = isBuy ? currentQty + qty : currentQty - qty;
 
         // DB 즉시 쓰기 (단일 트랜잭션)
@@ -177,6 +187,7 @@ public class TradeEngine {
         balanceCache.put(userId, newBalance);
         shares.put(channelId, newQty);
         priceCache.put(channelId, finalPrice);
+        supplyCache.put(channelId, Math.max(0L, currentSupply + (isBuy ? qty : -qty)));
 
         // 캔들 업데이트 (STOMP /topic/candles/{channelId} 브로드캐스트 포함)
         candleService.onTrade(channelId, finalPrice, System.currentTimeMillis());
@@ -194,6 +205,7 @@ public class TradeEngine {
                         "type", isBuy ? "buy" : "sell",
                         "quantity", qty,
                         "price", executedPrice,
+                        "fee", fee,
                         "timestamp", System.currentTimeMillis()
                 )
         );
@@ -201,7 +213,7 @@ public class TradeEngine {
             messagingTemplate.convertAndSend("/topic/streamers", List.of(savedStock.get()));
         }
 
-        return new TradeResponse("executed", executedPrice, newBalance);
+        return new TradeResponse("executed", executedPrice, newBalance, fee);
     }
 
     // ---------------------------------------------------------------
@@ -230,7 +242,15 @@ public class TradeEngine {
 
     private void loadStockIfAbsent(String channelId, BigDecimal fallback) {
         if (priceCache.containsKey(channelId)) return;
-        priceCache.put(channelId, stockRepository.findById(channelId)
-                .map(s -> BigDecimal.valueOf(s.getCurrentPrice())).orElse(fallback));
+        stockRepository.findById(channelId).ifPresentOrElse(
+            s -> {
+                priceCache.put(channelId, BigDecimal.valueOf(s.getCurrentPrice()));
+                supplyCache.put(channelId, s.getTotalSupply());
+            },
+            () -> {
+                priceCache.put(channelId, fallback);
+                supplyCache.put(channelId, 0L);
+            }
+        );
     }
 }
