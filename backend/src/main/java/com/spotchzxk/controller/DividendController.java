@@ -42,7 +42,9 @@ public class DividendController {
         if (uid == null) return ResponseEntity.status(401).build();
 
         List<UserDividendLog> logs = userDividendLogRepository.findTop50ByUserIdOrderByCreatedAtDesc(uid);
-        List<Map<String, Object>> result = logs.stream().map(log -> Map.<String, Object>of(
+        List<Map<String, Object>> result = logs.stream()
+                .filter(log -> log.getAmount() != null && log.getAmount().compareTo(java.math.BigDecimal.ZERO) > 0)
+                .map(log -> Map.<String, Object>of(
                 "channelId", log.getChannelId(),
                 "streamerName", log.getStreamerName(),
                 "profileImageUrl", log.getProfileImageUrl() != null ? log.getProfileImageUrl() : "",
