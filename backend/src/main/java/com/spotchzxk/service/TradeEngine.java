@@ -92,11 +92,11 @@ public class TradeEngine {
         // 매도: finalPrice = P × (1-k)^n,  totalRevenue = P × (1-k) × (1 − (1-k)^n) / k
         BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
         long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
-        // 매수: 발행량 비례로 충격 증가 → 신규 발행 억제
-        // 매도: 고정 충격 유지 → 매도 폭락 방지
+        // 매수: 고정 충격 → 가격/발행량에 무관하게 상승폭 일정 (FOMO 증폭 방지)
+        // 매도: 발행량 비례 충격 → 고가·고발행 종목일수록 하락폭 커짐 (자연적 과열 억제)
         double impact = isBuy
-                ? BASE_PRICE_IMPACT * (1.0 + currentSupply / SUPPLY_BASE)
-                : BASE_PRICE_IMPACT;
+                ? BASE_PRICE_IMPACT
+                : BASE_PRICE_IMPACT * (1.0 + currentSupply / SUPPLY_BASE);
         double unitFactor   = isBuy ? (1.0 + impact) : (1.0 - impact);
         double finalMult    = Math.pow(unitFactor, qty);
         double sumMult      = isBuy
