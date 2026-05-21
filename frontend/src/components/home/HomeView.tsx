@@ -277,7 +277,7 @@ export const HomeView = ({
           </div>
           <div className="space-y-1">
             {top5.map((s, i) => {
-              const pct = changePct(s.price);
+              const pct = changePct(s.price, s.basePrice);
               return (
                 <div key={s.id} className="flex items-center gap-3 py-3 cursor-pointer"
                   style={{ borderBottom: i < top5.length - 1 ? '1px solid #1A2232' : 'none' }}
