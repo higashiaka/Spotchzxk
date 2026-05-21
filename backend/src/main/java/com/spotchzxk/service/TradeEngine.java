@@ -29,6 +29,8 @@ public class TradeEngine {
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
     private static final long INITIAL_SUPPLY = 10_000L;
+    private static final long MAX_HOLDING_PER_STOCK = INITIAL_SUPPLY / 10;  // 1인 최대 10%
+    private static final int TRANCHE_COUNT = 10;                             // 하우스 호가 분할 수
     private static final String HOUSE_USER_ID = "__house__";
 
     private final UserRepository userRepository;
@@ -188,29 +190,40 @@ public class TradeEngine {
         new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
 
+            // 총 발행량을 상장 시점에 고정 (이후 불변)
+            stock.setTotalSupply(INITIAL_SUPPLY);
+            stockRepository.save(stock);
+            supplyCache.put(channelId, INITIAL_SUPPLY);
+
             User house = userRepository.findById(HOUSE_USER_ID)
                     .orElseGet(() -> userRepository.save(
                             User.builder().id(HOUSE_USER_ID).coinBalance(BigDecimal.ZERO).build()));
 
-            // 보유량은 0 (전량 예약 상태로 시작)
+            // 하우스 보유량 0 — 전량 매도 호가로 예약
             UserShare houseShare = userShareRepository.findByUserIdAndStockChannelId(HOUSE_USER_ID, channelId)
                     .orElseGet(() -> UserShare.builder().user(house).stock(stock)
                             .quantity(0L).avgPrice(BigDecimal.valueOf(listingPrice)).build());
             houseShare.setQuantity(0L);
             userShareRepository.save(houseShare);
 
-            orderRepository.save(Order.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(HOUSE_USER_ID)
-                    .streamerId(channelId)
-                    .type("sell")
-                    .quantity((int) INITIAL_SUPPLY)
-                    .estimatedPrice(BigDecimal.valueOf(listingPrice))
-                    .limitPrice(BigDecimal.valueOf(listingPrice))
-                    .orderMode("limit")
-                    .status("pending")
-                    .createdAt(System.currentTimeMillis())
-                    .build());
+            // 1,000주 × 10개 트랜치, 상장가 기준 5%씩 상승
+            long trancheSize = INITIAL_SUPPLY / TRANCHE_COUNT;
+            long baseTime = System.currentTimeMillis();
+            for (int i = 0; i < TRANCHE_COUNT; i++) {
+                int tranchePrice = Math.max(1, (int) Math.round(listingPrice * (1.0 + 0.05 * i) / 10.0) * 10);
+                orderRepository.save(Order.builder()
+                        .id(UUID.randomUUID().toString())
+                        .userId(HOUSE_USER_ID)
+                        .streamerId(channelId)
+                        .type("sell")
+                        .quantity((int) trancheSize)
+                        .estimatedPrice(BigDecimal.valueOf(listingPrice))
+                        .limitPrice(BigDecimal.valueOf(tranchePrice))
+                        .orderMode("limit")
+                        .status("pending")
+                        .createdAt(baseTime + i)
+                        .build());
+            }
 
             return null;
         });
@@ -241,6 +254,12 @@ public class TradeEngine {
             throw new IllegalStateException("잔고 부족");
         if (!isBuy && currentQty < totalQty)
             throw new IllegalStateException("보유 주식 부족");
+        if (isBuy) {
+            long pendingBuyQty = orderRepository.sumPendingBuyQuantity(userId, channelId);
+            long holdingAfter = currentQty + pendingBuyQty + totalQty;
+            if (holdingAfter > MAX_HOLDING_PER_STOCK)
+                throw new IllegalStateException("1인 최대 보유 한도(" + MAX_HOLDING_PER_STOCK + "주)를 초과합니다. 추가 매수 가능: " + Math.max(0, MAX_HOLDING_PER_STOCK - currentQty - pendingBuyQty) + "주");
+        }
 
         // 즉시 매칭 시도
         int remainingQty = totalQty;
@@ -270,7 +289,7 @@ public class TradeEngine {
             BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
             BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
 
-            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
+            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy, "limit");
 
             remainingQty -= matchQty;
             lastExecutedPrice = matchPrice;
@@ -366,6 +385,12 @@ public class TradeEngine {
 
         if (!isBuy && currentQty < totalQty)
             throw new IllegalStateException("보유 주식 부족");
+        if (isBuy) {
+            long pendingBuyQty = orderRepository.sumPendingBuyQuantity(userId, channelId);
+            long holdingAfter = currentQty + pendingBuyQty + totalQty;
+            if (holdingAfter > MAX_HOLDING_PER_STOCK)
+                throw new IllegalStateException("1인 최대 보유 한도(" + MAX_HOLDING_PER_STOCK + "주)를 초과합니다. 추가 매수 가능: " + Math.max(0, MAX_HOLDING_PER_STOCK - currentQty - pendingBuyQty) + "주");
+        }
 
         int remainingQty = totalQty;
         BigDecimal lastExecutedPrice = priceCache.getOrDefault(channelId, req.getEstimatedPrice());
@@ -403,7 +428,7 @@ public class TradeEngine {
                 }
             }
 
-            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
+            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy, "market");
 
             remainingQty -= matchQty;
             lastExecutedPrice = matchPrice;
@@ -443,7 +468,7 @@ public class TradeEngine {
     // 3. 두 주문의 매칭 매커니즘 실행 (DB 트랜잭션 처리)
     // ---------------------------------------------------------------
 
-    private void executeMatch(Order opposite, String userId, int qty, BigDecimal price, BigDecimal cost, BigDecimal fee, boolean isBuy) {
+    private void executeMatch(Order opposite, String userId, int qty, BigDecimal price, BigDecimal cost, BigDecimal fee, boolean isBuy, String orderMode) {
         String oppositeUserId = opposite.getUserId();
         String channelId = opposite.getStreamerId();
 
@@ -522,7 +547,7 @@ public class TradeEngine {
                     .quantity(qty)
                     .estimatedPrice(price)
                     .executedPrice(price)
-                    .orderMode(isBuy ? "market" : "market") 
+                    .orderMode(orderMode)
                     .status("completed")
                     .createdAt(System.currentTimeMillis())
                     .build());
@@ -541,11 +566,9 @@ public class TradeEngine {
                     .createdAt(System.currentTimeMillis())
                     .build());
 
-            // 5. 종목 정보 갱신
-            stock.setTotalSupply(stock.getTotalSupply() + (isBuy ? qty : -qty));
+            // 5. 종목 정보 갱신 — totalSupply는 상장 시 고정, 거래로 변하지 않음
             stock.setDailyVolume(stock.getDailyVolume() + qty);
             stockRepository.save(stock);
-            supplyCache.put(channelId, stock.getTotalSupply());
 
             return null;
         });

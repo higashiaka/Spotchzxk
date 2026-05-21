@@ -4,7 +4,6 @@ import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
 import com.spotchzxk.entity.Order;
 import com.spotchzxk.exception.ResetLimitExceededException;
-import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import com.spotchzxk.repository.OrderRepository;
@@ -29,7 +28,6 @@ public class PortfolioService {
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
-    private final StockRepository stockRepository;
     private final OrderRepository orderRepository;
     private final TradeEngine tradeEngine;
 
@@ -63,6 +61,16 @@ public class PortfolioService {
     public void resetPortfolio(String userId) {
         User p = getOrCreate(userId);
 
+        List<UserShare> shares = userShareRepository.findByUserId(userId);
+        boolean hasShares = shares.stream().anyMatch(s -> s.getQuantity() > 0);
+        if (hasShares) {
+            throw new IllegalStateException("보유 주식이 있으면 초기화할 수 없습니다. 먼저 전량 매도해주세요.");
+        }
+        boolean hasPendingOrders = !orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "pending").isEmpty();
+        if (hasPendingOrders) {
+            throw new IllegalStateException("미체결 주문이 있으면 초기화할 수 없습니다. 먼저 모든 주문을 취소해주세요.");
+        }
+
         LocalDate todayKst = LocalDate.now(KST);
         if (!todayKst.equals(p.getLastResetDate())) {
             p.setResetCount(0);
@@ -76,17 +84,6 @@ public class PortfolioService {
         p.setResetCount(p.getResetCount() + 1);
         p.setCoinBalance(INITIAL_BALANCE);
         userRepository.save(p);
-
-        List<UserShare> shares = userShareRepository.findByUserId(userId);
-
-        // 보유 주식만큼 totalSupply 차감 (소각) — 팬텀 supply 방지
-        shares.stream()
-                .filter(s -> s.getQuantity() > 0)
-                .forEach(s -> stockRepository.findById(s.getStock().getChannelId()).ifPresent(stock -> {
-                    stock.setTotalSupply(Math.max(0, stock.getTotalSupply() - s.getQuantity()));
-                    stockRepository.save(stock);
-                    tradeEngine.evictSupplyCache(stock.getChannelId());
-                }));
 
         userShareRepository.deleteAll(shares);
         tradeEngine.evictUserCache(userId);
