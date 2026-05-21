@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioService {
 
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
+    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
     private static final int MAX_DAILY_RESETS = 3;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 

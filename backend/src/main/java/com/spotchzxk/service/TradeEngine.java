@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class TradeEngine {
 
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
+    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
     // dev engine.ts 동일: 1주당 0.05% 가격 충격
     private static final double PRICE_IMPACT_PER_SHARE = 0.0005;
 
