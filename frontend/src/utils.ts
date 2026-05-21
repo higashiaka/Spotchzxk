@@ -1,5 +1,5 @@
 export const BASE_PRICE = 1000;
-export const INITIAL_BALANCE = 10_000_000;
+export const INITIAL_BALANCE = 1_000_000;
 
 export const fmt = (value: number): string => {
   if (value < 1) return `${value.toFixed(2)}원`;
