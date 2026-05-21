@@ -148,7 +148,7 @@ function App() {
   const resetMutation = useResetPortfolio(user?.uid);
 
   const handleReset = () => {
-    if (!window.confirm('투자 자금을 1천만원으로 초기화하시겠습니까?\n보유 주식이 모두 삭제됩니다.')) return;
+    if (!window.confirm('투자 자금을 100만원으로 초기화하시겠습니까?\n보유 주식이 모두 삭제됩니다.')) return;
     resetMutation.mutate();
   };
 
