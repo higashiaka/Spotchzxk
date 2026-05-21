@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
 import { fmt, fmtCompact, changePct, priceColor, avatarColor, INITIAL_BALANCE, grade } from '../../utils';
 import { Ticker } from '../Ticker';
+import { MegaphonePost, useMegaphonePosts } from '../../hooks/useMegaphone';
+import { subscribeStomp } from '../../lib/stompClient';
 
 export const HomeView = ({
   streamers, portfolio, user, totalAssets, history, recentlyViewedIds,
@@ -21,6 +23,20 @@ export const HomeView = ({
   liveTrades: LiveTrade[];
 }) => {
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+
+  const { data: initialPosts = [] } = useMegaphonePosts();
+  const [latestMegaphone, setLatestMegaphone] = useState<MegaphonePost | null>(null);
+
+  useEffect(() => {
+    if (initialPosts.length > 0) setLatestMegaphone(initialPosts[0]);
+  }, [initialPosts]);
+
+  useEffect(() => {
+    const sub = subscribeStomp('/topic/megaphone', msg => {
+      try { setLatestMegaphone(JSON.parse(msg.body) as MegaphonePost); } catch { /* ignore */ }
+    });
+    return () => sub.unsubscribe();
+  }, []);
   const totalReturn = totalAssets - INITIAL_BALANCE;
   const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
   const userGrade = grade(totalAssets);
@@ -56,6 +72,31 @@ export const HomeView = ({
   return (
     <div className="h-full flex flex-col overflow-hidden relative">
       <Ticker streamers={streamers} liveTrades={liveTrades} />
+
+      {latestMegaphone && (
+        <a
+          href={latestMegaphone.liveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-4 py-2 shrink-0 transition-opacity hover:opacity-80"
+          style={{ background: '#0D1A10', borderBottom: '1px solid #00E67633', textDecoration: 'none' }}
+        >
+          <span className="text-sm shrink-0">📣</span>
+          <span className="text-xs font-bold shrink-0" style={{ color: '#00E676' }}>
+            {latestMegaphone.streamerName}
+          </span>
+          <span className="text-[10px] font-bold px-1 py-0.5 rounded shrink-0"
+            style={{ background: '#FF4444', color: '#FFF' }}>LIVE</span>
+          {latestMegaphone.message && (
+            <span className="text-xs truncate" style={{ color: '#8899AA' }}>
+              {latestMegaphone.message}
+            </span>
+          )}
+          <span className="ml-auto text-[10px] shrink-0" style={{ color: '#626B7A' }}>
+            라이브 보기 →
+          </span>
+        </a>
+      )}
 
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
 

@@ -20,6 +20,7 @@ import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
 import { OrderView } from './components/order/OrderView';
+import { ShopView } from './components/shop/ShopView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
 function App() {
@@ -179,6 +180,7 @@ function App() {
   }
 
   const rightTab: Exclude<AppTab, 'profile'> = activeTab === 'profile' ? 'home' : activeTab;
+  const balance = portfolio?.balance ?? 0;
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
@@ -245,6 +247,13 @@ function App() {
               selectedStreamer={selectedStreamer}
               user={user}
               onSelectStreamer={s => setSelectedStreamer(s)}
+            />
+          )}
+          {rightTab === 'shop' && (
+            <ShopView
+              streamers={streamers}
+              user={user}
+              balance={balance}
             />
           )}
         </div>
