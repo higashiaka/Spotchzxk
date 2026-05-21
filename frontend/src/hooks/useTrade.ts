@@ -32,9 +32,9 @@ export const useTrade = (userId: string) => {
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
         const cost = newTrade.estimatedPrice * newTrade.quantity;
-        const state = old || { balance: 10000000, shares: {} };
+        const state = old || { balance: 1000000, shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
-        let newBalance = state.balance ?? 10000000;
+        let newBalance = state.balance ?? 1000000;
 
         if (newTrade.type === 'buy') {
           newBalance -= cost;
