@@ -1,4 +1,4 @@
-export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile';
+export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile' | 'shop';
 
 export interface LiveTrade {
   streamerId: string;
