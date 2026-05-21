@@ -36,4 +36,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Modifying
     @Query(value = "DELETE FROM user_shares WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") String userId);
+
+    @Query(value = "SELECT COALESCE(SUM(pre_stream_quantity), 0) FROM user_shares WHERE channel_id = :channelId AND pre_stream_quantity > 0 AND user_id != '__house__'", nativeQuery = true)
+    long sumPreStreamQuantityByChannel(@Param("channelId") String channelId);
 }

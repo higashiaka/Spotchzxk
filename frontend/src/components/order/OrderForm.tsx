@@ -23,7 +23,7 @@ export const OrderForm = ({
   const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(user?.uid);
   
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
-  const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
+  const [orderMode, setOrderMode] = useState<'market' | 'limit'>('limit');
   const [qtyStr, setQtyStr] = useState('1');
 
   // 현재가 로드 시 지정가 초기값 설정

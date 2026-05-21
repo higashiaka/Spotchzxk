@@ -85,14 +85,14 @@ public class StockService {
     }
 
     /**
-     * sqrt(팔로워수) × 10, 100원 단위 반올림, 최소 500원
-     * 예) 10,000명→1,000원 / 100,000명→3,100원 / 1,000,000명→10,000원
+     * sqrt(팔로워수) × 300, 1,000원 단위 반올림, 범위 10,000~300,000원
+     * 예) 1,000명→10,000원 / 10,000명→30,000원 / 100,000명→94,000원 / 1,000,000명→300,000원
      */
     private static int calcListingPrice(int followerCount) {
-        if (followerCount <= 0) return 500;
-        int raw = (int) (Math.sqrt(followerCount) * 10);
-        int rounded = (raw / 100) * 100;
-        return Math.max(500, rounded);
+        if (followerCount <= 0) return 10_000;
+        int raw = (int) (Math.sqrt(followerCount) * 300);
+        int rounded = (raw / 1_000) * 1_000;
+        return Math.max(10_000, Math.min(300_000, rounded));
     }
 
     private String getEnvOrProperty(String key) {

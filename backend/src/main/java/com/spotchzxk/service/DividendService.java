@@ -36,17 +36,17 @@ public class DividendService {
 
     @Transactional
     public void payIntervalDividend(Stock stock) {
-        if (stock.getTotalSupply() <= 0) return;
+        // 실제 유통량: 스트림 시작 시점 스냅샷 기준, 하우스 제외
+        long actualFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
+        if (actualFloat <= 0) return;
 
-        // 풀 = price × 0.10 × hours → supply로 희석
-        // supply = hours 일 때 기존 공식과 동일, supply 증가할수록 1주당 배당 자동 감소
         int hours = Math.max(1, stock.getBaseBroadcastHours());
         BigDecimal fixedPool = BigDecimal.valueOf(stock.getCurrentPrice())
                 .multiply(BigDecimal.valueOf(0.10))
                 .multiply(BigDecimal.valueOf(hours))
                 .setScale(4, RoundingMode.HALF_UP);
         BigDecimal grossRatePerShare = fixedPool
-                .divide(BigDecimal.valueOf(stock.getTotalSupply()), 4, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(actualFloat), 4, RoundingMode.HALF_UP);
 
         // 배당세 20% 적용: 실제 지급액 = 총 풀의 80%
         BigDecimal ratePerShare = grossRatePerShare
@@ -74,22 +74,24 @@ public class DividendService {
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
 
-            shares.forEach(us -> tradeEngine.evictUserCache(us.getUser().getId()));
+            // 배당 수령 대상(pre_stream_quantity 기준)의 캐시 갱신 — logs 기반으로 정확히 특정
+            logs.forEach(log -> tradeEngine.evictUserCache(log.getUserId()));
 
+            BigDecimal actualPaid = ratePerShare.multiply(BigDecimal.valueOf(actualFloat))
+                    .setScale(0, RoundingMode.HALF_UP);
+            BigDecimal taxBurned = grossRatePerShare.subtract(ratePerShare)
+                    .multiply(BigDecimal.valueOf(actualFloat))
+                    .setScale(0, RoundingMode.HALF_UP);
             DividendLog logEntry = DividendLog.builder()
                     .stock(stock)
-                    .totalDividendPool(ratePerShare.multiply(BigDecimal.valueOf(stock.getTotalSupply()))
-                            .setScale(0, RoundingMode.HALF_UP).intValue())
+                    .totalDividendPool(actualPaid.intValue())
                     .payoutReason("interval")
                     .streamMinutes(null)
                     .build();
-            BigDecimal taxBurned = grossRatePerShare.subtract(ratePerShare)
-                    .multiply(BigDecimal.valueOf(stock.getTotalSupply()))
-                    .setScale(0, RoundingMode.HALF_UP);
             dividendLogRepository.save(logEntry);
 
-            log.info("Interval dividend for channel {}: fixedPool={}, supply={}, ratePerShare={} (gross={}, taxBurned={}), {} users",
-                    stock.getChannelId(), fixedPool, stock.getTotalSupply(), ratePerShare, grossRatePerShare, taxBurned, updatedUsers);
+            log.info("Interval dividend for channel {}: fixedPool={}, float={}/{}, ratePerShare={} (gross={}, taxBurned={}), {} users",
+                    stock.getChannelId(), fixedPool, actualFloat, stock.getTotalSupply(), ratePerShare, grossRatePerShare, taxBurned, updatedUsers);
 
             messagingTemplate.convertAndSend("/topic/dividends", Map.of(
                     "channelId", stock.getChannelId(),

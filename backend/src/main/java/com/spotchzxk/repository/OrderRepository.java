@@ -33,4 +33,8 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Modifying
     @Query(value = "UPDATE orders SET status = 'cancelled' WHERE user_id = :userId AND status = 'pending'", nativeQuery = true)
     int cancelPendingOrdersByUserId(@Param("userId") String userId);
+
+    // 보유 한도 계산용 — 특정 유저의 종목별 미체결 매수 수량 합산
+    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
+    long sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 }
