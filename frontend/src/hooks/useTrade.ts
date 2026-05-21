@@ -7,6 +7,8 @@ export interface TradeDetails {
   type: 'buy' | 'sell';
   quantity: number;
   estimatedPrice: number;
+  orderMode: 'market' | 'limit';
+  limitPrice?: number;
 }
 
 export const useTrade = (userId: string) => {
@@ -32,14 +34,9 @@ export const useTrade = (userId: string) => {
       const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
-        const PRICE_IMPACT_FACTOR = 0.0005;
-        const isBuy = newTrade.type === 'buy';
-        const u  = isBuy ? 1 + PRICE_IMPACT_FACTOR : 1 - PRICE_IMPACT_FACTOR;
-        const fm = Math.pow(u, newTrade.quantity);
-        const cost = Math.max(0, newTrade.estimatedPrice * (isBuy
-          ? u * (fm - 1) / PRICE_IMPACT_FACTOR
-          : u * (1 - fm) / PRICE_IMPACT_FACTOR));
-        
+        const activePrice = newTrade.limitPrice ?? newTrade.estimatedPrice;
+        const cost = activePrice * newTrade.quantity;
+
         const state = old || { balance: 10000000, shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
         let newBalance = state.balance ?? 10000000;

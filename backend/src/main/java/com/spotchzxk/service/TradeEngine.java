@@ -1,5 +1,6 @@
 package com.spotchzxk.service;
 
+import com.spotchzxk.dto.OrderBookDto;
 import com.spotchzxk.dto.TradeRequest;
 import com.spotchzxk.dto.TradeResponse;
 import com.spotchzxk.entity.*;
@@ -17,14 +18,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TradeEngine {
 
-    private static final double BASE_PRICE_IMPACT = 0.0005;
-    private static final double SUPPLY_BASE = 10_000.0;
     private static final BigDecimal MIN_PRICE = BigDecimal.ONE;
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
@@ -64,7 +64,12 @@ public class TradeEngine {
             stockLock.lock();
             try {
                 loadStockIfAbsent(channelId, req.getEstimatedPrice());
-                return executeAndPersist(req);
+                boolean isLimit = "limit".equals(req.getOrderMode()) && req.getLimitPrice() != null;
+                if (isLimit) {
+                    return submitLimitOrder(req);
+                } else {
+                    return executeMarketOrder(req);
+                }
             } finally {
                 stockLock.unlock();
             }
@@ -73,144 +78,121 @@ public class TradeEngine {
         }
     }
 
-    // ---------------------------------------------------------------
-    // 체결 → 즉시 DB 쓰기 → 캐시 갱신 → STOMP 브로드캐스트
-    // (userLock + stockLock 보유 상태에서 호출)
-    // ---------------------------------------------------------------
+    /**
+     * 지정가 주문 취소 — 잔고/보유량 예약을 반환하고 status=cancelled 로 전환
+     */
+    public void cancelOrder(String orderId, String userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다."));
+        if (!order.getUserId().equals(userId))
+            throw new IllegalStateException("본인 주문만 취소할 수 있습니다.");
+        if (!"pending".equals(order.getStatus()))
+            throw new IllegalStateException("미체결 주문만 취소할 수 있습니다.");
 
-    private TradeResponse executeAndPersist(TradeRequest req) {
-        String userId = req.getUserId();
-        String channelId = req.getStreamerId();
-        boolean isBuy = "buy".equals(req.getType());
-        int qty = req.getQuantity();
-        BigDecimal estimatedPrice = req.getEstimatedPrice();
+        String channelId = order.getStreamerId();
+        boolean isBuy = "buy".equals(order.getType());
+        BigDecimal reserved = order.getLimitPrice().multiply(BigDecimal.valueOf(order.getQuantity()))
+                .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal fee = reserved.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
 
-        // 단순 선형 market impact: price × (1 ± qty × k)
-        BigDecimal currentPrice = priceCache.getOrDefault(channelId, estimatedPrice);
-        long currentSupply  = supplyCache.getOrDefault(channelId, 0L);
-        double priceMultiplier = isBuy
-                ? 1.0 + qty * BASE_PRICE_IMPACT
-                : 1.0 - qty * BASE_PRICE_IMPACT;
+        ReentrantLock userLock = userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
+        userLock.lock();
+        try {
+            new TransactionTemplate(txManager).execute(status -> {
+                order.setStatus("cancelled");
+                orderRepository.save(order);
 
-        BigDecimal finalPrice    = currentPrice.multiply(BigDecimal.valueOf(priceMultiplier)).max(MIN_PRICE).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal cost          = finalPrice.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal executedPrice = finalPrice;
-
-        // 잔고 / 보유량 검증
-        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
-        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
-        long currentQty = shares.getOrDefault(channelId, 0L);
-
-        // 거래세: 거래금액의 1%를 소각 (인플레이션 완화)
-        BigDecimal fee = cost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
-
-        if (isBuy && currentBalance.compareTo(cost.add(fee)) < 0) throw new IllegalStateException("잔고 부족");
-        if (!isBuy && currentQty < qty) throw new IllegalStateException("보유 주식 부족");
-
-        // 새 상태 — 매수: 거래금액 + 수수료 차감 / 매도: 거래금액에서 수수료 차감 후 지급
-        BigDecimal newBalance = isBuy
-                ? currentBalance.subtract(cost).subtract(fee)
-                : currentBalance.add(cost).subtract(fee);
-        long newQty = isBuy ? currentQty + qty : currentQty - qty;
-
-        // DB 즉시 쓰기 (단일 트랜잭션)
-        AtomicReference<Stock> savedStock = new AtomicReference<>();
-        new TransactionTemplate(txManager).execute(status -> {
-            // 유저 잔고
-            User user = userRepository.findById(userId)
-                    .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
-            user.setCoinBalance(newBalance);
-            user = userRepository.save(user);
-
-            // 보유 주식
-            if (newQty == 0) {
-                userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
-                    .ifPresent(share -> userShareRepository.delete(share));
-            } else {
-                // Stock이 없으면 기본값으로 생성 (안전 처리)
-                Stock stock = stockRepository.findById(channelId)
-                        .orElseGet(() -> stockRepository.save(Stock.builder()
-                                .channelId(channelId)
-                                .streamerName(channelId)
-                                .totalSupply(0L)
-                                .currentPrice(estimatedPrice.intValue())
-                                .build()));
-                UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
-                        .orElseGet(() -> UserShare.builder()
-                                .user(userRepository.getReferenceById(userId))
-                                .stock(stock)
-                                .avgPrice(BigDecimal.ZERO)
-                                .build());
+                // 예약 반환
+                User user = userRepository.findById(userId)
+                        .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
                 if (isBuy) {
-                    BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
-                    BigDecimal prevTotal = prevAvg.multiply(BigDecimal.valueOf(currentQty));
-                    share.setAvgPrice(prevTotal.add(cost).divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP));
+                    // 매수 예약: 잔고 + 총액 + 수수료 반환
+                    user.setCoinBalance(user.getCoinBalance().add(reserved).add(fee));
+                    userRepository.save(user);
+                    balanceCache.put(userId, user.getCoinBalance());
+                } else {
+                    // 매도 예약: 보유량 반환
+                    UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                            .orElseThrow(() -> new IllegalStateException("보유 주식을 찾을 수 없습니다."));
+                    share.setQuantity(share.getQuantity() + order.getQuantity());
+                    userShareRepository.save(share);
+
+                    Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+                    shares.merge(channelId, (long) order.getQuantity(), Long::sum);
                 }
-                share.setQuantity(newQty);
-                userShareRepository.save(share);
-            }
-
-            // 종목 가격 및 순환 공급량, 일일 거래량 변경
-            stockRepository.findById(channelId).ifPresent(s -> {
-                s.setCurrentPrice(finalPrice.intValue());
-                s.setTotalSupply(s.getTotalSupply() + (isBuy ? qty : -qty));
-                s.setDailyVolume(s.getDailyVolume() + qty);
-                savedStock.set(stockRepository.save(s));
+                return null;
             });
-
-            // 주문 내역 기록 (orders)
-            Order order = Order.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(userId)
-                    .streamerId(channelId)
-                    .type(isBuy ? "buy" : "sell")
-                    .quantity(qty)
-                    .estimatedPrice(estimatedPrice)
-                    .executedPrice(executedPrice)
-                    .status("completed")
-                    .createdAt(System.currentTimeMillis())
-                    .build();
-            orderRepository.save(order);
-
-            return null;
-        });
-
-        // 캐시 갱신 (커밋 후)
-        balanceCache.put(userId, newBalance);
-        shares.put(channelId, newQty);
-        priceCache.put(channelId, finalPrice);
-        supplyCache.put(channelId, Math.max(0L, currentSupply + (isBuy ? qty : -qty)));
-
-        // 캔들 업데이트 (STOMP /topic/candles/{channelId} 브로드캐스트 포함)
-        candleService.onTrade(channelId, finalPrice, System.currentTimeMillis());
-
-        // STOMP 브로드캐스트
-        messagingTemplate.convertAndSend(
-                "/topic/prices/" + channelId,
-                Map.of("streamerId", channelId, "price", finalPrice)
-        );
-        messagingTemplate.convertAndSend(
-                "/topic/trades",
-                Map.of(
-                        "streamerId", channelId,
-                        "streamerName", savedStock.get() != null ? savedStock.get().getStreamerName() : channelId,
-                        "type", isBuy ? "buy" : "sell",
-                        "quantity", qty,
-                        "price", executedPrice,
-                        "fee", fee,
-                        "timestamp", System.currentTimeMillis()
-                )
-        );
-        if (savedStock.get() != null) {
-            messagingTemplate.convertAndSend("/topic/streamers", List.of(savedStock.get()));
+            broadcastOrderBook(channelId);
+        } finally {
+            userLock.unlock();
         }
-
-        return new TradeResponse("executed", executedPrice, newBalance, fee);
     }
 
     // ---------------------------------------------------------------
-    // 캐시 제거 (포트폴리오 초기화 후 호출)
+    // 실시간 호가창 집계 및 웹소켓 브로드캐스트
     // ---------------------------------------------------------------
+
+    public OrderBookDto getOrderBook(String streamerId) {
+        Stock stock = stockRepository.findById(streamerId)
+                .orElse(Stock.builder().channelId(streamerId).currentPrice(1000).build());
+        BigDecimal currentPrice = BigDecimal.valueOf(stock.getCurrentPrice());
+
+        List<Order> dbOrders = orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(streamerId, "pending");
+
+        Map<BigDecimal, Long> asksAgg = new TreeMap<>(); // 오름차순
+        Map<BigDecimal, Long> bidsAgg = new TreeMap<>(Collections.reverseOrder()); // 내림차순
+
+        for (Order o : dbOrders) {
+            if ("sell".equals(o.getType())) {
+                asksAgg.merge(o.getLimitPrice(), (long) o.getQuantity(), Long::sum);
+            } else {
+                bidsAgg.merge(o.getLimitPrice(), (long) o.getQuantity(), Long::sum);
+            }
+        }
+
+        List<OrderBookDto.OrderBookEntry> asks = asksAgg.entrySet().stream()
+                .map(e -> new OrderBookDto.OrderBookEntry(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+
+        List<OrderBookDto.OrderBookEntry> bids = bidsAgg.entrySet().stream()
+                .map(e -> new OrderBookDto.OrderBookEntry(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+
+        // 가상 호가 패딩 (유동성 비주얼 제공)
+        BigDecimal step = currentPrice.multiply(BigDecimal.valueOf(0.005)).setScale(2, RoundingMode.HALF_UP);
+        if (step.compareTo(BigDecimal.ZERO) == 0) {
+            step = BigDecimal.valueOf(0.01);
+        }
+
+        for (int i = 1; i <= 5; i++) {
+            BigDecimal askPrice = currentPrice.add(step.multiply(BigDecimal.valueOf(i))).setScale(2, RoundingMode.HALF_UP);
+            boolean alreadyHas = asks.stream().anyMatch(entry -> entry.getPrice().compareTo(askPrice) == 0);
+            if (!alreadyHas && asks.size() < 10) {
+                asks.add(new OrderBookDto.OrderBookEntry(askPrice, 100L * i));
+            }
+        }
+        asks.sort(Comparator.comparing(OrderBookDto.OrderBookEntry::getPrice));
+
+        for (int i = 1; i <= 5; i++) {
+            BigDecimal bidPrice = currentPrice.subtract(step.multiply(BigDecimal.valueOf(i))).max(BigDecimal.valueOf(0.01)).setScale(2, RoundingMode.HALF_UP);
+            boolean alreadyHas = bids.stream().anyMatch(entry -> entry.getPrice().compareTo(bidPrice) == 0);
+            if (!alreadyHas && bids.size() < 10) {
+                bids.add(new OrderBookDto.OrderBookEntry(bidPrice, 100L * i));
+            }
+        }
+        bids.sort((e1, e2) -> e2.getPrice().compareTo(e1.getPrice()));
+
+        return new OrderBookDto(streamerId, currentPrice, asks, bids);
+    }
+
+    public void broadcastOrderBook(String streamerId) {
+        try {
+            OrderBookDto orderBook = getOrderBook(streamerId);
+            messagingTemplate.convertAndSend("/topic/orderbook/" + streamerId, orderBook);
+        } catch (Exception e) {
+            log.error("Failed to broadcast order book for " + streamerId, e);
+        }
+    }
 
     public void evictUserCache(String userId) {
         balanceCache.remove(userId);
@@ -222,7 +204,426 @@ public class TradeEngine {
     }
 
     // ---------------------------------------------------------------
-    // 캐시 로드 (락 보호 하에 호출 → 동시 접근 없음)
+    // 1. 지정가 주문 제출 (Limit Order Match)
+    // ---------------------------------------------------------------
+
+    private TradeResponse submitLimitOrder(TradeRequest req) {
+        String userId = req.getUserId();
+        String channelId = req.getStreamerId();
+        boolean isBuy = "buy".equals(req.getType());
+        int totalQty = req.getQuantity();
+        BigDecimal limitPrice = req.getLimitPrice();
+
+        BigDecimal initialCost = limitPrice.multiply(BigDecimal.valueOf(totalQty)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal initialFee = initialCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
+        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        long currentQty = shares.getOrDefault(channelId, 0L);
+
+        // 사전 검증
+        if (isBuy && currentBalance.compareTo(initialCost.add(initialFee)) < 0)
+            throw new IllegalStateException("잔고 부족");
+        if (!isBuy && currentQty < totalQty)
+            throw new IllegalStateException("보유 주식 부족");
+
+        // 즉시 매칭 시도
+        int remainingQty = totalQty;
+        BigDecimal lastExecutedPrice = limitPrice;
+        BigDecimal matchCostAccum = BigDecimal.ZERO;
+        BigDecimal matchFeeAccum = BigDecimal.ZERO;
+
+        List<Order> oppositeOrders = isBuy
+                ? orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                    .stream().filter(o -> "sell".equals(o.getType()) && o.getLimitPrice().compareTo(limitPrice) <= 0).toList()
+                : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                    .stream().filter(o -> "buy".equals(o.getType()) && o.getLimitPrice().compareTo(limitPrice) >= 0).toList();
+
+        // 오름차순(Asks) / 내림차순(Bids) 정렬
+        List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
+        if (isBuy) {
+            sortedOpposite.sort(Comparator.comparing(Order::getLimitPrice).thenComparing(Order::getCreatedAt));
+        } else {
+            sortedOpposite.sort((o1, o2) -> o2.getLimitPrice().compareTo(o1.getLimitPrice()));
+        }
+
+        for (Order opp : sortedOpposite) {
+            if (remainingQty <= 0) break;
+
+            int matchQty = Math.min(remainingQty, opp.getQuantity());
+            BigDecimal matchPrice = opp.getLimitPrice();
+            BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
+
+            remainingQty -= matchQty;
+            lastExecutedPrice = matchPrice;
+            matchCostAccum = matchCostAccum.add(matchCost);
+            matchFeeAccum = matchFeeAccum.add(matchFee);
+        }
+
+        BigDecimal finalBalance = balanceCache.get(userId);
+
+        // 남은 잔여 수량은 PENDING으로 저장 및 예약
+        String pendingOrderId = UUID.randomUUID().toString();
+        if (remainingQty > 0) {
+            int left = remainingQty;
+            BigDecimal reservedCost = limitPrice.multiply(BigDecimal.valueOf(left)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal reservedFee = reservedCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+            new TransactionTemplate(txManager).execute(status -> {
+                User user = userRepository.findById(userId)
+                        .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
+
+                if (isBuy) {
+                    // 매수 예약: 잔여 금액 차감
+                    user.setCoinBalance(user.getCoinBalance().subtract(reservedCost).subtract(reservedFee));
+                    userRepository.save(user);
+                    balanceCache.put(userId, user.getCoinBalance());
+                } else {
+                    // 매도 예약: 이미 match로 보유량 깎인 상태에서 잔여 물량 보유량 감소
+                    UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                            .orElseThrow(() -> new IllegalStateException("보유 주식을 찾을 수 없습니다."));
+                    share.setQuantity(share.getQuantity() - left);
+                    userShareRepository.save(share);
+                    shares.put(channelId, share.getQuantity());
+                }
+
+                orderRepository.save(Order.builder()
+                        .id(pendingOrderId)
+                        .userId(userId)
+                        .streamerId(channelId)
+                        .type(isBuy ? "buy" : "sell")
+                        .quantity(left)
+                        .estimatedPrice(req.getEstimatedPrice())
+                        .limitPrice(limitPrice)
+                        .orderMode("limit")
+                        .status("pending")
+                        .createdAt(System.currentTimeMillis())
+                        .build());
+                return null;
+            });
+
+            finalBalance = balanceCache.get(userId);
+
+            messagingTemplate.convertAndSend("/topic/orders/" + userId,
+                    Map.of("event", "pending", "orderId", pendingOrderId,
+                            "streamerId", channelId, "type", isBuy ? "buy" : "sell",
+                            "quantity", left, "limitPrice", limitPrice));
+        }
+
+        // 종목 가격 정보 업데이트 및 STOMP 알림
+        BigDecimal finalPrice = lastExecutedPrice;
+        stockRepository.findById(channelId).ifPresent(s -> {
+            s.setCurrentPrice(finalPrice.intValue());
+            stockRepository.save(s);
+            priceCache.put(channelId, finalPrice);
+        });
+
+        candleService.onTrade(channelId, finalPrice, System.currentTimeMillis());
+        messagingTemplate.convertAndSend("/topic/prices/" + channelId, Map.of("streamerId", channelId, "price", finalPrice));
+        broadcastOrderBook(channelId);
+
+        return new TradeResponse(
+                remainingQty > 0 ? "pending" : "executed",
+                finalPrice,
+                finalBalance,
+                matchFeeAccum,
+                pendingOrderId,
+                "limit"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 2. 시장가 주문 체결 (Market Order Match + 미체결분 지정가 전환)
+    // ---------------------------------------------------------------
+
+    private TradeResponse executeMarketOrder(TradeRequest req) {
+        String userId = req.getUserId();
+        String channelId = req.getStreamerId();
+        boolean isBuy = "buy".equals(req.getType());
+        int totalQty = req.getQuantity();
+
+        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
+        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        long currentQty = shares.getOrDefault(channelId, 0L);
+
+        if (!isBuy && currentQty < totalQty)
+            throw new IllegalStateException("보유 주식 부족");
+
+        int remainingQty = totalQty;
+        BigDecimal lastExecutedPrice = priceCache.getOrDefault(channelId, req.getEstimatedPrice());
+        BigDecimal totalMatchFee = BigDecimal.ZERO;
+
+        // 1단계: 호가창의 반대편 대기 주문과 매칭
+        List<Order> oppositeOrders = isBuy
+                ? orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                    .stream().filter(o -> "sell".equals(o.getType())).toList()
+                : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                    .stream().filter(o -> "buy".equals(o.getType())).toList();
+
+        List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
+        if (isBuy) {
+            sortedOpposite.sort(Comparator.comparing(Order::getLimitPrice).thenComparing(Order::getCreatedAt));
+        } else {
+            sortedOpposite.sort((o1, o2) -> o2.getLimitPrice().compareTo(o1.getLimitPrice()));
+        }
+
+        for (Order opp : sortedOpposite) {
+            if (remainingQty <= 0) break;
+
+            int matchQty = Math.min(remainingQty, opp.getQuantity());
+            BigDecimal matchPrice = opp.getLimitPrice();
+            BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+
+            if (isBuy) {
+                // 매수자 잔고 체크
+                BigDecimal userBal = balanceCache.get(userId);
+                if (userBal.compareTo(matchCost.add(matchFee)) < 0) {
+                    // 살 수 있는 최대치 계산
+                    int maxAffordable = userBal.divide(matchPrice.multiply(BigDecimal.valueOf(1.01)), 0, RoundingMode.DOWN).intValue();
+                    if (maxAffordable <= 0) break;
+                    matchQty = Math.min(matchQty, maxAffordable);
+                    matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
+                    matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+                }
+            }
+
+            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
+
+            remainingQty -= matchQty;
+            lastExecutedPrice = matchPrice;
+            totalMatchFee = totalMatchFee.add(matchFee);
+        }
+
+        BigDecimal finalBalance = balanceCache.get(userId);
+
+        // 2단계: 미체결된 잔여 수량은 슬리피지(AMM) 없이 마지막 체결가 지정가 주문(limit)으로 호가창에 남겨둠
+        if (remainingQty > 0) {
+            int left = remainingQty;
+            BigDecimal pendingPrice = lastExecutedPrice; 
+            BigDecimal reservedCost = pendingPrice.multiply(BigDecimal.valueOf(left)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal reservedFee = reservedCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+            String pendingOrderId = UUID.randomUUID().toString();
+
+            if (isBuy) {
+                BigDecimal userBal = balanceCache.get(userId);
+                if (userBal.compareTo(reservedCost.add(reservedFee)) < 0) {
+                    int maxAffordable = userBal.divide(pendingPrice.multiply(BigDecimal.valueOf(1.01)), 0, RoundingMode.DOWN).intValue();
+                    if (maxAffordable > 0) {
+                        left = maxAffordable;
+                        reservedCost = pendingPrice.multiply(BigDecimal.valueOf(left)).setScale(2, RoundingMode.HALF_UP);
+                        reservedFee = reservedCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+                    } else {
+                        left = 0;
+                    }
+                }
+            }
+
+            if (left > 0) {
+                final int finalLeft = left;
+                final BigDecimal finalReservedCost = reservedCost;
+                final BigDecimal finalReservedFee = reservedFee;
+
+                new TransactionTemplate(txManager).execute(status -> {
+                    User user = userRepository.findById(userId)
+                            .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
+
+                    if (isBuy) {
+                        user.setCoinBalance(user.getCoinBalance().subtract(finalReservedCost).subtract(finalReservedFee));
+                        userRepository.save(user);
+                        balanceCache.put(userId, user.getCoinBalance());
+                    } else {
+                        // 매도: match로 깎인 상태에서 추가 남은 물량 보유량 감소(예약)
+                        UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                                .orElseThrow(() -> new IllegalStateException("보유 주식을 찾을 수 없습니다."));
+                        share.setQuantity(share.getQuantity() - finalLeft);
+                        userShareRepository.save(share);
+                        shares.put(channelId, share.getQuantity());
+                    }
+
+                    orderRepository.save(Order.builder()
+                            .id(pendingOrderId)
+                            .userId(userId)
+                            .streamerId(channelId)
+                            .type(isBuy ? "buy" : "sell")
+                            .quantity(finalLeft)
+                            .estimatedPrice(req.getEstimatedPrice())
+                            .limitPrice(pendingPrice)
+                            .orderMode("limit") // 시장가 미체결분은 지정가 주문으로 전환 대기
+                            .status("pending")
+                            .createdAt(System.currentTimeMillis())
+                            .build());
+                    return null;
+                });
+
+                finalBalance = balanceCache.get(userId);
+
+                messagingTemplate.convertAndSend("/topic/orders/" + userId,
+                        Map.of("event", "pending", "orderId", pendingOrderId,
+                                "streamerId", channelId, "type", isBuy ? "buy" : "sell",
+                                "quantity", finalLeft, "limitPrice", pendingPrice));
+            }
+        }
+
+        // 종목 가격 정보 업데이트 및 STOMP 알림
+        BigDecimal finalPrice = lastExecutedPrice;
+        stockRepository.findById(channelId).ifPresent(s -> {
+            s.setCurrentPrice(finalPrice.intValue());
+            stockRepository.save(s);
+            priceCache.put(channelId, finalPrice);
+        });
+
+        candleService.onTrade(channelId, finalPrice, System.currentTimeMillis());
+        messagingTemplate.convertAndSend("/topic/prices/" + channelId, Map.of("streamerId", channelId, "price", finalPrice));
+        broadcastOrderBook(channelId);
+
+        return new TradeResponse(
+                remainingQty > 0 ? "pending" : "executed",
+                finalPrice,
+                finalBalance,
+                totalMatchFee,
+                UUID.randomUUID().toString(),
+                "market"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 3. 두 주문의 매칭 매커니즘 실행 (DB 트랜잭션 처리)
+    // ---------------------------------------------------------------
+
+    private void executeMatch(Order opposite, String userId, int qty, BigDecimal price, BigDecimal cost, BigDecimal fee, boolean isBuy) {
+        String oppositeUserId = opposite.getUserId();
+        String channelId = opposite.getStreamerId();
+
+        new TransactionTemplate(txManager).execute(status -> {
+            // 1. 상대방 주문 수량 삭감 / 완료 처리
+            opposite.setQuantity(opposite.getQuantity() - qty);
+            if (opposite.getQuantity() == 0) {
+                opposite.setStatus("completed");
+                opposite.setExecutedPrice(price);
+            }
+            orderRepository.save(opposite);
+
+            // 2. 계좌 잔고 정보 업데이트
+            User buyerUser = userRepository.findById(isBuy ? userId : oppositeUserId)
+                    .orElseThrow(() -> new IllegalStateException("구매 유저 정보가 존재하지 않습니다."));
+            User sellerUser = userRepository.findById(isBuy ? oppositeUserId : userId)
+                    .orElseThrow(() -> new IllegalStateException("판매 유저 정보가 존재하지 않습니다."));
+
+            if (isBuy) {
+                // 내가 Market Buy일 때: 내 캐시 잔고 깎음 (상대 sell은 stock이 이미 예약 상태)
+                buyerUser.setCoinBalance(buyerUser.getCoinBalance().subtract(cost).subtract(fee));
+                userRepository.save(buyerUser);
+                balanceCache.put(userId, buyerUser.getCoinBalance());
+
+                // 상대방 Sell Limit 체결: 판매 대금 (수수료 차감) 지급
+                sellerUser.setCoinBalance(sellerUser.getCoinBalance().add(cost.subtract(fee)));
+                userRepository.save(sellerUser);
+                balanceCache.put(oppositeUserId, sellerUser.getCoinBalance());
+            } else {
+                // 내가 Market Sell일 때: 내 보유 주식 깎고 판매 대금 지급
+                sellerUser.setCoinBalance(sellerUser.getCoinBalance().add(cost.subtract(fee)));
+                userRepository.save(sellerUser);
+                balanceCache.put(userId, sellerUser.getCoinBalance());
+
+                // 상대방 Buy Limit 체결: 구매 수수료는 이미 예약 시 선반영 됨.
+            }
+
+            // 3. 주식 보유 현황(UserShare) 갱신
+            // 매수인 주식 보유량 증가
+            Stock stock = stockRepository.findById(channelId).orElseThrow();
+            UserShare buyerShare = userShareRepository.findByUserIdAndStockChannelId(buyerUser.getId(), channelId)
+                    .orElseGet(() -> UserShare.builder().user(buyerUser).stock(stock).avgPrice(BigDecimal.ZERO).build());
+
+            long prevBuyerQty = buyerShare.getQuantity();
+            long newBuyerQty = prevBuyerQty + qty;
+            BigDecimal prevBuyerAvg = buyerShare.getAvgPrice() != null ? buyerShare.getAvgPrice() : BigDecimal.ZERO;
+            BigDecimal prevTotalCost = prevBuyerAvg.multiply(BigDecimal.valueOf(prevBuyerQty));
+            buyerShare.setAvgPrice(prevTotalCost.add(cost).divide(BigDecimal.valueOf(newBuyerQty), 2, RoundingMode.HALF_UP));
+            buyerShare.setQuantity(newBuyerQty);
+            userShareRepository.save(buyerShare);
+
+            Map<String, Long> buyerSharesMap = sharesCache.computeIfAbsent(buyerUser.getId(), k -> new ConcurrentHashMap<>());
+            buyerSharesMap.put(channelId, newBuyerQty);
+
+            // 매도인의 주식은 예약되어 있었거나 (Limit Sell), Market Sell 이므로 차감
+            if (!isBuy) {
+                UserShare sellerShare = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                        .orElseThrow(() -> new IllegalStateException("판매 주식이 없습니다."));
+                sellerShare.setQuantity(sellerShare.getQuantity() - qty);
+                if (sellerShare.getQuantity() == 0) {
+                    userShareRepository.delete(sellerShare);
+                } else {
+                    userShareRepository.save(sellerShare);
+                }
+                Map<String, Long> sellerSharesMap = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+                sellerSharesMap.put(channelId, sellerShare.getQuantity());
+            }
+
+            // 4. 주문 이력 완료 내역 기록 생성
+            // 본 주문 체결분 저장
+            orderRepository.save(Order.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(userId)
+                    .streamerId(channelId)
+                    .type(isBuy ? "buy" : "sell")
+                    .quantity(qty)
+                    .estimatedPrice(price)
+                    .executedPrice(price)
+                    .orderMode(isBuy ? "market" : "market") 
+                    .status("completed")
+                    .createdAt(System.currentTimeMillis())
+                    .build());
+
+            // 상대방 limit 주문 체결분 저장
+            orderRepository.save(Order.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(oppositeUserId)
+                    .streamerId(channelId)
+                    .type(isBuy ? "sell" : "buy")
+                    .quantity(qty)
+                    .estimatedPrice(price)
+                    .executedPrice(price)
+                    .orderMode("limit")
+                    .status("completed")
+                    .createdAt(System.currentTimeMillis())
+                    .build());
+
+            // 5. 종목 정보 갱신
+            stock.setTotalSupply(stock.getTotalSupply() + (isBuy ? qty : -qty));
+            stock.setDailyVolume(stock.getDailyVolume() + qty);
+            stockRepository.save(stock);
+            supplyCache.put(channelId, stock.getTotalSupply());
+
+            return null;
+        });
+
+        // 상대방에게 매칭 체결 알림 발송 (웹소켓)
+        messagingTemplate.convertAndSend("/topic/orders/" + oppositeUserId, Map.of(
+                "event", "filled",
+                "orderId", opposite.getId(),
+                "streamerId", channelId,
+                "executedPrice", price,
+                "fee", fee
+        ));
+
+        // 전체 트레이드 채널 알림
+        messagingTemplate.convertAndSend("/topic/trades", Map.of(
+                "streamerId", channelId,
+                "streamerName", stockRepository.findById(channelId).map(Stock::getStreamerName).orElse(channelId),
+                "type", isBuy ? "buy" : "sell",
+                "quantity", qty,
+                "price", price,
+                "fee", fee,
+                "timestamp", System.currentTimeMillis()
+        ));
+    }
+
+    // ---------------------------------------------------------------
+    // 캐시 로딩 (포트폴리오 조회 시)
     // ---------------------------------------------------------------
 
     private void loadPortfolioIfAbsent(String userId) {
