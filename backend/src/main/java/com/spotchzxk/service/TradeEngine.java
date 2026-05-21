@@ -371,46 +371,38 @@ public class TradeEngine {
         BigDecimal lastExecutedPrice = priceCache.getOrDefault(channelId, req.getEstimatedPrice());
         BigDecimal totalMatchFee = BigDecimal.ZERO;
 
-        // 1단계: 호가창의 반대편 대기 주문과 매칭
-        List<Order> oppositeOrders = isBuy
-                ? orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
-                    .stream().filter(o -> "sell".equals(o.getType())).toList()
-                : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
-                    .stream().filter(o -> "buy".equals(o.getType())).toList();
-
-        List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
+        // 1단계: 매수만 즉시 매칭 — 매도는 항상 현재가 기준 대기 주문으로 등록
         if (isBuy) {
+            List<Order> oppositeOrders = orderRepository
+                    .findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                    .stream().filter(o -> "sell".equals(o.getType())).toList();
+
+            List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
             sortedOpposite.sort(Comparator.comparing(Order::getLimitPrice).thenComparing(Order::getCreatedAt));
-        } else {
-            sortedOpposite.sort((o1, o2) -> o2.getLimitPrice().compareTo(o1.getLimitPrice()));
-        }
 
-        for (Order opp : sortedOpposite) {
-            if (remainingQty <= 0) break;
+            for (Order opp : sortedOpposite) {
+                if (remainingQty <= 0) break;
 
-            int matchQty = Math.min(remainingQty, opp.getQuantity());
-            BigDecimal matchPrice = opp.getLimitPrice();
-            BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+                int matchQty = Math.min(remainingQty, opp.getQuantity());
+                BigDecimal matchPrice = opp.getLimitPrice();
+                BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
 
-            if (isBuy) {
-                // 매수자 잔고 체크
                 BigDecimal userBal = balanceCache.get(userId);
                 if (userBal.compareTo(matchCost.add(matchFee)) < 0) {
-                    // 살 수 있는 최대치 계산
                     int maxAffordable = userBal.divide(matchPrice.multiply(BigDecimal.valueOf(1.01)), 0, RoundingMode.DOWN).intValue();
                     if (maxAffordable <= 0) break;
                     matchQty = Math.min(matchQty, maxAffordable);
                     matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
                     matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
                 }
+
+                executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, true);
+
+                remainingQty -= matchQty;
+                lastExecutedPrice = matchPrice;
+                totalMatchFee = totalMatchFee.add(matchFee);
             }
-
-            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
-
-            remainingQty -= matchQty;
-            lastExecutedPrice = matchPrice;
-            totalMatchFee = totalMatchFee.add(matchFee);
         }
 
         BigDecimal finalBalance = balanceCache.get(userId);
