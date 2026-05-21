@@ -23,11 +23,14 @@ public class TradeController {
     }
 
     @PostMapping("/api/trade")
-    public ResponseEntity<TradeResponse> trade(@Valid @RequestBody TradeRequest req,
-                                               @AuthenticationPrincipal String uid) {
+    public ResponseEntity<?> trade(@Valid @RequestBody TradeRequest req,
+                                   @AuthenticationPrincipal String uid) {
         req.setUserId(uid);
-        TradeResponse response = tradeEngine.submitTrade(req);
-        return ResponseEntity.ok(response);
+        try {
+            return ResponseEntity.ok(tradeEngine.submitTrade(req));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/api/trade/cancel")
