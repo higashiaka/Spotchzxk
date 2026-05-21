@@ -56,6 +56,9 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long dividendAccumulationCount;
 
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long issuedShares;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

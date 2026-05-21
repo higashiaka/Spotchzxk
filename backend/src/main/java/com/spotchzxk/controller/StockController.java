@@ -9,9 +9,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.spotchzxk.service.TradeEngine;
-import com.spotchzxk.dto.OrderBookDto;
-
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -23,16 +20,10 @@ import java.util.Optional;
 public class StockController {
 
     private final StockService stockService;
-    private final TradeEngine tradeEngine;
 
     @GetMapping
     public ResponseEntity<List<Stock>> getAllStocks() {
         return ResponseEntity.ok(stockService.getAllStocks());
-    }
-
-    @GetMapping("/{streamerId}/orderbook")
-    public ResponseEntity<OrderBookDto> getOrderBook(@PathVariable("streamerId") String streamerId) {
-        return ResponseEntity.ok(tradeEngine.getOrderBook(streamerId));
     }
 
     @PostMapping

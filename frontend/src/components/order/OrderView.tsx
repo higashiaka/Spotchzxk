@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { changePct, priceColor, fmt, fmtCompact } from '../../utils';
 import { OrderForm } from './OrderForm';
-import { OrderBook } from './OrderBook';
 
 export const OrderView = ({
   streamers, selectedStreamer, user, onSelectStreamer,
@@ -13,36 +12,30 @@ export const OrderView = ({
   user: User | null;
   onSelectStreamer: (s: Stock) => void;
 }) => {
-  const [limitPrice, setLimitPrice] = useState<number | null>(null);
+  const [qtyStr, setQtyStr] = useState('1');
+  const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
   const [prevId, setPrevId] = useState<string | null>(null);
 
-  // 선택 종목이 바뀌었을 때 지정가 초기화
   if (selectedStreamer && selectedStreamer.id !== prevId) {
     setPrevId(selectedStreamer.id);
-    setLimitPrice(null);
+    setQtyStr('1');
   }
 
   if (selectedStreamer) {
     return (
-      <div className="h-full flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-[#222A3A] overflow-hidden bg-[#0B0E14]">
-        {/* 좌측: 실시간 호가창 */}
-        <div className="flex-1 overflow-hidden h-[45%] md:h-full">
-          <OrderBook streamer={selectedStreamer} onSelectPrice={setLimitPrice} />
-        </div>
-        {/* 우측: 주문 폼 */}
-        <div className="w-full md:w-[340px] overflow-hidden h-[55%] md:h-full shrink-0">
-          <OrderForm 
-            streamer={selectedStreamer} 
-            user={user} 
-            limitPrice={limitPrice} 
-            setLimitPrice={setLimitPrice} 
-          />
-        </div>
+      <div className="h-full overflow-hidden bg-[#0B0E14]">
+        <OrderForm
+          streamer={selectedStreamer}
+          user={user}
+          qtyStr={qtyStr}
+          setQtyStr={setQtyStr}
+          orderType={orderType}
+          setOrderType={setOrderType}
+        />
       </div>
     );
   }
 
-  // 종목 미선택 시 Picker
   const sorted = useMemo(() => [...streamers].sort((a, b) => b.totalVolume - a.totalVolume), [streamers]);
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar bg-[#0B0E14]">
@@ -52,8 +45,7 @@ export const OrderView = ({
           const pct = changePct(s.price);
           return (
             <div key={s.id} onClick={() => onSelectStreamer(s)}
-              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors bg-[#131924] border-[#222A3A] hover:border-[#3D8BFF]"
-            >
+              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors bg-[#131924] border-[#222A3A] hover:border-[#3D8BFF]">
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-sm truncate">{s.name}</p>
                 <p className="text-xs mt-0.5 text-[#626B7A]">{fmtCompact(s.totalVolume)}</p>
