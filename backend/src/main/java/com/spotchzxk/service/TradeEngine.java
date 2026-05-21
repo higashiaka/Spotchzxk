@@ -76,9 +76,9 @@ public class TradeEngine {
     }
 
     // ---------------------------------------------------------------
-    // 시장가 체결 — dev engine.ts의 가격충격 공식 적용
-    // 매수: price *= (1 + qty * 0.0005)  → 올라간 가격에 즉시 체결
-    // 매도: price *= (1 - qty * 0.0005)  → 내려간 가격에 즉시 체결
+    // 시장가 체결 — 1주씩 순차 체결하는 지수 가격충격 공식
+    // 매수: price *= (1 + 0.0005)^qty
+    // 매도: price *= (1 - 0.0005)^qty  → qty가 커도 절대 0·음수 불가
     // ---------------------------------------------------------------
 
     private TradeResponse executeMarketOrder(String userId, String channelId,
@@ -89,10 +89,12 @@ public class TradeEngine {
                         .map(s -> BigDecimal.valueOf(s.getCurrentPrice()))
                         .orElse(fallbackPrice));
 
-        double netDelta = isBuy ? qty : -qty;
-        double multiplier = 1.0 + (netDelta * PRICE_IMPACT_PER_SHARE);
-        BigDecimal executedPrice = BigDecimal.valueOf(
-                Math.max(1.0, currentPrice.doubleValue() * multiplier))
+        // 1주씩 순차 체결 시뮬레이션 → 지수 공식으로 O(1) 계산
+        // 매수: price * (1+k)^qty,  매도: price * (1-k)^qty  (k=PRICE_IMPACT_PER_SHARE)
+        // 선형 공식(1 ± qty*k)과 달리 qty가 아무리 커도 음수·0 불가
+        double r = isBuy ? (1.0 + PRICE_IMPACT_PER_SHARE) : (1.0 - PRICE_IMPACT_PER_SHARE);
+        double finalPriceRaw = currentPrice.doubleValue() * Math.pow(r, qty);
+        BigDecimal executedPrice = BigDecimal.valueOf(Math.max(1.0, finalPriceRaw))
                 .setScale(0, RoundingMode.HALF_UP);
 
         BigDecimal cost = executedPrice.multiply(BigDecimal.valueOf(qty));
