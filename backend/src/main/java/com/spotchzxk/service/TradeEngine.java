@@ -371,23 +371,28 @@ public class TradeEngine {
         BigDecimal lastExecutedPrice = priceCache.getOrDefault(channelId, req.getEstimatedPrice());
         BigDecimal totalMatchFee = BigDecimal.ZERO;
 
-        // 1단계: 매수만 즉시 매칭 — 매도는 항상 현재가 기준 대기 주문으로 등록
+        // 호가창의 반대편 대기 주문과 즉시 매칭 (IOC — 매칭 안 되면 오류)
+        String oppType = isBuy ? "sell" : "buy";
+        List<Order> oppositeOrders = orderRepository
+                .findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
+                .stream().filter(o -> oppType.equals(o.getType())).toList();
+
+        List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
         if (isBuy) {
-            List<Order> oppositeOrders = orderRepository
-                    .findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")
-                    .stream().filter(o -> "sell".equals(o.getType())).toList();
-
-            List<Order> sortedOpposite = new ArrayList<>(oppositeOrders);
             sortedOpposite.sort(Comparator.comparing(Order::getLimitPrice).thenComparing(Order::getCreatedAt));
+        } else {
+            sortedOpposite.sort((o1, o2) -> o2.getLimitPrice().compareTo(o1.getLimitPrice()));
+        }
 
-            for (Order opp : sortedOpposite) {
-                if (remainingQty <= 0) break;
+        for (Order opp : sortedOpposite) {
+            if (remainingQty <= 0) break;
 
-                int matchQty = Math.min(remainingQty, opp.getQuantity());
-                BigDecimal matchPrice = opp.getLimitPrice();
-                BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
-                BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
+            int matchQty = Math.min(remainingQty, opp.getQuantity());
+            BigDecimal matchPrice = opp.getLimitPrice();
+            BigDecimal matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
 
+            if (isBuy) {
                 BigDecimal userBal = balanceCache.get(userId);
                 if (userBal.compareTo(matchCost.add(matchFee)) < 0) {
                     int maxAffordable = userBal.divide(matchPrice.multiply(BigDecimal.valueOf(1.01)), 0, RoundingMode.DOWN).intValue();
@@ -396,84 +401,21 @@ public class TradeEngine {
                     matchCost = matchPrice.multiply(BigDecimal.valueOf(matchQty)).setScale(2, RoundingMode.HALF_UP);
                     matchFee = matchCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
                 }
-
-                executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, true);
-
-                remainingQty -= matchQty;
-                lastExecutedPrice = matchPrice;
-                totalMatchFee = totalMatchFee.add(matchFee);
             }
+
+            executeMatch(opp, userId, matchQty, matchPrice, matchCost, matchFee, isBuy);
+
+            remainingQty -= matchQty;
+            lastExecutedPrice = matchPrice;
+            totalMatchFee = totalMatchFee.add(matchFee);
+        }
+
+        // 한 주도 체결되지 않았으면 오류
+        if (remainingQty == totalQty) {
+            throw new IllegalStateException(isBuy ? "매수 가능한 매도 호가가 없습니다." : "매도 가능한 매수 호가가 없습니다.");
         }
 
         BigDecimal finalBalance = balanceCache.get(userId);
-
-        // 2단계: 미체결된 잔여 수량은 슬리피지(AMM) 없이 마지막 체결가 지정가 주문(limit)으로 호가창에 남겨둠
-        if (remainingQty > 0) {
-            int left = remainingQty;
-            BigDecimal pendingPrice = lastExecutedPrice; 
-            BigDecimal reservedCost = pendingPrice.multiply(BigDecimal.valueOf(left)).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal reservedFee = reservedCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
-            String pendingOrderId = UUID.randomUUID().toString();
-
-            if (isBuy) {
-                BigDecimal userBal = balanceCache.get(userId);
-                if (userBal.compareTo(reservedCost.add(reservedFee)) < 0) {
-                    int maxAffordable = userBal.divide(pendingPrice.multiply(BigDecimal.valueOf(1.01)), 0, RoundingMode.DOWN).intValue();
-                    if (maxAffordable > 0) {
-                        left = maxAffordable;
-                        reservedCost = pendingPrice.multiply(BigDecimal.valueOf(left)).setScale(2, RoundingMode.HALF_UP);
-                        reservedFee = reservedCost.multiply(TRADE_FEE_RATE).setScale(2, RoundingMode.HALF_UP);
-                    } else {
-                        left = 0;
-                    }
-                }
-            }
-
-            if (left > 0) {
-                final int finalLeft = left;
-                final BigDecimal finalReservedCost = reservedCost;
-                final BigDecimal finalReservedFee = reservedFee;
-
-                new TransactionTemplate(txManager).execute(status -> {
-                    User user = userRepository.findById(userId)
-                            .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
-
-                    if (isBuy) {
-                        user.setCoinBalance(user.getCoinBalance().subtract(finalReservedCost).subtract(finalReservedFee));
-                        userRepository.save(user);
-                        balanceCache.put(userId, user.getCoinBalance());
-                    } else {
-                        // 매도: match로 깎인 상태에서 추가 남은 물량 보유량 감소(예약)
-                        UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
-                                .orElseThrow(() -> new IllegalStateException("보유 주식을 찾을 수 없습니다."));
-                        share.setQuantity(share.getQuantity() - finalLeft);
-                        userShareRepository.save(share);
-                        shares.put(channelId, share.getQuantity());
-                    }
-
-                    orderRepository.save(Order.builder()
-                            .id(pendingOrderId)
-                            .userId(userId)
-                            .streamerId(channelId)
-                            .type(isBuy ? "buy" : "sell")
-                            .quantity(finalLeft)
-                            .estimatedPrice(req.getEstimatedPrice())
-                            .limitPrice(pendingPrice)
-                            .orderMode("limit") // 시장가 미체결분은 지정가 주문으로 전환 대기
-                            .status("pending")
-                            .createdAt(System.currentTimeMillis())
-                            .build());
-                    return null;
-                });
-
-                finalBalance = balanceCache.get(userId);
-
-                messagingTemplate.convertAndSend("/topic/orders/" + userId,
-                        Map.of("event", "pending", "orderId", pendingOrderId,
-                                "streamerId", channelId, "type", isBuy ? "buy" : "sell",
-                                "quantity", finalLeft, "limitPrice", pendingPrice));
-            }
-        }
 
         // 종목 가격 정보 업데이트 및 STOMP 알림
         BigDecimal finalPrice = lastExecutedPrice;
@@ -488,7 +430,7 @@ public class TradeEngine {
         broadcastOrderBook(channelId);
 
         return new TradeResponse(
-                remainingQty > 0 ? "pending" : "executed",
+                "executed",
                 finalPrice,
                 finalBalance,
                 totalMatchFee,

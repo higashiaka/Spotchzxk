@@ -22,9 +22,10 @@ export const useTrade = (userId: string) => {
         method: 'POST',
         body: JSON.stringify({ userId, ...tradeDetails }),
       });
-      
+
       if (!res.ok) {
-        throw new Error('Trade failed to queue on server');
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || '주문 처리에 실패했습니다.');
       }
       return res.json();
     },
@@ -60,7 +61,7 @@ export const useTrade = (userId: string) => {
       if (context?.previousPortfolio) {
         queryClient.setQueryData<Portfolio>(['portfolio', userId], context.previousPortfolio);
       }
-      alert(`Trade failed: ${err.message}. Rolling back.`);
+      alert(err.message);
     },
     
     onSettled: () => {
