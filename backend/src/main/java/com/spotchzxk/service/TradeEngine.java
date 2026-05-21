@@ -28,6 +28,8 @@ public class TradeEngine {
     private static final BigDecimal MIN_PRICE = BigDecimal.ONE;
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
+    private static final long INITIAL_SUPPLY = 10_000L;
+    private static final String HOUSE_USER_ID = "__house__";
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -177,6 +179,43 @@ public class TradeEngine {
 
     public void evictSupplyCache(String channelId) {
         supplyCache.remove(channelId);
+    }
+
+    /**
+     * 종목 상장 직후 호출 — 하우스 계정이 초기 물량(10,000주)을 상장가에 매도 호가로 등록
+     */
+    public void initializeStockSupply(String channelId, int listingPrice) {
+        new TransactionTemplate(txManager).execute(status -> {
+            Stock stock = stockRepository.findById(channelId).orElseThrow();
+
+            User house = userRepository.findById(HOUSE_USER_ID)
+                    .orElseGet(() -> userRepository.save(
+                            User.builder().id(HOUSE_USER_ID).coinBalance(BigDecimal.ZERO).build()));
+
+            // 보유량은 0 (전량 예약 상태로 시작)
+            UserShare houseShare = userShareRepository.findByUserIdAndStockChannelId(HOUSE_USER_ID, channelId)
+                    .orElseGet(() -> UserShare.builder().user(house).stock(stock)
+                            .quantity(0L).avgPrice(BigDecimal.valueOf(listingPrice)).build());
+            houseShare.setQuantity(0L);
+            userShareRepository.save(houseShare);
+
+            orderRepository.save(Order.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(HOUSE_USER_ID)
+                    .streamerId(channelId)
+                    .type("sell")
+                    .quantity((int) INITIAL_SUPPLY)
+                    .estimatedPrice(BigDecimal.valueOf(listingPrice))
+                    .limitPrice(BigDecimal.valueOf(listingPrice))
+                    .orderMode("limit")
+                    .status("pending")
+                    .createdAt(System.currentTimeMillis())
+                    .build());
+
+            return null;
+        });
+
+        broadcastOrderBook(channelId);
     }
 
     // ---------------------------------------------------------------

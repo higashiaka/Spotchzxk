@@ -27,6 +27,7 @@ public class StockService {
 
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final TradeEngine tradeEngine;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -68,11 +69,30 @@ public class StockService {
             throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
         }
 
-        Stock savedStock = stockRepository.save(stock);
+        // 팔로워 수 기반 상장가 산정
+        int listingPrice = calcListingPrice(stock.getFollowerCount());
+        stock.setCurrentPrice(listingPrice);
+        stock.setBasePrice(listingPrice);
+
+        stockRepository.save(stock);
+
+        // 초기 10,000주를 상장가에 매도 호가로 등록 (하우스 계정)
+        tradeEngine.initializeStockSupply(channelId, listingPrice);
 
         // 전체 목록 브로드캐스트 → 프론트 즉시 반영
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
-        return Optional.of(savedStock);
+        return Optional.of(stockRepository.findById(channelId).orElseThrow());
+    }
+
+    /**
+     * sqrt(팔로워수) × 10, 100원 단위 반올림, 최소 500원
+     * 예) 10,000명→1,000원 / 100,000명→3,100원 / 1,000,000명→10,000원
+     */
+    private static int calcListingPrice(int followerCount) {
+        if (followerCount <= 0) return 500;
+        int raw = (int) (Math.sqrt(followerCount) * 10);
+        int rounded = (raw / 100) * 100;
+        return Math.max(500, rounded);
     }
 
     private String getEnvOrProperty(String key) {
