@@ -28,7 +28,7 @@ public class TradeEngine {
     private static final BigDecimal MIN_PRICE = BigDecimal.ONE;
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final BigDecimal TRADE_FEE_RATE = new BigDecimal("0.01");
-    private static final long INITIAL_SUPPLY = 10_000L;
+    private static final long INITIAL_SUPPLY = 100_000L;
     private static final long MAX_HOLDING_PER_STOCK = INITIAL_SUPPLY / 10;  // 1인 최대 10%
     private static final int TRANCHE_COUNT = 10;                             // 하우스 호가 분할 수
     private static final String HOUSE_USER_ID = "__house__";
@@ -184,7 +184,7 @@ public class TradeEngine {
     }
 
     /**
-     * 종목 상장 직후 호출 — 하우스 계정이 초기 물량(10,000주)을 상장가에 매도 호가로 등록
+     * 종목 상장 직후 호출 — 하우스 계정이 초기 물량(100,000주)을 상장가에 매도 호가로 등록
      */
     public void initializeStockSupply(String channelId, int listingPrice) {
         new TransactionTemplate(txManager).execute(status -> {
