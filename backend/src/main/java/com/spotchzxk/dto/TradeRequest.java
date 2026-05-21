@@ -25,12 +25,4 @@ public class TradeRequest {
     @NotNull
     @DecimalMin("0.01")
     private BigDecimal estimatedPrice;
-
-    /** 주문 방식: "market"(기본) | "limit" */
-    @Pattern(regexp = "market|limit")
-    private String orderMode = "market";
-
-    /** 지정가 — orderMode="limit" 일 때만 필수 */
-    @DecimalMin("0.01")
-    private BigDecimal limitPrice;
 }

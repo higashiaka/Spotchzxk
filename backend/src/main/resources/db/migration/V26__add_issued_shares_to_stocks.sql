@@ -1,0 +1,1 @@
+ALTER TABLE stocks ADD COLUMN issued_shares BIGINT NOT NULL DEFAULT 0;

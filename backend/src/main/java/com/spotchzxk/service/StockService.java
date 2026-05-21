@@ -74,10 +74,9 @@ public class StockService {
         stock.setCurrentPrice(listingPrice);
         stock.setBasePrice(listingPrice);
 
+        stock.setTotalSupply(100_000L);
+        stock.setIssuedShares(0L);
         stockRepository.save(stock);
-
-        // 초기 10,000주를 상장가에 매도 호가로 등록 (하우스 계정)
-        tradeEngine.initializeStockSupply(channelId, listingPrice);
 
         // 전체 목록 브로드캐스트 → 프론트 즉시 반영
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
