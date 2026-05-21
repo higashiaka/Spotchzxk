@@ -36,7 +36,16 @@ public class Order {
     private BigDecimal executedPrice;
 
     @Column(nullable = false, length = 20)
-    private String status; // e.g. "completed"
+    private String status; // "completed" | "pending" | "cancelled"
+
+    /** 주문 방식: "market" | "limit" */
+    @Builder.Default
+    @Column(name = "order_mode", nullable = false, length = 10)
+    private String orderMode = "market";
+
+    /** 지정가 (limit 주문 시에만 설정) */
+    @Column(name = "limit_price", precision = 12, scale = 2)
+    private BigDecimal limitPrice;
 
     @Column(name = "created_at", nullable = false)
     private long createdAt; // epoch milliseconds

@@ -8,6 +8,8 @@ export interface OrderHistory {
   quantity: number;
   executedPrice?: number;
   estimatedPrice: number;
+  limitPrice?: number;
+  orderMode?: 'market' | 'limit';
   createdAt: number;
   status: string;
 }
