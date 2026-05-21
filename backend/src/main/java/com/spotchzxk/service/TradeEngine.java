@@ -158,30 +158,6 @@ public class TradeEngine {
                 .map(e -> new OrderBookDto.OrderBookEntry(e.getKey(), e.getValue()))
                 .collect(Collectors.toList());
 
-        // 가상 호가 패딩 (유동성 비주얼 제공)
-        BigDecimal step = currentPrice.multiply(BigDecimal.valueOf(0.005)).setScale(2, RoundingMode.HALF_UP);
-        if (step.compareTo(BigDecimal.ZERO) == 0) {
-            step = BigDecimal.valueOf(0.01);
-        }
-
-        for (int i = 1; i <= 5; i++) {
-            BigDecimal askPrice = currentPrice.add(step.multiply(BigDecimal.valueOf(i))).setScale(2, RoundingMode.HALF_UP);
-            boolean alreadyHas = asks.stream().anyMatch(entry -> entry.getPrice().compareTo(askPrice) == 0);
-            if (!alreadyHas && asks.size() < 10) {
-                asks.add(new OrderBookDto.OrderBookEntry(askPrice, 100L * i));
-            }
-        }
-        asks.sort(Comparator.comparing(OrderBookDto.OrderBookEntry::getPrice));
-
-        for (int i = 1; i <= 5; i++) {
-            BigDecimal bidPrice = currentPrice.subtract(step.multiply(BigDecimal.valueOf(i))).max(BigDecimal.valueOf(0.01)).setScale(2, RoundingMode.HALF_UP);
-            boolean alreadyHas = bids.stream().anyMatch(entry -> entry.getPrice().compareTo(bidPrice) == 0);
-            if (!alreadyHas && bids.size() < 10) {
-                bids.add(new OrderBookDto.OrderBookEntry(bidPrice, 100L * i));
-            }
-        }
-        bids.sort((e1, e2) -> e2.getPrice().compareTo(e1.getPrice()));
-
         return new OrderBookDto(streamerId, currentPrice, asks, bids);
     }
 
