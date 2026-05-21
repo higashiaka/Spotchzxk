@@ -408,7 +408,7 @@ export const ProfileView = ({
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: '#1A2232', borderColor: '#222A3A' }}>
         <div className="flex flex-col items-start gap-0.5">
-          <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (1천만으로 세팅)</span>
+          <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (100만으로 세팅)</span>
           <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : '#626B7A' }}>
             오늘 남은 횟수: {remainingResets}회
           </span>
