@@ -59,10 +59,12 @@ public class ChzzkLivePollingService {
                 stock.setLive(true);
                 stock.setLiveStartedAt(LocalDateTime.now());
                 stock.setDividendAccumulationCount(0);
-                stockRepository.save(stock);
                 userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
+                long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
+                stock.setPreStreamFloat(preStreamFloat);
+                stockRepository.save(stock);
                 anyChanged = true;
-                log.info("Stream started: channel={}, pre-stream snapshot taken", stock.getChannelId());
+                log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}", stock.getChannelId(), preStreamFloat);
 
             } else if (wasLive && isLiveNow) {
                 payIntervalIfDue(stock);

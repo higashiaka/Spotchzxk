@@ -90,11 +90,12 @@ export const ChartView = ({
   };
 
   const expectedPerShare = (s: Stock): string => {
-    const supply = s.totalSupply ?? 0;
-    if (supply <= 0) return '계산 중';
+    // 실제 배당 분모: 방송 시작 전 보유량 합계(preStreamFloat). 없으면 totalSupply로 fallback
+    const divisor = (s.preStreamFloat && s.preStreamFloat > 0) ? s.preStreamFloat : (s.totalSupply ?? 0);
+    if (divisor <= 0) return '계산 중';
     const hours = Math.max(1, s.baseBroadcastHours ?? 1);
-    // price × 0.10 × hours / supply × (1 - 배당세 0.20)
-    const val = s.price * 0.10 * hours / supply * 0.80;
+    // price × 0.10 × hours / preStreamFloat × (1 - 배당세 0.20)
+    const val = s.price * 0.10 * hours / divisor * 0.80;
     return val >= 1 ? `+${Math.floor(val)}코인` : `+${val.toFixed(4)}`;
   };
 
