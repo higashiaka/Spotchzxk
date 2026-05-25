@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { UTCTimestamp } from 'lightweight-charts';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
-import { subscribeStomp } from '../../lib/stompClient';
+import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { apiFetch } from '../../lib/api';
 import { LiveTrade } from '../../types';
 import { fmt, fmtCompact, changePct, priceColor } from '../../utils';
@@ -22,11 +22,16 @@ export const StockDetail = ({
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [candles, setCandles] = useState<Candle[]>([]);
 
-  useEffect(() => {
-    setCandles([]);
-    apiFetch(`/api/stocks/${streamer.id}/candles?interval=${interval}&count=50`)
-      .then(res => res.ok ? res.json() : [])
-      .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[]) => {
+  // 종목/인터벌 변경 시 fetch용 ref (재연결 핸들러에서 최신값 참조)
+  const fetchParamsRef = useRef({ stockId: streamer.id, interval });
+  fetchParamsRef.current = { stockId: streamer.id, interval };
+
+  const fetchCandles = (stockId: string, iv: string, clearFirst: boolean) => {
+    if (clearFirst) setCandles([]);
+    apiFetch(`/api/stocks/${stockId}/candles?interval=${iv}&count=50`)
+      .then(res => res.ok ? res.json() : null)
+      .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[] | null) => {
+        if (!data) return; // 실패 시 기존 데이터 유지
         setCandles(data.map(c => ({
           time: (Math.floor(c.bucketStart / 1000) + 9 * 3600) as UTCTimestamp,
           open: c.open,
@@ -35,8 +40,22 @@ export const StockDetail = ({
           close: c.close,
         })));
       })
-      .catch(() => setCandles([]));
-  }, [streamer.id, interval]);
+      .catch(() => {/* 에러 시 기존 캔들 유지 */});
+  };
+
+  // 종목/인터벌 변경 시 초기 로드
+  useEffect(() => {
+    fetchCandles(streamer.id, interval, true);
+  }, [streamer.id, interval]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // STOMP 재연결 시 캔들 재조회 (서버 재시작 후 복구)
+  useEffect(() => {
+    const unsub = registerOnConnect(() => {
+      const { stockId, interval: iv } = fetchParamsRef.current;
+      fetchCandles(stockId, iv, false); // 기존 데이터 유지하면서 갱신
+    });
+    return () => unsub();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const subscription = subscribeStomp(`/topic/candles/${streamer.id}`, (message) => {
