@@ -26,11 +26,12 @@ export function getStompClient(): Client {
 }
 
 export function registerOnConnect(callback: () => void): () => void {
+  // 항상 connectListeners에 추가 → 재연결 시에도 구독 복구됨
+  connectListeners.push(callback);
   const client = getStompClient();
+  // 이미 연결 중이면 즉시 실행
   if (client.connected) {
-    callback();
-  } else {
-    connectListeners.push(callback);
+    try { callback(); } catch (e) { console.error('Error in STOMP onConnect listener:', e); }
   }
   return () => {
     const idx = connectListeners.indexOf(callback);
