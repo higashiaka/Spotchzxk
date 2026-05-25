@@ -1,0 +1,2 @@
+ALTER TABLE stocks
+    ADD COLUMN pre_stream_float BIGINT NOT NULL DEFAULT 0;

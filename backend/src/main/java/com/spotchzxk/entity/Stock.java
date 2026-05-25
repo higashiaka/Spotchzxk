@@ -59,6 +59,10 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long issuedShares;
 
+    // 방송 시작 시점 실제 유통량 (하우스 제외, pre_stream_quantity 합산) — 주당 배당 계산 분모
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long preStreamFloat;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

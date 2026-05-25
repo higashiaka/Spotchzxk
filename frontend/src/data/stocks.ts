@@ -12,6 +12,7 @@ export interface Stock {
   baseBroadcastHours?: number;
   liveStartedAt?: string;
   dividendAccumulationCount?: number;
+  preStreamFloat?: number;
   listedAt?: string;
 }
 
