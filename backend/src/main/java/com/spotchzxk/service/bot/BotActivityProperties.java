@@ -1,5 +1,6 @@
 package com.spotchzxk.service.bot;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -26,4 +27,13 @@ public class BotActivityProperties {
     private int lowBalanceQuantityPercent = 50;
     private int highHoldingQuantity = 30;
     private int highHoldingBuyChancePercent = 20;
+
+    @PostConstruct
+    public void validate() {
+        if (lowBalanceThresholdPercent < criticalBalanceThresholdPercent) {
+            throw new IllegalStateException(
+                    "bot.activity.low-balance-threshold-percent (" + lowBalanceThresholdPercent +
+                    ") must be >= critical-balance-threshold-percent (" + criticalBalanceThresholdPercent + ")");
+        }
+    }
 }
