@@ -298,7 +298,7 @@ export const HomeView = ({
               return (
                 <div key={s.id} className="flex items-center gap-3 py-3 cursor-pointer"
                   style={{ borderBottom: i < top5.length - 1 ? '1px solid #1A2232' : 'none' }}
-                  onClick={() => { onSelect(s); onNavigate('prices'); }}>
+                  onClick={() => onSelect(s)}>
                   {/* 순위 번호 / Rank number */}
                   <span className="w-5 text-sm font-bold shrink-0 text-center"
                     style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>{i + 1}</span>
