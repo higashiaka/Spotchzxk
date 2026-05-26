@@ -57,3 +57,9 @@ bot:
     buy-chance-percent: ${BOT_ACTIVITY_BUY_CHANCE_PERCENT:60}
     small-quantity-max: ${BOT_ACTIVITY_SMALL_QUANTITY_MAX:5}
     large-quantity-chance-percent: ${BOT_ACTIVITY_LARGE_QUANTITY_CHANCE_PERCENT:15}
+    low-balance-threshold-percent: ${BOT_ACTIVITY_LOW_BALANCE_THRESHOLD_PERCENT:30}
+    critical-balance-threshold-percent: ${BOT_ACTIVITY_CRITICAL_BALANCE_THRESHOLD_PERCENT:10}
+    low-balance-buy-chance-percent: ${BOT_ACTIVITY_LOW_BALANCE_BUY_CHANCE_PERCENT:25}
+    low-balance-quantity-percent: ${BOT_ACTIVITY_LOW_BALANCE_QUANTITY_PERCENT:50}
+    high-holding-quantity: ${BOT_ACTIVITY_HIGH_HOLDING_QUANTITY:30}
+    high-holding-buy-chance-percent: ${BOT_ACTIVITY_HIGH_HOLDING_BUY_CHANCE_PERCENT:20}

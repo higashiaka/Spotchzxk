@@ -16,6 +16,9 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     
     List<UserShare> findByUserId(String userId);
 
+    @Query("SELECT us FROM UserShare us JOIN FETCH us.stock WHERE us.user.id = :userId AND us.quantity > 0")
+    List<UserShare> findByUserIdWithPositiveQuantityAndStock(@Param("userId") String userId);
+
     Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
 
     @Modifying

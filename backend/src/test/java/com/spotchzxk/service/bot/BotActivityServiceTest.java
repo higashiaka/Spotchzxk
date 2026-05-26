@@ -1,6 +1,8 @@
 package com.spotchzxk.service.bot;
 
 import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.User;
+import com.spotchzxk.entity.UserShare;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
@@ -8,6 +10,7 @@ import com.spotchzxk.repository.UserShareRepository;
 import com.spotchzxk.service.TradeEngine;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -75,6 +78,36 @@ class BotActivityServiceTest {
     }
 
     @Test
+    void lowBalanceCanReduceBuyChanceWhenBotHasHoldings() {
+        properties.setBuyChancePercent(60);
+        properties.setLowBalanceBuyChancePercent(0);
+
+        String tradeType = service.pickTradeType(BigDecimal.valueOf(250_000), 5);
+
+        assertThat(tradeType).isEqualTo("sell");
+    }
+
+    @Test
+    void criticalBalanceForcesSellWhenBotHasHoldings() {
+        properties.setBuyChancePercent(100);
+
+        String tradeType = service.pickTradeType(BigDecimal.valueOf(100_000), 5);
+
+        assertThat(tradeType).isEqualTo("sell");
+    }
+
+    @Test
+    void highHoldingCanReduceBuyChance() {
+        properties.setBuyChancePercent(60);
+        properties.setHighHoldingQuantity(30);
+        properties.setHighHoldingBuyChancePercent(0);
+
+        String tradeType = service.pickTradeType(BigDecimal.valueOf(1_000_000), 30);
+
+        assertThat(tradeType).isEqualTo("sell");
+    }
+
+    @Test
     void liveStocksReceiveSelectionPriority() {
         Stock inactive = stock("inactive", false);
         Stock live = stock("live", true);
@@ -85,6 +118,31 @@ class BotActivityServiceTest {
         );
 
         assertThat(picked.getChannelId()).isEqualTo("live");
+    }
+
+    @Test
+    void lowBalanceBotPicksHeldStockFirst() {
+        Stock held = stock("held", false);
+        Stock unheldLive = stock("unheld-live", true);
+        when(userRepository.findById("bot_activity_001"))
+                .thenReturn(Optional.of(User.builder()
+                        .id("bot_activity_001")
+                        .coinBalance(BigDecimal.valueOf(3_000))
+                        .isBot(true)
+                        .build()));
+        when(userShareRepository.findByUserIdWithPositiveQuantityAndStock("bot_activity_001"))
+                .thenReturn(List.of(UserShare.builder()
+                        .stock(held)
+                        .quantity(5)
+                        .build()));
+
+        Stock picked = service.pickStockForBot(
+                "bot_activity_001",
+                List.of(unheldLive, held),
+                Map.of()
+        );
+
+        assertThat(picked.getChannelId()).isEqualTo("held");
     }
 
     @Test
