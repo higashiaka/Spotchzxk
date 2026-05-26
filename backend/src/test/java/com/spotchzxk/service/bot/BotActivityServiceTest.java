@@ -46,6 +46,12 @@ class BotActivityServiceTest {
     }
 
     @Test
+    void botUserIdsUseStableActivityPrefix() {
+        assertThat(service.botUserId(1)).isEqualTo("bot_activity_001");
+        assertThat(service.botUserId(20)).isEqualTo("bot_activity_020");
+    }
+
+    @Test
     void botWithoutHoldingsOnlyBuys() {
         when(userShareRepository.findByUserIdAndStockChannelId("bot_activity_001", "stock-1"))
                 .thenReturn(Optional.empty());
