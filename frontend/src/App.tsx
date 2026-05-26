@@ -17,7 +17,6 @@ import { AppTab, LiveTrade } from './types';
 import { Sidebar } from './components/layout/Sidebar';
 import { DesktopTabBar } from './components/layout/DesktopTabBar';
 import { MobileNavBar } from './components/layout/MobileNavBar';
-import { OnlineCountBadge } from './components/common/OnlineCountBadge';
 import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
@@ -289,9 +288,6 @@ function App() {
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
       <AnnouncementPopup />
-      <div className="md:hidden fixed top-3 right-3 z-40">
-        <OnlineCountBadge count={onlineCount} compact />
-      </div>
 
       {/* 좌측 사이드바: 프로필·인증·포트폴리오 요약 포함
           Left sidebar: includes profile, auth, and portfolio summary */}
@@ -318,7 +314,7 @@ function App() {
       <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
         style={{ background: '#080A0F' }}>
 
-        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} onlineCount={onlineCount} />
+        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />
 
         <div className="flex-1 overflow-hidden">
           {rightTab === 'home' && (
