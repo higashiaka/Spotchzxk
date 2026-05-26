@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
-import { OrderHistory } from './useTransactionHistory';
+import { OrderHistory, sortOrdersNewestFirst } from './useTransactionHistory';
 
 /** 미체결 주문 목록 조회 및 취소 기능을 제공하는 훅.
  *  3초 간격 폴링 + STOMP 실시간 알림으로 체결/취소 이벤트를 즉시 반영
@@ -20,7 +20,8 @@ export const usePendingOrders = (userId: string | undefined) => {
       if (!userId) return [];
       const res = await apiFetch('/api/orders');
       if (!res.ok) throw new Error('주문 내역 조회 실패');
-      return res.json();
+      const orders = await res.json();
+      return sortOrdersNewestFirst(orders);
     },
     enabled: !!userId,
     refetchInterval: 3000,

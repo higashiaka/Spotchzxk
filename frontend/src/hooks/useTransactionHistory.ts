@@ -26,6 +26,9 @@ export interface OrderHistory {
   status: string;
 }
 
+export const sortOrdersNewestFirst = (orders: OrderHistory[]): OrderHistory[] =>
+  [...orders].sort((a, b) => b.createdAt - a.createdAt);
+
 /** 사용자 주문/거래 내역을 4초 간격으로 폴링하는 React Query 훅.
  *  userId가 없으면 쿼리를 실행하지 않음
  *
@@ -38,7 +41,8 @@ export const useTransactionHistory = (userId: string | undefined) => {
       if (!userId) return [];
       const res = await apiFetch('/api/orders');
       if (!res.ok) throw new Error('주문 내역 조회 실패');
-      return res.json();
+      const orders = await res.json();
+      return sortOrdersNewestFirst(orders);
     },
     enabled: !!userId,
     refetchInterval: 4000,
