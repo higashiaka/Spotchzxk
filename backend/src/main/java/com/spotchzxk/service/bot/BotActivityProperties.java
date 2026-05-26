@@ -1,0 +1,23 @@
+package com.spotchzxk.service.bot;
+
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+@Getter
+@Setter
+@Component
+@ConfigurationProperties(prefix = "bot.activity")
+public class BotActivityProperties {
+
+    private boolean enabled = false;
+    private int minDelaySeconds = 20;
+    private int maxDelaySeconds = 45;
+    private int maxOrdersPerTick = 2;
+    private int userCount = 20;
+    private int maxQuantity = 12;
+    private int buyChancePercent = 60;
+    private int smallQuantityMax = 5;
+    private int largeQuantityChancePercent = 15;
+}

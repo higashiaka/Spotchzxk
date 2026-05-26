@@ -32,4 +32,8 @@ public class User {
     @Column(nullable = false, precision = 14, scale = 2)
     @Builder.Default
     private BigDecimal dividendTotal = BigDecimal.ZERO;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isBot = false;
 }

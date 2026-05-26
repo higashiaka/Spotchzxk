@@ -45,3 +45,15 @@ app:
   admin-api-key: ${ADMIN_API_KEY:}
   firebase:
     service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:serviceAccountKey.json}
+
+bot:
+  activity:
+    enabled: ${BOT_ACTIVITY_ENABLED:false}
+    min-delay-seconds: ${BOT_ACTIVITY_MIN_DELAY_SECONDS:20}
+    max-delay-seconds: ${BOT_ACTIVITY_MAX_DELAY_SECONDS:45}
+    max-orders-per-tick: ${BOT_ACTIVITY_MAX_ORDERS_PER_TICK:2}
+    user-count: ${BOT_ACTIVITY_USER_COUNT:20}
+    max-quantity: ${BOT_ACTIVITY_MAX_QUANTITY:12}
+    buy-chance-percent: ${BOT_ACTIVITY_BUY_CHANCE_PERCENT:60}
+    small-quantity-max: ${BOT_ACTIVITY_SMALL_QUANTITY_MAX:5}
+    large-quantity-chance-percent: ${BOT_ACTIVITY_LARGE_QUANTITY_CHANCE_PERCENT:15}
