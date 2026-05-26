@@ -9,7 +9,6 @@ import java.math.BigDecimal;
 @Getter @Setter
 public class TradeRequest {
 
-    @NotBlank
     private String userId;
 
     @NotBlank

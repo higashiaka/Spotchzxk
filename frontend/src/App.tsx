@@ -212,6 +212,11 @@ function App() {
     setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
   };
 
+  const handleNavigate = (tab: AppTab) => {
+    if (tab === 'prices') setSelectedStreamer(null);
+    setActiveTab(tab);
+  };
+
   /** 최근 본 종목에서 특정 항목 제거
    *  Removes a specific entry from the recently viewed list */
   const handleRemoveRecent = (id: string) => {
@@ -254,7 +259,7 @@ function App() {
         onReset={handleReset}
         onLinkGoogle={handleLinkGoogle}
         onSelect={handleSelectStreamer}
-        onNavigate={setActiveTab}
+        onNavigate={handleNavigate}
       />
 
       {/* 우측 콘텐츠 영역: profile 탭 활성 시 모바일에서 숨김
@@ -262,7 +267,7 @@ function App() {
       <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
         style={{ background: '#080A0F' }}>
 
-        <DesktopTabBar activeTab={rightTab} onNavigate={setActiveTab} />
+        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />
 
         <div className="flex-1 overflow-hidden">
           {rightTab === 'home' && (
@@ -274,7 +279,7 @@ function App() {
               history={history ?? []}
               recentlyViewedIds={recentlyViewedIds}
               onSelect={handleSelectStreamer}
-              onNavigate={setActiveTab}
+              onNavigate={handleNavigate}
               onRemoveRecent={handleRemoveRecent}
               liveTrades={liveTrades}
             />
@@ -284,7 +289,7 @@ function App() {
               streamers={streamers}
               selectedStreamer={selectedStreamer}
               onSelectStreamer={s => setSelectedStreamer(s)}
-              onNavigate={setActiveTab}
+              onNavigate={handleNavigate}
               liveTrades={liveTrades}
             />
           )}
@@ -313,7 +318,7 @@ function App() {
       </div>
 
       {/* 모바일 하단 내비게이션 바 / Mobile bottom navigation bar */}
-      <MobileNavBar activeTab={activeTab} onNavigate={setActiveTab} />
+      <MobileNavBar activeTab={activeTab} onNavigate={handleNavigate} />
     </div>
   );
 }

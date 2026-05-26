@@ -30,11 +30,11 @@ public class DailyResetService {
         log.info("Starting daily reset at midnight...");
         List<Stock> stocks = stockRepository.findAll();
         
-        for (Stock stock : stocks) {
+        stocks.forEach(stock -> {
             stock.setBasePrice(stock.getCurrentPrice());
             stock.setDailyVolume(0L);
-            stockRepository.save(stock);
-        }
+        });
+        stockRepository.saveAll(stocks);
         
         // Broadcast the reset stocks list to all clients instantly
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());

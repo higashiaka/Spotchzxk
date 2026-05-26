@@ -19,6 +19,7 @@ public class AccountLinkService {
     private final UserShareRepository userShareRepository;
     private final OrderRepository orderRepository;
     private final DeviceMappingRepository deviceMappingRepository;
+    private final TradeEngine tradeEngine;
 
     /**
      * 게스트 계정 데이터를 Google 계정으로 이전한다.
@@ -57,5 +58,8 @@ public class AccountLinkService {
 
         // 게스트 유저 삭제 (user_shares, orders ON DELETE CASCADE 적용)
         userRepository.deleteById(guestUid);
+
+        tradeEngine.evictUserCache(guestUid);
+        tradeEngine.evictUserCache(googleUid);
     }
 }
