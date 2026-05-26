@@ -109,6 +109,9 @@ public class BotActivityService {
 
     String pickTradeType(String botUserId, String channelId) {
         long heldQty = findHeldQuantity(botUserId, channelId);
+        if (heldQty <= 0) {
+            return "buy";
+        }
         BigDecimal balance = findBotBalance(botUserId);
         return pickTradeType(balance, heldQty);
     }

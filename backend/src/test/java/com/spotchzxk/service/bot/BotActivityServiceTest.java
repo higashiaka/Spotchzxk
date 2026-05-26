@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -152,6 +153,17 @@ class BotActivityServiceTest {
         for (int i = 0; i < 100; i++) {
             assertThat(service.pickQuantity(3)).isBetween(1, 3);
         }
+    }
+
+    @Test
+    void propertiesValidationRejectsReversedBalanceThresholds() {
+        BotActivityProperties invalid = new BotActivityProperties();
+        invalid.setLowBalanceThresholdPercent(5);
+        invalid.setCriticalBalanceThresholdPercent(20);
+
+        assertThatThrownBy(invalid::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("low-balance-threshold-percent");
     }
 
     @Test
