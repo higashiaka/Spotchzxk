@@ -18,7 +18,7 @@ import { useHoldings } from '../../hooks/useHoldings';
  *  and volume chart */
 export const HomeView = ({
   streamers, portfolio, user, totalAssets, history, recentlyViewedIds,
-  onSelect, onNavigate, onRemoveRecent, liveTrades,
+  onlineCount, onSelect, onNavigate, onRemoveRecent, liveTrades,
 }: {
   /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
@@ -32,6 +32,8 @@ export const HomeView = ({
   history: any[];
   /** 최근 본 종목 ID 배열 (최신순) / Recently viewed stock IDs in recency order */
   recentlyViewedIds: string[];
+  /** 현재 동시 접속자 수 / Current online connection count */
+  onlineCount: number | null;
   /** 종목 선택 핸들러 / Stock selection handler */
   onSelect: (s: Stock) => void;
   /** 탭 전환 핸들러 / Tab navigation handler */
@@ -69,9 +71,9 @@ export const HomeView = ({
   /** 총 자산 기준 투자 등급 / Investor grade based on total assets */
   const userGrade = grade(totalAssets);
 
-  /** 보유 종목 목록 (평가금액 내림차순, 최대 3개 표시)
-   *  Holdings sorted by value descending, limited to 3 for display */
-  const { holdings, holdingCount } = useHoldings(portfolio, streamers, { limit: 3 });
+  /** 보유 종목 목록 (평가금액 내림차순)
+   *  Holdings sorted by value descending */
+  const { holdings, holdingCount } = useHoldings(portfolio, streamers);
 
   /** 최근 본 종목 Stock 객체 배열 (ID 순서 유지)
    *  Recently viewed Stock objects in recency order */
@@ -146,7 +148,7 @@ export const HomeView = ({
           )}
         </div>
 
-        {/* 나의 종목 (보유 종목 최대 3개) / My stocks (up to 3 holdings) */}
+        {/* 나의 종목 / My stocks */}
         <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid #222A3A' }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">나의 종목</p>
@@ -154,7 +156,7 @@ export const HomeView = ({
           </div>
           {user && holdings.length > 0 ? (
             <>
-              <div className="space-y-3 mb-3">
+              <div className="space-y-3 mb-3 max-h-[188px] overflow-y-auto pr-1 hide-scrollbar">
                 {holdings.map(({ streamer: s, qty, value, pct }) => (
                   <div key={s.id} className="flex items-center gap-3 cursor-pointer"
                     onClick={() => { onSelect(s); onNavigate('prices'); }}>
@@ -194,8 +196,8 @@ export const HomeView = ({
         <div style={{ borderBottom: '1px solid #222A3A' }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
-            { label: '보유 종목', value: `${holdingCount}개`, sub: '' },
-            { label: '포트폴리오 수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
+            { label: '포트폴리오수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
+            { label: '동접자', value: `${(onlineCount ?? 0).toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
               style={{ borderBottom: '1px solid #1A2232' }}

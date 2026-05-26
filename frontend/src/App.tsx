@@ -329,6 +329,7 @@ function App() {
               totalAssets={totalAssets}
               history={history ?? []}
               recentlyViewedIds={recentlyViewedIds}
+              onlineCount={onlineCount}
               onSelect={handleSelectStreamer}
               onNavigate={handleNavigate}
               onRemoveRecent={handleRemoveRecent}
