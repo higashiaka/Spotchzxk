@@ -24,7 +24,7 @@ public class ChzzkApiClient {
             "https://api.chzzk.naver.com/service/v3/channels/%s/live-detail";
 
     private final EnvResolver envResolver;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();

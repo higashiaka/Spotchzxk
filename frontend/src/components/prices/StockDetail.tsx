@@ -16,12 +16,10 @@ import { Candle } from '../chart/chartUtils';
  *  Shows real-time price, candlestick chart by interval,
  *  trade history for the stock, and an order entry button */
 export const StockDetail = ({
-  streamer, onBack, onOrder, liveTrades,
+  streamer, onOrder, liveTrades,
 }: {
   /** 표시할 종목 데이터 / Stock data to display */
   streamer: Stock;
-  /** 목록으로 돌아가는 핸들러 / Handler to go back to the stock list */
-  onBack: () => void;
   /** 주문 화면으로 이동하는 핸들러 / Handler to navigate to the order screen */
   onOrder: () => void;
   /** 전체 실시간 체결 내역 (해당 종목 필터링에 사용) / All live trades; filtered to this stock */
@@ -112,11 +110,6 @@ export const StockDetail = ({
 
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
-      {/* 뒤로가기 버튼 / Back button */}
-      <button type="button" onClick={onBack} className="text-sm mb-4 flex items-center gap-1" style={{ color: '#626B7A' }}>
-        ← 목록으로
-      </button>
-
       {/* 종목명 및 현재가 / Stock name and current price */}
       <div className="mb-4">
         <h1 className="text-white text-xl font-bold">{streamer.name}</h1>

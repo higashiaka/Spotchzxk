@@ -41,7 +41,6 @@ export const PricesView = ({
     return (
       <StockDetail
         streamer={selectedStreamer}
-        onBack={() => onSelectStreamer(null)}
         onOrder={() => onNavigate('order')}
         liveTrades={liveTrades}
       />

@@ -12,12 +12,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -63,7 +67,9 @@ public class DividendService {
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
 
-            logs.forEach(log -> tradeEngine.evictUserCache(log.getUserId()));
+            evictUserCachesAfterCommit(logs.stream()
+                    .map(UserDividendLog::getUserId)
+                    .collect(Collectors.toCollection(LinkedHashSet::new)));
 
             BigDecimal actualPaid = ratePerShare.multiply(BigDecimal.valueOf(eligibleShares))
                     .setScale(0, RoundingMode.HALF_UP);
@@ -87,5 +93,22 @@ public class DividendService {
                     "createdAt", LocalDateTime.now().toString()
             ));
         }
+    }
+
+    private void evictUserCachesAfterCommit(Set<String> userIds) {
+        if (userIds.isEmpty()) return;
+
+        Runnable evictCaches = () -> userIds.forEach(tradeEngine::evictUserCache);
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evictCaches.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evictCaches.run();
+            }
+        });
     }
 }

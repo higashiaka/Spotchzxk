@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +36,7 @@ public class CandleService {
     private final OrderRepository orderRepository;
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final Map<Long, Set<String>> tradedStockIdsByMinute = new ConcurrentHashMap<>();
 
     // ── REST: DB 주문 기록 → 캔들 목록 반환 ──────────────────────────────────────
 
@@ -66,10 +68,13 @@ public class CandleService {
     // ── 거래 발생 시: 현재 각 봉 재계산 → STOMP 브로드캐스트 ─────────────────────
 
     public void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
-        // 최대 구간(1주) 이후 주문만 가져와 모든 interval 봉을 재계산
-        long weekStart = (timestamp / MS_1W) * MS_1W;
+        long minuteStart = (timestamp / MS_1M) * MS_1M;
+        tradedStockIdsByMinute
+                .computeIfAbsent(minuteStart, ignored -> ConcurrentHashMap.newKeySet())
+                .add(stockId);
+        long weekBucketStart = (timestamp / MS_1W) * MS_1W;
         List<Order> orders = orderRepository
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, weekStart);
+                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, weekBucketStart);
 
         Map<String, OhlcCandle> update = computeCurrentBuckets(orders, timestamp);
         messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
@@ -81,15 +86,14 @@ public class CandleService {
     public void tick() {
         long now = System.currentTimeMillis();
         long bucketStart1m = (now / MS_1M) * MS_1M;
+        tradedStockIdsByMinute.keySet().removeIf(bucket -> bucket < bucketStart1m);
+        Set<String> tradedStockIds = tradedStockIdsByMinute.getOrDefault(bucketStart1m, Set.of());
 
         for (Stock stock : stockRepository.findAll()) {
             String stockId = stock.getChannelId();
 
             // 이번 분에 거래가 있었으면 onTrade 에서 이미 브로드캐스트됨 → 스킵
-            boolean hadTrade = !orderRepository
-                    .findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(stockId, bucketStart1m, now)
-                    .isEmpty();
-            if (hadTrade) continue;
+            if (tradedStockIds.contains(stockId)) continue;
 
             double price = stock.getCurrentPrice();
             Map<String, OhlcCandle> update = new HashMap<>();

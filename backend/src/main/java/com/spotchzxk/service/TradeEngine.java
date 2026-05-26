@@ -87,10 +87,10 @@ public class TradeEngine {
         long heldQty = shares.getOrDefault(channelId, 0L);
 
         validateTrade(channelId, isBuy, qty, cost, currentBalance, heldQty);
-        persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost);
+        String streamerName = persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, executedPrice,
                 currentBalance, shares, heldQty, cost);
-        broadcastTrade(channelId, isBuy, qty, executedPrice);
+        broadcastTrade(channelId, streamerName, isBuy, qty, executedPrice);
 
         return new TradeResponse("executed", executedPrice, newBalance,
                 BigDecimal.ZERO, UUID.randomUUID().toString(), "market");
@@ -130,9 +130,9 @@ public class TradeEngine {
         }
     }
 
-    private void persistTrade(String userId, String channelId, boolean isBuy, int qty,
-                              BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost) {
-        new TransactionTemplate(txManager).execute(status -> {
+    private String persistTrade(String userId, String channelId, boolean isBuy, int qty,
+                                BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost) {
+        return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
             User user = userRepository.findById(userId)
                     .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
@@ -141,7 +141,7 @@ public class TradeEngine {
             updateUserBalance(user, isBuy, cost);
             updateUserShare(user, stock, channelId, isBuy, qty, cost);
             saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice);
-            return null;
+            return stock.getStreamerName();
         });
     }
 
@@ -235,14 +235,13 @@ public class TradeEngine {
         return newBalance;
     }
 
-    private void broadcastTrade(String channelId, boolean isBuy, int qty, BigDecimal executedPrice) {
+    private void broadcastTrade(String channelId, String streamerName, boolean isBuy, int qty, BigDecimal executedPrice) {
         candleService.onTrade(channelId, executedPrice, System.currentTimeMillis());
         messagingTemplate.convertAndSend("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
         messagingTemplate.convertAndSend("/topic/trades", Map.of(
                 "streamerId", channelId,
-                "streamerName", stockRepository.findById(channelId)
-                        .map(Stock::getStreamerName).orElse(channelId),
+                "streamerName", streamerName != null ? streamerName : channelId,
                 "type", isBuy ? "buy" : "sell",
                 "quantity", qty,
                 "price", executedPrice,
