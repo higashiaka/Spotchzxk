@@ -1,3 +1,4 @@
+// 배당금 수령 내역과 누적 배당 정보를 조회합니다.
 import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';

@@ -1,3 +1,4 @@
+// 주문 화면: 종목 선택과 주문 폼의 선택 상태를 조율합니다.
 import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';

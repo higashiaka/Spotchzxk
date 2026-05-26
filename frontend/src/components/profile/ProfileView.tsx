@@ -1,3 +1,4 @@
+// 프로필 화면: 로그인, 계정 연동, 자산/주문/배당 내역을 사용자 기준으로 보여줍니다.
 import { useState, useEffect } from 'react';
 import { User, updateProfile } from 'firebase/auth';
 import { Stock, DEFAULT_STOCKS } from '../../hooks/useStocks';

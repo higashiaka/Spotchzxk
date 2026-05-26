@@ -1,3 +1,4 @@
+// 라이브 확성기 게시물 조회와 구매 요청을 묶은 훅입니다.
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 

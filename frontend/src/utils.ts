@@ -1,3 +1,4 @@
+// 화면 표시용 숫자 포맷, 색상 계산, 등급 계산 유틸리티입니다.
 export const BASE_PRICE = 1000;
 export const INITIAL_BALANCE = 1_000_000;
 

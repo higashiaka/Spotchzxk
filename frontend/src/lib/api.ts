@@ -1,3 +1,4 @@
+// 백엔드 API 호출을 한곳에서 처리하고 Firebase 인증 토큰을 자동으로 붙입니다.
 import { getAuth } from 'firebase/auth';
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';

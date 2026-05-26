@@ -1,3 +1,4 @@
+// 데스크톱 상단 탭: 사이드바 오른쪽 영역의 주요 화면을 전환합니다.
 import { AppTab } from '../../types';
 
 export const DesktopTabBar = ({

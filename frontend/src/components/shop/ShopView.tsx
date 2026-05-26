@@ -1,3 +1,4 @@
+// 상점 화면: 보유 잔고로 라이브 확성기 메시지를 구매하고 전송합니다.
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';

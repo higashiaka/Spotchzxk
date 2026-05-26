@@ -1,3 +1,4 @@
+// React 앱의 진입점: 전역 스타일과 React Query 컨텍스트를 연결합니다.
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

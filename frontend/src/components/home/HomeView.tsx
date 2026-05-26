@@ -1,3 +1,4 @@
+// 홈 화면: 투자 요약, 보유 종목, 최근 본 종목, 실시간 거래 피드를 구성합니다.
 import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';

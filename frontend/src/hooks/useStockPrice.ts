@@ -1,3 +1,4 @@
+// 개별 종목의 현재가를 실시간 스트림에서 찾아 컴포넌트에 제공합니다.
 import { useState, useEffect } from 'react';
 import { subscribeStomp } from '../lib/stompClient';
 

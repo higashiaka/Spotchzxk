@@ -1,3 +1,4 @@
+// 모바일 하단 내비게이션: 작은 화면에서 앱 탭을 전환합니다.
 import { AppTab } from '../../types';
 
 const NAV_ITEMS: { tab: AppTab; label: string; path: string }[] = [

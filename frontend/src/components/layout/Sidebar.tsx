@@ -1,3 +1,4 @@
+// 데스크톱 사이드바: 프로필, 자산 요약, 메뉴 이동, 빠른 종목 목록을 제공합니다.
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';

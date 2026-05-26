@@ -1,3 +1,4 @@
+// 계획 JSON을 읽어 프론트엔드에서 참고하기 쉬운 형태로 출력하는 보조 스크립트입니다.
 const fs = require('fs');
 
 const html = `

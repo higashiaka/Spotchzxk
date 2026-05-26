@@ -1,3 +1,4 @@
+// 주문 요청을 서버에 보내고 관련 React Query 캐시를 갱신합니다.
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Portfolio } from './usePortfolio';
 import { apiFetch } from '../lib/api';
