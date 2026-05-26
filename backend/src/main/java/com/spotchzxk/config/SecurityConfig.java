@@ -31,7 +31,7 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/health", "/api/guest/**", "/ws/**", "/api/auth/me", "/error").permitAll()
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stocks", "/api/orders/recent", "/api/orders/history").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stocks", "/api/orders/recent", "/api/orders/history", "/api/online-count").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
                 .anyRequest().authenticated()
             )
