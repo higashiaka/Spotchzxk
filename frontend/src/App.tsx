@@ -366,6 +366,7 @@ function App() {
             <HoldingsView
               portfolio={portfolio}
               streamers={streamers}
+              history={history ?? []}
               onNavigate={handleNavigate}
               onSelect={handleSelectStreamer}
             />

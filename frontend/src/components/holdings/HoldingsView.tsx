@@ -3,10 +3,11 @@ import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
 import { fmt, priceColor, avatarColor } from '../../utils';
 import { useHoldings } from '../../hooks/useHoldings';
+import { OrderHistory } from '../../hooks/useTransactionHistory';
 
 /** 보유 종목 정렬 기준
  *  Sort key for the holdings list */
-type SortKey = 'value' | 'pct' | 'name';
+type SortKey = 'recent' | 'value' | 'pct' | 'name';
 
 /** 보유 주식 상세 화면 컴포넌트.
  *  전체 보유 종목을 정렬·필터링하여 손익 정보와 함께 표시
@@ -16,6 +17,7 @@ type SortKey = 'value' | 'pct' | 'name';
 export const HoldingsView = ({
   portfolio,
   streamers,
+  history,
   onNavigate,
   onSelect,
 }: {
@@ -23,28 +25,48 @@ export const HoldingsView = ({
   portfolio: any;
   /** 전체 종목 목록 (현재가 조회용) / Full stock list for price lookup */
   streamers: Stock[];
+  /** 현재 사용자의 거래 내역 / Current user's transaction history */
+  history: OrderHistory[];
   /** 탭 전환 핸들러 / Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
   /** 종목 선택 → 시세 상세로 이동하는 핸들러 / Handler to open stock detail in prices tab */
   onSelect: (s: Stock) => void;
 }) => {
   /** 현재 정렬 기준 / Currently selected sort key */
-  const [sortKey, setSortKey] = useState<SortKey>('value');
+  const [sortKey, setSortKey] = useState<SortKey>('recent');
 
   /** 전체 보유 종목 목록 (DEFAULT_STOCKS 포함, 평가금액 내림차순 기본값)
    *  Full holding list including DEFAULT_STOCKS, default order by market value desc */
   const { holdings, holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
+  /** 종목별 가장 최근 체결 시각 / Latest executed trade timestamp by stock */
+  const latestTradeTimeByStock = useMemo(() => {
+    const latest = new Map<string, number>();
+    history
+      .filter(order => order.status === 'executed' || order.executedPrice != null)
+      .forEach(order => {
+        const previous = latest.get(order.streamerId) ?? 0;
+        if (order.createdAt > previous) latest.set(order.streamerId, order.createdAt);
+      });
+    return latest;
+  }, [history]);
+
   /** 정렬 기준에 따라 재정렬된 보유 종목 목록
    *  Holdings re-sorted based on the selected sort key */
   const sorted = useMemo(() => {
     return [...holdings].sort((a, b) => {
+      if (sortKey === 'recent') {
+        const aTime = latestTradeTimeByStock.get(a.streamer.id) ?? 0;
+        const bTime = latestTradeTimeByStock.get(b.streamer.id) ?? 0;
+        if (bTime !== aTime) return bTime - aTime;
+        return b.value - a.value;
+      }
       if (sortKey === 'value') return b.value - a.value;
       if (sortKey === 'pct')   return b.pct - a.pct;
       if (sortKey === 'name')  return a.streamer.name.localeCompare(b.streamer.name, 'ko');
       return 0;
     });
-  }, [holdings, sortKey]);
+  }, [holdings, latestTradeTimeByStock, sortKey]);
 
   /** 전체 보유 주식 평가금액 합산 / Sum of all holdings' market value */
   const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
@@ -57,6 +79,7 @@ export const HoldingsView = ({
 
   /** 정렬 버튼 목록 / Sort button definitions */
   const SORT_BUTTONS: { key: SortKey; label: string }[] = [
+    { key: 'recent', label: '최근거래' },
     { key: 'value', label: '평가금액' },
     { key: 'pct',   label: '수익률' },
     { key: 'name',  label: '이름순' },
