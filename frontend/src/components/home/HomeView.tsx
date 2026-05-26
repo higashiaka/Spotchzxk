@@ -70,6 +70,8 @@ export const HomeView = ({
   const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
   /** 총 자산 기준 투자 등급 / Investor grade based on total assets */
   const userGrade = grade(totalAssets);
+  /** 봇 거래 활동을 반영한 표시용 동접자 수 / Display count adjusted for bot trading activity */
+  const displayedOnlineCount = (onlineCount ?? 0) + 5;
 
   /** 보유 종목 목록 (평가금액 내림차순)
    *  Holdings sorted by value descending */
@@ -197,7 +199,7 @@ export const HomeView = ({
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
             { label: '포트폴리오수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
-            { label: '동접자', value: `${(onlineCount ?? 0).toLocaleString()}명`, sub: '실시간' },
+            { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
               style={{ borderBottom: '1px solid #1A2232' }}
