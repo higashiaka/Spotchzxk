@@ -1,14 +1,11 @@
 import { AppTab } from '../../types';
-import { OnlineCountBadge } from '../common/OnlineCountBadge';
 
 export const DesktopTabBar = ({
   activeTab,
   onNavigate,
-  onlineCount,
 }: {
   activeTab: Exclude<AppTab, 'profile'>;
   onNavigate: (tab: AppTab) => void;
-  onlineCount: number | null;
 }) => {
   const tabs = [
     { tab: 'home' as const, label: '홈' },
@@ -40,9 +37,6 @@ export const DesktopTabBar = ({
             </button>
           );
         })}
-      </div>
-      <div className="ml-auto">
-        <OnlineCountBadge count={onlineCount} />
       </div>
     </div>
   );
