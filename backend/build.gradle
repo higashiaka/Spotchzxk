@@ -13,6 +13,9 @@ java {
 	}
 }
 
+compileJava.options.encoding = 'UTF-8'
+compileTestJava.options.encoding = 'UTF-8'
+
 repositories {
 	mavenCentral()
 }
@@ -42,6 +45,7 @@ tasks.named('test') {
 }
 
 bootRun {
+	jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8']
 	def envFile = file('.env')
 	if (envFile.exists()) {
 		envFile.readLines().each { line ->

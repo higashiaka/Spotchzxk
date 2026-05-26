@@ -23,7 +23,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
 
     @Modifying
-    @Query(value = "UPDATE user_shares SET pre_stream_quantity = quantity WHERE channel_id = :channelId", nativeQuery = true)
+    @Query(value = "UPDATE user_shares SET pre_stream_quantity = CASE WHEN user_id = '__house__' THEN 0 ELSE quantity END WHERE channel_id = :channelId", nativeQuery = true)
     void snapshotPreStreamQuantities(@Param("channelId") String channelId);
 
     @Query("SELECT us FROM UserShare us JOIN FETCH us.user WHERE us.stock.channelId = :channelId AND us.quantity > 0")

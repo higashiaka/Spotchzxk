@@ -216,7 +216,7 @@ After=network.target mysql.service
 User=ubuntu
 WorkingDirectory=/opt/spotchzxk/backend
 EnvironmentFile=/opt/spotchzxk/backend/.env
-ExecStart=/usr/bin/java -jar /opt/spotchzxk/backend/build/libs/spotchzxk-0.0.1-SNAPSHOT.jar
+ExecStart=/usr/bin/java -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -jar /opt/spotchzxk/backend/build/libs/spotchzxk-0.0.1-SNAPSHOT.jar
 SuccessExitStatus=143
 Restart=on-failure
 RestartSec=10

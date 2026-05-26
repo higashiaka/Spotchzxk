@@ -1,9 +1,8 @@
 package com.spotchzxk.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -11,12 +10,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
@@ -24,65 +19,28 @@ import java.util.List;
 @Slf4j
 public class ChzzkLivePollingService {
 
-    private static final String LIVE_DETAIL_API =
-            "https://api.chzzk.naver.com/service/v3/channels/%s/live-detail";
-
     private final StockRepository stockRepository;
     private final DividendService dividendService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final com.spotchzxk.repository.UserShareRepository userShareRepository;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+    private final UserShareRepository userShareRepository;
+    private final ChzzkApiClient chzzkApiClient;
 
     @Scheduled(fixedDelay = 60_000)
     @Transactional
     public void pollLiveStatus() {
         List<Stock> stocks = stockRepository.findAll();
-        if (stocks.isEmpty()) return;
-
-        String nidAut = getEnv("NID_AUT");
-        String nidSes = getEnv("NID_SES");
+        if (stocks.isEmpty()) {
+            return;
+        }
 
         boolean anyChanged = false;
         for (Stock stock : stocks) {
-            String status = fetchChannelStatus(stock.getChannelId(), nidAut, nidSes);
-            if (status == null) continue;
-
-            boolean isLiveNow = "OPEN".equals(status);
-            boolean isBlocked = "BLOCK".equals(status);
-            boolean wasLive = stock.isLive();
-
-            if (!wasLive && isLiveNow) {
-                stock.setLive(true);
-                stock.setLiveStartedAt(LocalDateTime.now());
-                stock.setDividendAccumulationCount(0);
-                userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
-                long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
-                stock.setPreStreamFloat(preStreamFloat);
-                stockRepository.save(stock);
-                anyChanged = true;
-                log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}", stock.getChannelId(), preStreamFloat);
-
-            } else if (wasLive && isLiveNow) {
-                payIntervalIfDue(stock);
-                stockRepository.save(stock);
-                anyChanged = true;
-
-            } else if (wasLive && !isLiveNow) {
-                if (isBlocked) {
-                    log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
-                }
-                stock.setLive(false);
-                stock.setLiveStartedAt(null);
-                stock.setDividendAccumulationCount(0);
-                stock.setDividendPool(java.math.BigDecimal.ZERO);
-                stockRepository.save(stock);
-                anyChanged = true;
-                log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
+            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+            if (status == null) {
+                continue;
             }
+
+            anyChanged |= handleLiveTransition(stock, status);
         }
 
         if (anyChanged) {
@@ -90,82 +48,69 @@ public class ChzzkLivePollingService {
         }
     }
 
-    private void payIntervalIfDue(Stock stock) {
-        if (stock.getLiveStartedAt() == null) return;
+    private boolean handleLiveTransition(Stock stock, String status) {
+        boolean isLiveNow = "OPEN".equals(status);
+        boolean isBlocked = "BLOCK".equals(status);
+        boolean wasLive = stock.isLive();
 
-        long elapsedMinutes = java.time.temporal.ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
+        if (!wasLive && isLiveNow) {
+            markStreamStarted(stock);
+            return true;
+        }
+        if (wasLive && isLiveNow) {
+            payIntervalIfDue(stock);
+            stockRepository.save(stock);
+            return true;
+        }
+        if (wasLive) {
+            markStreamEnded(stock, status, isBlocked);
+            return true;
+        }
+        return false;
+    }
+
+    private void markStreamStarted(Stock stock) {
+        stock.setLive(true);
+        stock.setLiveStartedAt(LocalDateTime.now());
+        stock.setDividendAccumulationCount(0);
+        userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
+        long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
+        stock.setPreStreamFloat(preStreamFloat);
+        stockRepository.save(stock);
+        log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
+                stock.getChannelId(), preStreamFloat);
+    }
+
+    private void markStreamEnded(Stock stock, String status, boolean isBlocked) {
+        if (isBlocked) {
+            log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
+        }
+        stock.setLive(false);
+        stock.setLiveStartedAt(null);
+        stock.setDividendAccumulationCount(0);
+        stockRepository.save(stock);
+        log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
+    }
+
+    private void payIntervalIfDue(Stock stock) {
+        if (stock.getLiveStartedAt() == null) {
+            return;
+        }
+
+        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
         long completedIntervals = elapsedMinutes / 10;
         long alreadyPaid = stock.getDividendAccumulationCount();
 
-        if (completedIntervals <= alreadyPaid) return;
+        if (completedIntervals <= alreadyPaid) {
+            return;
+        }
 
         long newIntervals = completedIntervals - alreadyPaid;
         for (long i = 0; i < newIntervals; i++) {
             dividendService.payIntervalDividend(stock);
         }
         stock.setDividendAccumulationCount(completedIntervals);
-        log.info("Interval dividend paid for channel {}: intervals {} → {}", stock.getChannelId(), alreadyPaid, completedIntervals);
-    }
-
-    /**
-     * @return "OPEN", "CLOSE", "BLOCK", or null if API call failed
-     */
-    private String fetchChannelStatus(String channelId, String nidAut, String nidSes) {
-        try {
-            String url = String.format(LIVE_DETAIL_API, channelId);
-            String cookie = String.format("NID_AUT=%s; NID_SES=%s",
-                    nidAut != null ? nidAut : "",
-                    nidSes != null ? nidSes : "");
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("User-Agent", "Mozilla/5.0 (X11; Unix x86_64)")
-                    .header("Cookie", cookie)
-                    .header("Origin", "https://chzzk.naver.com")
-                    .header("DNT", "1")
-                    .header("Sec-GPC", "1")
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                log.warn("Chzzk API returned {} for channel {}", response.statusCode(), channelId);
-                return null;
-            }
-
-            JsonNode content = objectMapper.readTree(response.body()).path("content");
-            String status = content.path("status").asText("");
-            return status.isEmpty() ? "CLOSE" : status.toUpperCase();
-
-        } catch (Exception e) {
-            log.error("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
-            return null;
-        }
-    }
-
-    private String getEnv(String key) {
-        String value = System.getenv(key);
-        if (value != null && !value.isBlank()) return value;
-
-        try {
-            java.nio.file.Path envPath = java.nio.file.Paths.get("../frontend/.env");
-            if (!java.nio.file.Files.exists(envPath)) {
-                envPath = java.nio.file.Paths.get("frontend/.env");
-            }
-            if (java.nio.file.Files.exists(envPath)) {
-                for (String line : java.nio.file.Files.readAllLines(envPath)) {
-                    line = line.trim();
-                    if (line.startsWith(key + "=")) {
-                        String raw = line.substring((key + "=").length()).trim();
-                        if ((raw.startsWith("\"") && raw.endsWith("\""))
-                                || (raw.startsWith("'") && raw.endsWith("'"))) {
-                            raw = raw.substring(1, raw.length() - 1);
-                        }
-                        return raw;
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-        return null;
+        log.info("Interval dividend paid for channel {}: intervals {} -> {}",
+                stock.getChannelId(), alreadyPaid, completedIntervals);
     }
 }

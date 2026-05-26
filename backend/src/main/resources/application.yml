@@ -34,6 +34,11 @@ spring:
 
 server:
   port: ${PORT:8080}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
 app:
   cors-origin: ${CORS_ORIGIN:http://localhost:5173}

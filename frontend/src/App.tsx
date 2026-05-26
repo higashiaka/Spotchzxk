@@ -1,4 +1,3 @@
-// 앱 전체의 인증, 탭 라우팅, 실시간 이벤트 상태를 묶는 최상위 컴포넌트입니다.
 import { useState, useMemo, useEffect } from 'react';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
@@ -24,15 +23,29 @@ import { OrderView } from './components/order/OrderView';
 import { ShopView } from './components/shop/ShopView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
+/** 앱 최상위 컴포넌트.
+ *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
+ *
+ *  Root application component.
+ *  Orchestrates Firebase authentication, tab routing,
+ *  real-time trade feed (STOMP), and portfolio state. */
 function App() {
+  /** Firebase 인증 상태의 현재 사용자 (미로그인 시 null) / Current Firebase user, null if not logged in */
   const [user, setUser] = useState<User | null>(null);
+  /** Firebase 초기 인증 확인 중 여부 (로딩 스플래시용) / Whether the initial Firebase auth check is in progress */
   const [authChecking, setAuthChecking] = useState(true);
+  /** 전체 종목 목록 (실시간 갱신) / Full stock list (updated in real time) */
   const streamers = useStocks();
+  /** 현재 활성 탭 / Currently active tab */
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+  /** 가격 화면에서 선택된 종목 (null이면 목록 표시) / Selected stock in the price screen, null shows the list */
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
+  /** 최근 본 종목 ID 목록 (최대 10개, 최신순) / Recently viewed stock IDs, latest first, max 10 */
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
+  /** 실시간 체결 피드 (최대 50건) / Real-time trade feed, max 50 entries */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
 
+  // 최근 체결 목록을 REST로 초기 로드 / Load recent trades via REST on mount
   useEffect(() => {
     apiFetch('/api/orders/recent')
       .then(res => res.ok ? res.json() : null)
@@ -54,6 +67,8 @@ function App() {
       .catch(err => console.error('Failed to load recent orders', err));
   }, [streamers]);
 
+  // STOMP /topic/trades 구독: 신규 체결을 목록 맨 앞에 추가 (최대 50건)
+  // Subscribe to STOMP /topic/trades: prepend new trades, max 50
   useEffect(() => {
     const subscription = subscribeStomp('/topic/trades', (message) => {
       try {
@@ -66,11 +81,15 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Firebase 인증 상태 구독: 로그인·로그아웃 감지 및 게스트 병합 처리
+  // Subscribe to Firebase auth state: detect login/logout and handle guest merge
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async u => {
       setUser(u);
       setAuthChecking(false);
 
+      // 게스트 → Google 계정 연동 완료 후 서버 측 병합 요청
+      // After guest-to-Google linking, request server-side data merge
       const pendingGuestUid = localStorage.getItem('pendingGuestMerge');
       if (pendingGuestUid && u && u.providerData.some(p => p.providerId === 'google.com')) {
         try {
@@ -82,18 +101,25 @@ function App() {
             localStorage.removeItem('pendingGuestMerge');
           }
         } catch {
-          // 다음 auth 상태 변경 시 재시도
+          // 다음 auth 상태 변경 시 재시도 / Retry on the next auth state change
         }
       }
     });
     return () => unsub();
   }, []);
 
+  /** Google 팝업 로그인 핸들러
+   *  Handles Google sign-in via popup */
   const handleGoogleLogin = async () => {
     try { await signInWithPopup(auth, googleProvider); }
     catch (err) { console.error(err); alert('Google 로그인에 실패했습니다.'); }
   };
 
+  /** 게스트(익명) 로그인 핸들러.
+   *  FingerprintJS로 기기 식별 후 서버 커스텀 토큰으로 재인증
+   *
+   *  Guest (anonymous) login handler.
+   *  Identifies the device via FingerprintJS, then re-authenticates with a server-issued custom token. */
   const handleGuestLogin = async () => {
     try {
       const { user: anonUser } = await signInAnonymously(auth);
@@ -116,8 +142,15 @@ function App() {
     }
   };
 
+  /** 로그아웃 핸들러 / Logout handler */
   const handleLogout = async () => { await signOut(auth); };
 
+  /** Google 계정 연동 핸들러.
+   *  이미 다른 계정에 연동된 경우 게스트 데이터를 병합 후 해당 계정으로 전환
+   *
+   *  Google account linking handler.
+   *  If the credential is already used by another account,
+   *  stores the guest UID for merging then switches to that account. */
   const handleLinkGoogle = async () => {
     if (!user) return;
     try {
@@ -127,6 +160,8 @@ function App() {
       if (err.code === 'auth/popup-closed-by-user') return;
 
       if (err.code === 'auth/credential-already-in-use') {
+        // 기존 Google 계정에 게스트 데이터를 병합: UID를 저장해 auth 변경 시 서버 요청
+        // Merge guest data into the existing Google account: store UID to request server merge on auth change
         const guestUid = user.uid;
         localStorage.setItem('pendingGuestMerge', guestUid);
         try {
@@ -144,15 +179,22 @@ function App() {
     }
   };
 
+  /** 현재 사용자의 포트폴리오 데이터 / Current user's portfolio data */
   const { data: portfolio } = usePortfolio(user?.uid);
+  /** 현재 사용자의 체결 내역 / Current user's transaction history */
   const { data: history } = useTransactionHistory(user?.uid);
+  /** 포트폴리오 초기화 뮤테이션 / Portfolio reset mutation */
   const resetMutation = useResetPortfolio(user?.uid);
 
+  /** 초기화 확인 대화상자 표시 후 뮤테이션 실행
+   *  Shows a confirmation dialog then executes the reset mutation */
   const handleReset = () => {
     if (!window.confirm('투자 자금을 100만원으로 초기화하시겠습니까?\n보유 주식이 모두 삭제됩니다.')) return;
     resetMutation.mutate();
   };
 
+  /** 총 자산: 현금 잔고 + 보유 종목 현재가 합산 (포트폴리오·종목 가격 변경 시 재계산)
+   *  Total assets: cash + sum of (current price × held quantity), recalculated when portfolio or prices change */
   const totalAssets = useMemo(() => {
     if (!portfolio) return 0;
     const held = Object.entries(portfolio.shares as Record<string, number>).reduce((sum, [id, qty]) => {
@@ -162,16 +204,21 @@ function App() {
     return portfolio.balance + held;
   }, [portfolio, streamers]);
 
+  /** 종목 선택 핸들러: 가격 탭으로 이동 + 최근 본 목록 갱신 (최대 10개)
+   *  Stock selection handler: navigates to prices tab and updates recently viewed list (max 10) */
   const handleSelectStreamer = (s: Stock) => {
     setSelectedStreamer(s);
     setActiveTab('prices');
     setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
   };
 
+  /** 최근 본 종목에서 특정 항목 제거
+   *  Removes a specific entry from the recently viewed list */
   const handleRemoveRecent = (id: string) => {
     setRecentlyViewedIds(prev => prev.filter(rid => rid !== id));
   };
 
+  // 인증 초기 확인 중 로딩 화면 / Loading screen while the initial auth check runs
   if (authChecking) {
     return (
       <div className="h-screen flex items-center justify-center font-mono" style={{ background: '#080A0F', color: '#626B7A' }}>
@@ -180,14 +227,18 @@ function App() {
     );
   }
 
+  /** profile 탭은 사이드바에서만 렌더링되므로, 우측 콘텐츠 탭은 home으로 폴백
+   *  Profile tab is rendered only in the sidebar; right-side content falls back to home */
   const rightTab: Exclude<AppTab, 'profile'> = activeTab === 'profile' ? 'home' : activeTab;
+  /** 현재 현금 잔고 / Current cash balance */
   const balance = portfolio?.balance ?? 0;
 
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
       <AnnouncementPopup />
 
-      {/* 좌측 사이드바 */}
+      {/* 좌측 사이드바: 프로필·인증·포트폴리오 요약 포함
+          Left sidebar: includes profile, auth, and portfolio summary */}
       <Sidebar
         activeTab={activeTab}
         user={user}
@@ -206,7 +257,8 @@ function App() {
         onNavigate={setActiveTab}
       />
 
-      {/* 우측 콘텐츠 영역 */}
+      {/* 우측 콘텐츠 영역: profile 탭 활성 시 모바일에서 숨김
+          Right content area: hidden on mobile when the profile tab is active */}
       <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
         style={{ background: '#080A0F' }}>
 
@@ -260,7 +312,7 @@ function App() {
         </div>
       </div>
 
-      {/* 모바일 하단 네비 */}
+      {/* 모바일 하단 내비게이션 바 / Mobile bottom navigation bar */}
       <MobileNavBar activeTab={activeTab} onNavigate={setActiveTab} />
     </div>
   );
