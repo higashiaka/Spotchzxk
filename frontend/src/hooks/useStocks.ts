@@ -1,3 +1,4 @@
+// 종목 목록을 REST로 초기화하고 STOMP 메시지로 최신 상태를 병합합니다.
 import { useState, useEffect } from 'react';
 import { DEFAULT_STOCKS, Stock } from '../data/stocks';
 import { subscribeStomp } from '../lib/stompClient';

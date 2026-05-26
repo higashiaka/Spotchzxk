@@ -1,3 +1,4 @@
+// 앱 전체의 인증, 탭 라우팅, 실시간 이벤트 상태를 묶는 최상위 컴포넌트입니다.
 import { useState, useMemo, useEffect } from 'react';
 import {
   signInWithPopup, signOut, onAuthStateChanged,

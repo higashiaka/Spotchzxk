@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite *)",
+      "Bash(echo \"ALTER TABLE stocks ADD COLUMN live_started_at DATETIME NULL;\")",
+      "Bash(echo \"ALTER TABLE dividend_logs ADD COLUMN stream_minutes BIGINT NULL;\")",
+      "Bash(cp backend/src/main/resources/db/migration/V17__add_dividend_pool_to_stocks.sql backend/src/main/resources/db/migration/V18__add_dividend_pool_to_stocks.sql)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" status --short)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" log --oneline -5)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" diff --stat)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" diff backend/src/main/java/com/spotchzxk/entity/User.java backend/src/main/java/com/spotchzxk/repository/UserShareRepository.java backend/src/main/java/com/spotchzxk/service/PortfolioService.java frontend/src/hooks/usePortfolio.ts frontend/src/hooks/useStocks.ts)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" add backend/src/main/java/com/spotchzxk/entity/Stock.java backend/src/main/java/com/spotchzxk/entity/User.java backend/src/main/java/com/spotchzxk/repository/UserShareRepository.java backend/src/main/java/com/spotchzxk/service/ChzzkLivePollingService.java backend/src/main/java/com/spotchzxk/service/DividendService.java backend/src/main/java/com/spotchzxk/service/PortfolioService.java frontend/src/App.tsx frontend/src/hooks/useDividends.ts frontend/src/hooks/usePortfolio.ts frontend/src/hooks/useStocks.ts backend/src/main/resources/db/migration/V19__add_dividend_accumulation_count_to_stocks.sql)",
+      "Bash(git -C c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk commit -m ' *)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" push origin main)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" add backend/src/main/resources/db/migration/V20__add_dividend_total_to_users.sql)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\frontend\\\\src\" -Recurse -Name)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" -Recurse -Directory -Filter \"src\")",
+      "Bash(Select-Object -First 5)",
+      "Bash(Get-ChildItem -Recurse -Directory)",
+      "Bash(Get-ChildItem -File)",
+      "Bash(Select-Object Name, Length)",
+      "Bash(git mv *)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" status)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" diff)",
+      "Bash(git -C \"c:/Users/KIMDH/Documents/Higashiaka/Spotchzxk\" add backend/src/main/java/com/spotchzxk/service/TradeEngine.java)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" -Recurse -Directory | Select-Object -First 30 | ForEach-Object { $_.FullName })",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'src' -Recurse -Directory | Select-Object -ExpandProperty FullName | Sort-Object\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\frontend\\\\src\\\\components\\\\shop\")",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\Spotchzxk-dev\" -Recurse -Depth 4 | Where-Object { !$_.PSIsContainer } | Select-Object FullName | Head-Object -Count 80)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\Spotchzxk-dev\" -Recurse -Depth 5 | Where-Object { !$_.PSIsContainer } | Select-Object -First 80 | Select-Object FullName)",
+      "Bash(git restore *)",
+      "Bash(git -C \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" status)",
+      "Bash(git -C \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" diff)",
+      "Bash(git -C \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" add frontend/src/App.tsx frontend/src/components/profile/ProfileView.tsx)",
+      "Bash(git -C 'c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk' commit -m ' *)",
+      "Bash(git -C \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\" push origin main)"
+    ]
+  }
+}

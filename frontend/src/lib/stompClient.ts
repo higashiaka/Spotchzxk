@@ -1,3 +1,4 @@
+// SockJS/STOMP 연결을 재사용해 실시간 주가, 거래, 확성기 이벤트를 구독합니다.
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { WS_URL } from './api';

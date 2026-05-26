@@ -1,3 +1,4 @@
+// API 응답 전에도 화면을 채울 수 있는 기본 종목 데이터와 종목 타입입니다.
 export interface Stock {
   id: string;
   name: string;

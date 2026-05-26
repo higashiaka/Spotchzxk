@@ -1,3 +1,4 @@
+// 실시간 차트: lightweight-charts를 사용해 종목별 캔들 데이터를 렌더링합니다.
 import { useState, useEffect, useRef } from 'react';
 import {
   createChart, ColorType, CrosshairMode, LineStyle,

@@ -1,3 +1,4 @@
+// 종목 상세 화면: 가격, 배당, 차트, 주문 진입 정보를 한 종목 기준으로 보여줍니다.
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { UTCTimestamp } from 'lightweight-charts';
 import { Stock } from '../../hooks/useStocks';

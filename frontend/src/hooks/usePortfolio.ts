@@ -1,3 +1,4 @@
+// 로그인 사용자의 잔고, 보유 종목, 평균 단가를 조회합니다.
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 

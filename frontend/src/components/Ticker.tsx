@@ -1,3 +1,4 @@
+// 상단 티커: 종목 가격과 실시간 거래 이벤트를 가로 스크롤로 보여줍니다.
 import { useMemo } from 'react';
 import { Stock } from '../hooks/useStocks';
 import { LiveTrade } from '../types';

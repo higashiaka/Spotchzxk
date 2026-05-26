@@ -1,3 +1,4 @@
+// Firebase 앱과 로그인 제공자를 초기화합니다.
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';

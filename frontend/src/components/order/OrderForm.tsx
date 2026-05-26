@@ -1,3 +1,4 @@
+// 주문 폼: 현재가, 보유 수량, 잔고를 기준으로 매수/매도 가능 여부를 계산합니다.
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';

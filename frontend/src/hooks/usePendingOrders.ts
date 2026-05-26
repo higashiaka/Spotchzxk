@@ -1,3 +1,4 @@
+// 아직 체결되지 않은 주문 목록을 주기적으로 확인합니다.
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';

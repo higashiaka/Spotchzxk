@@ -1,3 +1,4 @@
+// 차트에서 사용하는 기간, OHLC 데이터 변환 유틸리티입니다.
 import { UTCTimestamp, ISeriesApi } from 'lightweight-charts';
 
 export interface Candle {

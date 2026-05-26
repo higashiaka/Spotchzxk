@@ -1,3 +1,4 @@
+// 사용자의 주문/거래 내역을 조회하는 React Query 훅입니다.
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 

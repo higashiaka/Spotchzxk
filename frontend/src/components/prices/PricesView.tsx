@@ -1,3 +1,4 @@
+// 시세 화면: 종목 검색 목록과 선택한 종목 상세 화면 사이를 전환합니다.
 import { useState, useMemo } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
