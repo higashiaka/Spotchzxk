@@ -20,4 +20,10 @@ public class BotActivityProperties {
     private int buyChancePercent = 60;
     private int smallQuantityMax = 5;
     private int largeQuantityChancePercent = 15;
+    private int lowBalanceThresholdPercent = 30;
+    private int criticalBalanceThresholdPercent = 10;
+    private int lowBalanceBuyChancePercent = 25;
+    private int lowBalanceQuantityPercent = 50;
+    private int highHoldingQuantity = 30;
+    private int highHoldingBuyChancePercent = 20;
 }

@@ -75,8 +75,8 @@ public class BotActivityService {
         for (int i = 0; i < orderLimit; i++) {
             String botUserId = dueBotUserIds.get(i);
             scheduleBotNextRun(botUserId, now);
-            Stock stock = pickStock(stocks, recentCounts);
             ensureBotUser(botUserId);
+            Stock stock = pickStockForBot(botUserId, stocks, recentCounts);
             submitBotOrder(botUserId, stock);
         }
     }
@@ -85,6 +85,15 @@ public class BotActivityService {
         return stocks.stream()
                 .max(Comparator.comparingInt(stock -> scoreStock(stock, recentCounts)))
                 .orElseThrow();
+    }
+
+    Stock pickStockForBot(String botUserId, List<Stock> stocks, Map<String, Long> recentCounts) {
+        BigDecimal balance = findBotBalance(botUserId);
+        List<Stock> heldStocks = findHeldStocks(botUserId, stocks);
+        if (!heldStocks.isEmpty() && (isCriticalBalance(balance) || isLowBalance(balance))) {
+            return pickStock(heldStocks, recentCounts);
+        }
+        return pickStock(stocks, recentCounts);
     }
 
     int pickQuantity(int maxAllowed) {
@@ -100,18 +109,36 @@ public class BotActivityService {
 
     String pickTradeType(String botUserId, String channelId) {
         long heldQty = findHeldQuantity(botUserId, channelId);
+        BigDecimal balance = findBotBalance(botUserId);
+        return pickTradeType(balance, heldQty);
+    }
+
+    String pickTradeType(BigDecimal balance, long heldQty) {
         if (heldQty <= 0) {
             return "buy";
         }
-        return randomInt(1, 100) <= clampPercent(properties.getBuyChancePercent()) ? "buy" : "sell";
+        if (isCriticalBalance(balance)) {
+            return "sell";
+        }
+
+        int buyChance = clampPercent(properties.getBuyChancePercent());
+        if (isLowBalance(balance)) {
+            buyChance = Math.min(buyChance, clampPercent(properties.getLowBalanceBuyChancePercent()));
+        }
+        if (heldQty >= Math.max(1, properties.getHighHoldingQuantity())) {
+            buyChance = Math.min(buyChance, clampPercent(properties.getHighHoldingBuyChancePercent()));
+        }
+
+        return randomInt(1, 100) <= buyChance ? "buy" : "sell";
     }
 
     private void submitBotOrder(String botUserId, Stock stock) {
-        String tradeType = pickTradeType(botUserId, stock.getChannelId());
+        BigDecimal balance = findBotBalance(botUserId);
         long heldQty = findHeldQuantity(botUserId, stock.getChannelId());
+        String tradeType = pickTradeType(balance, heldQty);
         int maxAllowed = "sell".equals(tradeType)
                 ? (int) Math.min(Integer.MAX_VALUE, heldQty)
-                : calculateBuyQuantityLimit(stock);
+                : calculateBuyQuantityLimit(stock, balance);
 
         if (maxAllowed <= 0) {
             return;
@@ -135,11 +162,23 @@ public class BotActivityService {
         }
     }
 
-    private int calculateBuyQuantityLimit(Stock stock) {
+    private int calculateBuyQuantityLimit(Stock stock, BigDecimal balance) {
+        if (isCriticalBalance(balance)) {
+            return 0;
+        }
         long remainingSupply = stock.getTotalSupply() > 0
                 ? stock.getTotalSupply() - stock.getIssuedShares()
                 : properties.getMaxQuantity();
-        return (int) Math.min(properties.getMaxQuantity(), Math.max(0, remainingSupply));
+        int supplyLimit = (int) Math.min(properties.getMaxQuantity(), Math.max(0, remainingSupply));
+        int affordableLimit = balance
+                .divide(BigDecimal.valueOf(Math.max(1, stock.getCurrentPrice())), 0, java.math.RoundingMode.DOWN)
+                .intValue();
+        int limit = Math.min(supplyLimit, affordableLimit);
+        if (isLowBalance(balance)) {
+            int reducedLimit = limit * clampPercent(properties.getLowBalanceQuantityPercent()) / 100;
+            limit = Math.min(limit, Math.max(1, reducedLimit));
+        }
+        return Math.max(0, limit);
     }
 
     private int scoreStock(Stock stock, Map<String, Long> recentCounts) {
@@ -175,6 +214,39 @@ public class BotActivityService {
     private long findHeldQuantity(String userId, String channelId) {
         Optional<UserShare> share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId);
         return share.map(UserShare::getQuantity).orElse(0L);
+    }
+
+    private List<Stock> findHeldStocks(String userId, List<Stock> stocks) {
+        Map<String, Stock> stockById = stocks.stream()
+                .collect(Collectors.toMap(Stock::getChannelId, stock -> stock, (left, right) -> left));
+        return userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId).stream()
+                .map(share -> share.getStock().getChannelId())
+                .map(stockById::get)
+                .filter(heldStock -> heldStock != null)
+                .collect(Collectors.toList());
+    }
+
+    private BigDecimal findBotBalance(String userId) {
+        Optional<User> user = userRepository.findById(userId);
+        if (user == null || user.isEmpty() || user.get().getCoinBalance() == null) {
+            return BOT_INITIAL_BALANCE;
+        }
+        return user.get().getCoinBalance();
+    }
+
+    private boolean isLowBalance(BigDecimal balance) {
+        return balancePercent(balance) <= clampPercent(properties.getLowBalanceThresholdPercent());
+    }
+
+    private boolean isCriticalBalance(BigDecimal balance) {
+        return balancePercent(balance) <= clampPercent(properties.getCriticalBalanceThresholdPercent());
+    }
+
+    private int balancePercent(BigDecimal balance) {
+        return balance
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BOT_INITIAL_BALANCE, 0, java.math.RoundingMode.DOWN)
+                .intValue();
     }
 
     String botUserId(int botNumber) {
