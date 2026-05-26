@@ -267,8 +267,11 @@ export const HomeView = ({
             ) : (
               liveTrades.slice(0, 10).map((trade, idx) => {
                 const isBuy = trade.type === 'buy';
+                const stock = streamers.find(s => s.id === trade.streamerId);
                 return (
-                  <div key={idx} className="flex items-center justify-between text-xs py-1">
+                  <div key={idx}
+                    className={`flex items-center justify-between text-xs py-1 rounded${stock ? ' cursor-pointer hover:bg-white/5 -mx-1 px-1' : ''}`}
+                    onClick={() => { if (stock) onSelect(stock); }}>
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-bold truncate text-white" style={{ maxWidth: '100px' }}>
                         {trade.streamerName}
@@ -365,9 +368,12 @@ export const HomeView = ({
                 const isBuy = trade.type === 'buy';
                 const d = new Date(trade.timestamp);
                 const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const stock = streamers.find(s => s.id === trade.streamerId);
                 return (
-                  <div key={idx} className="flex items-center px-4 py-3.5"
-                    style={{ borderBottom: '1px solid #1A2232' }}>
+                  <div key={idx}
+                    className={`flex items-center px-4 py-3.5${stock ? ' cursor-pointer hover:bg-white/5' : ''}`}
+                    style={{ borderBottom: '1px solid #1A2232' }}
+                    onClick={() => { if (stock) { setShowTradeFeed(false); onSelect(stock); } }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0"
