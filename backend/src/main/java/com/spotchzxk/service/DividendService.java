@@ -67,6 +67,8 @@ public class DividendService {
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
 
+            // 커밋 후 캐시 무효화
+            // Evict user caches after transaction commits
             evictUserCachesAfterCommit(logs.stream()
                     .map(UserDividendLog::getUserId)
                     .collect(Collectors.toCollection(LinkedHashSet::new)));
@@ -84,14 +86,44 @@ public class DividendService {
             log.info("Interval dividend for channel {}: price={}, ratePerShare={}, eligibleShares={}, {} users",
                     stock.getChannelId(), stock.getCurrentPrice(), ratePerShare, eligibleShares, updatedUsers);
 
-            messagingTemplate.convertAndSend("/topic/dividends", Map.of(
+            // STOMP 메시지는 트랜잭션 커밋 후에 발송해야 프론트엔드가 REST 조회 시 새 데이터를 볼 수 있음
+            // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
+            final String now = LocalDateTime.now().toString();
+            final Map<String, Object> globalPayload = Map.of(
                     "channelId", stock.getChannelId(),
                     "streamerName", stock.getStreamerName(),
                     "profileImageUrl", stock.getProfileImageUrl() != null ? stock.getProfileImageUrl() : "",
-                    "ratePerShare", ratePerShare,
+                    "totalDividendPool", actualPaid.intValue(),
                     "streamMinutes", 0L,
-                    "createdAt", LocalDateTime.now().toString()
-            ));
+                    "createdAt", now
+            );
+            // 유저별 개인 배당 알림 페이로드 목록
+            // Per-user personal dividend notification payloads
+            final List<Map<String, Object>> userPayloads = logs.stream()
+                    .map(ul -> Map.<String, Object>of(
+                            "channelId", ul.getChannelId(),
+                            "streamerName", ul.getStreamerName(),
+                            "profileImageUrl", ul.getProfileImageUrl() != null ? ul.getProfileImageUrl() : "",
+                            "quantity", Math.abs(ul.getQuantity()),
+                            "ratePerShare", ul.getRatePerShare().abs(),
+                            "amount", ul.getAmount().abs(),
+                            "createdAt", ul.getCreatedAt() != null ? ul.getCreatedAt().toString() : now
+                    ))
+                    .collect(Collectors.toList());
+            final List<String> userIds = logs.stream()
+                    .map(UserDividendLog::getUserId)
+                    .collect(Collectors.toList());
+
+            sendAfterCommit(() -> {
+                // 전체 배당 피드 브로드캐스트
+                // Broadcast to global dividend feed
+                messagingTemplate.convertAndSend("/topic/dividends", globalPayload);
+                // 각 유저에게 개인 배당 내역 실시간 전송
+                // Send personal dividend entry to each user in real-time
+                for (int i = 0; i < userIds.size(); i++) {
+                    messagingTemplate.convertAndSend("/topic/user-dividends/" + userIds.get(i), userPayloads.get(i));
+                }
+            });
         }
     }
 
@@ -108,6 +140,22 @@ public class DividendService {
             @Override
             public void afterCommit() {
                 evictCaches.run();
+            }
+        });
+    }
+
+    /** 트랜잭션 커밋 후 작업을 실행. 트랜잭션 컨텍스트가 없으면 즉시 실행.
+     *  Runs the given task after the current transaction commits.
+     *  Falls back to immediate execution if no active transaction. */
+    private void sendAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
             }
         });
     }

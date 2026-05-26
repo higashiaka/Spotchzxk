@@ -124,11 +124,19 @@ export const ProfileView = ({
     fetchDividendHistory();
   }, [user]);
 
-  // STOMP /topic/dividends 구독: 신규 배당 발생 시 목록 갱신
-  // Subscribe to STOMP /topic/dividends to refresh the list on new dividends
+  // STOMP /topic/user-dividends/{uid} 구독: 내 배당 발생 시 REST 재조회 없이 직접 추가
+  // Subscribe to personal dividend topic; prepend new entry directly (no REST re-fetch)
   useEffect(() => {
     if (!user || user.isAnonymous) return;
-    const sub = subscribeStomp('/topic/dividends', fetchDividendHistory);
+    const sub = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
+      try {
+        const entry = JSON.parse(message.body);
+        setDividendHistory(prev => [entry, ...prev].slice(0, 50));
+      } catch (e) {
+        // 파싱 실패 시 전체 재조회로 폴백 / Fall back to full re-fetch on parse error
+        fetchDividendHistory();
+      }
+    });
     return () => sub.unsubscribe();
   }, [user]);
 
