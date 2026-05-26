@@ -17,9 +17,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -38,7 +40,7 @@ public class BotActivityService {
     private final UserShareRepository userShareRepository;
     private final TradeEngine tradeEngine;
 
-    private volatile long nextRunAtMs = 0;
+    private final ConcurrentHashMap<String, Long> botNextRunAtMs = new ConcurrentHashMap<>();
 
     @Scheduled(fixedDelay = 1_000)
     public void tick() {
@@ -47,29 +49,33 @@ public class BotActivityService {
         }
 
         long now = System.currentTimeMillis();
-        if (now < nextRunAtMs) {
-            return;
-        }
-
-        scheduleNextRun(now);
-        runOneTick();
+        initializeBotTimers(now);
+        runDueBots(now);
     }
 
-    void runOneTick() {
-        int orderCount = randomInt(0, Math.max(0, properties.getMaxOrdersPerTick()));
-        if (orderCount <= 0) {
+    void runDueBots(long now) {
+        List<String> dueBotUserIds = botNextRunAtMs.entrySet().stream()
+                .filter(entry -> entry.getValue() <= now)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        if (dueBotUserIds.isEmpty()) {
             return;
         }
+
+        Collections.shuffle(dueBotUserIds);
+        int orderLimit = Math.min(dueBotUserIds.size(), Math.max(1, properties.getMaxOrdersPerTick()));
 
         List<Stock> stocks = stockRepository.findAll();
         if (stocks.isEmpty()) {
+            dueBotUserIds.forEach(botUserId -> scheduleBotNextRun(botUserId, now));
             return;
         }
 
         Map<String, Long> recentCounts = recentTradeCounts();
-        for (int i = 0; i < orderCount; i++) {
+        for (int i = 0; i < orderLimit; i++) {
+            String botUserId = dueBotUserIds.get(i);
+            scheduleBotNextRun(botUserId, now);
             Stock stock = pickStock(stocks, recentCounts);
-            String botUserId = pickBotUserId();
             ensureBotUser(botUserId);
             submitBotOrder(botUserId, stock);
         }
@@ -171,15 +177,38 @@ public class BotActivityService {
         return share.map(UserShare::getQuantity).orElse(0L);
     }
 
-    private String pickBotUserId() {
-        int botNumber = randomInt(1, Math.max(1, properties.getUserCount()));
+    String botUserId(int botNumber) {
         return BOT_ID_PREFIX + String.format("%03d", botNumber);
     }
 
-    private void scheduleNextRun(long nowMs) {
+    private void initializeBotTimers(long nowMs) {
+        int userCount = Math.max(1, properties.getUserCount());
+        for (int i = 1; i <= userCount; i++) {
+            String botUserId = botUserId(i);
+            botNextRunAtMs.computeIfAbsent(botUserId, ignored -> nowMs + randomDelayMs());
+        }
+        botNextRunAtMs.keySet().removeIf(botUserId -> botNumber(botUserId) > userCount);
+    }
+
+    private void scheduleBotNextRun(String botUserId, long nowMs) {
+        botNextRunAtMs.put(botUserId, nowMs + randomDelayMs());
+    }
+
+    private long randomDelayMs() {
         int min = Math.max(1, properties.getMinDelaySeconds());
         int max = Math.max(min, properties.getMaxDelaySeconds());
-        nextRunAtMs = nowMs + randomInt(min, max) * 1_000L;
+        return randomInt(min, max) * 1_000L;
+    }
+
+    private int botNumber(String botUserId) {
+        if (!botUserId.startsWith(BOT_ID_PREFIX)) {
+            return Integer.MAX_VALUE;
+        }
+        try {
+            return Integer.parseInt(botUserId.substring(BOT_ID_PREFIX.length()));
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
     }
 
     private int randomInt(int minInclusive, int maxInclusive) {

@@ -14,7 +14,7 @@ public class BotActivityProperties {
     private boolean enabled = false;
     private int minDelaySeconds = 20;
     private int maxDelaySeconds = 45;
-    private int maxOrdersPerTick = 2;
+    private int maxOrdersPerTick = 1;
     private int userCount = 20;
     private int maxQuantity = 12;
     private int buyChancePercent = 60;
