@@ -346,7 +346,7 @@ export const HomeView = ({
                 주문 내역이 없습니다
               </div>
             ) : (
-              [...history].reverse().map((item: any) => {
+              history.map((item: any) => {
                 const s = streamers.find(st => st.id === item.streamerId);
                 const price = item.executedPrice ?? item.estimatedPrice;
                 const d = new Date(item.createdAt);
