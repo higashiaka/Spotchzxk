@@ -161,7 +161,7 @@ export const HomeView = ({
               <div className="space-y-3 mb-3 max-h-[188px] overflow-y-auto pr-1 hide-scrollbar">
                 {holdings.map(({ streamer: s, qty, value, pct }) => (
                   <div key={s.id} className="flex items-center gap-3 cursor-pointer"
-                    onClick={() => { onSelect(s); onNavigate('prices'); }}>
+                    onClick={() => onSelect(s)}>
                     <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
                       style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
                       {s.profileImageUrl ? (
@@ -222,7 +222,7 @@ export const HomeView = ({
                 return (
                   <div key={s.id} className="flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-full border"
                     style={{ background: '#131924', borderColor: '#222A3A' }}>
-                    <button type="button" onClick={() => { onSelect(s); onNavigate('prices'); }}
+                    <button type="button" onClick={() => onSelect(s)}
                       className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-white">{s.name}</span>
                       <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
