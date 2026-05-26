@@ -5,7 +5,7 @@ import {
   linkWithPopup, signInWithCredential,
 } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
-import { subscribeStomp } from './lib/stompClient';
+import { registerOnConnect, subscribeStomp } from './lib/stompClient';
 import { apiFetch } from './lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStocks, Stock } from './hooks/useStocks';
@@ -17,6 +17,7 @@ import { AppTab, LiveTrade } from './types';
 import { Sidebar } from './components/layout/Sidebar';
 import { DesktopTabBar } from './components/layout/DesktopTabBar';
 import { MobileNavBar } from './components/layout/MobileNavBar';
+import { OnlineCountBadge } from './components/common/OnlineCountBadge';
 import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
@@ -46,6 +47,39 @@ function App() {
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
   /** 실시간 체결 피드 (최대 50건) / Real-time trade feed, max 50 entries */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
+  const [onlineCount, setOnlineCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const loadOnlineCount = () => {
+      apiFetch('/api/online-count')
+      .then(res => res.ok ? res.json() : null)
+      .then(payload => {
+        if (payload && typeof payload.count === 'number') {
+          setOnlineCount(payload.count);
+        }
+      })
+      .catch(err => console.error('Failed to load online count', err));
+    };
+
+    loadOnlineCount();
+
+    const subscription = subscribeStomp('/topic/online-count', message => {
+      try {
+        const payload = JSON.parse(message.body);
+        if (typeof payload.count === 'number') {
+          setOnlineCount(payload.count);
+        }
+      } catch (e) {
+        console.error('Failed to parse online count message', e);
+      }
+    });
+    const unregisterConnect = registerOnConnect(loadOnlineCount);
+
+    return () => {
+      subscription.unsubscribe();
+      unregisterConnect();
+    };
+  }, []);
 
   // 최근 체결 목록을 REST로 초기 로드 / Load recent trades via REST on mount
   useEffect(() => {
@@ -255,6 +289,9 @@ function App() {
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
       <AnnouncementPopup />
+      <div className="md:hidden fixed top-3 right-3 z-40">
+        <OnlineCountBadge count={onlineCount} compact />
+      </div>
 
       {/* 좌측 사이드바: 프로필·인증·포트폴리오 요약 포함
           Left sidebar: includes profile, auth, and portfolio summary */}
@@ -281,7 +318,7 @@ function App() {
       <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
         style={{ background: '#080A0F' }}>
 
-        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />
+        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} onlineCount={onlineCount} />
 
         <div className="flex-1 overflow-hidden">
           {rightTab === 'home' && (
