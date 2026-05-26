@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DEFAULT_STOCKS, Stock } from '../data/stocks';
 import { subscribeStomp } from '../lib/stompClient';
 import { apiFetch } from '../lib/api';
+import { LiveTrade } from '../types';
 
 export type { Stock } from '../data/stocks';
 export { DEFAULT_STOCKS };
@@ -28,11 +29,11 @@ function mapRawToStock(r: any): Stock {
 
 /** 종목 목록을 관리하는 훅.
  *  마운트 시 REST API로 전체 종목을 초기 로드하고,
- *  이후 STOMP /topic/streamers 메시지로 실시간 병합 업데이트
+ *  이후 STOMP /topic/streamers 및 /topic/trades 메시지로 실시간 병합 업데이트
  *
  *  Hook that manages the full list of stocks.
  *  Fetches all stocks via REST on mount, then applies
- *  real-time merge updates from STOMP /topic/streamers */
+ *  real-time merge updates from STOMP /topic/streamers and /topic/trades */
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
 
@@ -73,6 +74,28 @@ export const useStocks = () => {
         handleMessage(JSON.parse(message.body));
       } catch (e) {
         console.error('Failed to parse stocks message', e);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 체결 이벤트 반영: 가격과 일간 거래량을 즉시 갱신해 차트/랭킹을 실시간 재정렬
+  // Apply trade events immediately so chart/ranking views re-sort in real time
+  useEffect(() => {
+    const subscription = subscribeStomp('/topic/trades', (message) => {
+      try {
+        const trade = JSON.parse(message.body) as LiveTrade;
+        setStocks(prev => prev.map(stock => {
+          if (stock.id !== trade.streamerId) return stock;
+          return {
+            ...stock,
+            price: Number(trade.price),
+            totalVolume: stock.totalVolume + Number(trade.quantity),
+          };
+        }));
+      } catch (e) {
+        console.error('Failed to parse trade message for stocks update', e);
       }
     });
 
