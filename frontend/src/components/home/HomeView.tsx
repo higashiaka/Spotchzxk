@@ -45,6 +45,8 @@ export const HomeView = ({
 }) => {
   /** 주문내역 모달 표시 여부 / Whether the order history modal is visible */
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  /** 전체 거래 피드 모달 표시 여부 / Whether the full trade feed modal is visible */
+  const [showTradeFeed, setShowTradeFeed] = useState(false);
 
   const { data: initialPosts = [] } = useMegaphonePosts();
   /** 배너에 표시할 최신 확성기 게시물 / Latest megaphone post shown in the banner */
@@ -239,7 +241,7 @@ export const HomeView = ({
           </div>
         )}
 
-        {/* 실시간 거래 피드 (최근 3건) / Live trade feed (most recent 3) */}
+        {/* 실시간 거래 피드 (최근 10건, 스크롤 가능) / Live trade feed (most recent 10, scrollable) */}
         <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -250,14 +252,20 @@ export const HomeView = ({
                 LIVE
               </span>
             </div>
+            {liveTrades.length > 0 && (
+              <button type="button" onClick={() => setShowTradeFeed(true)}
+                className="text-xs" style={{ color: '#626B7A' }}>
+                더보기 ›
+              </button>
+            )}
           </div>
-          <div className="space-y-2.5">
+          <div className="max-h-[200px] overflow-y-auto hide-scrollbar space-y-2.5">
             {liveTrades.length === 0 ? (
               <p className="text-xs py-2" style={{ color: '#626B7A' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
               </p>
             ) : (
-              liveTrades.slice(0, 3).map((trade, idx) => {
+              liveTrades.slice(0, 10).map((trade, idx) => {
                 const isBuy = trade.type === 'buy';
                 return (
                   <div key={idx} className="flex items-center justify-between text-xs py-1">
@@ -327,6 +335,65 @@ export const HomeView = ({
         </div>
 
       </div>
+
+      {/* 전체 거래 피드 모달 / Full trade feed modal */}
+      {showTradeFeed && (
+        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#080A0F' }}>
+          <div className="flex items-center justify-between px-4 py-4 shrink-0"
+            style={{ borderBottom: '1px solid #222A3A' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-white font-bold text-base">실시간 거래 피드</h2>
+              <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
+                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+                LIVE
+              </span>
+            </div>
+            <button type="button" onClick={() => setShowTradeFeed(false)}
+              className="text-sm px-3 py-1.5 rounded-lg"
+              style={{ background: '#1A2232', color: '#BAC4D1' }}>
+              닫기
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
+            {liveTrades.length === 0 ? (
+              <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+                대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
+              </div>
+            ) : (
+              liveTrades.map((trade, idx) => {
+                const isBuy = trade.type === 'buy';
+                const d = new Date(trade.timestamp);
+                const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                return (
+                  <div key={idx} className="flex items-center px-4 py-3.5"
+                    style={{ borderBottom: '1px solid #1A2232' }}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0"
+                          style={{
+                            background: isBuy ? '#FF525226' : '#3D8BFF26',
+                            color: isBuy ? '#FF5252' : '#3D8BFF',
+                          }}>
+                          {isBuy ? '매수' : '매도'}
+                        </span>
+                        <p className="text-white text-sm font-bold truncate">{trade.streamerName}</p>
+                      </div>
+                      <p className="text-xs" style={{ color: '#626B7A' }}>{timeStr}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono font-bold text-sm text-white">{trade.quantity}주</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
+                        {fmt(trade.price)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 주문내역 모달 (전체 화면 오버레이) / Order history modal (full-screen overlay) */}
       {showOrderHistory && (
