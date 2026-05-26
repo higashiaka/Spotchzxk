@@ -177,7 +177,7 @@ export const HomeView = ({
                   </div>
                 ))}
               </div>
-              <button type="button" onClick={() => onNavigate('profile')}
+              <button type="button" onClick={() => onNavigate('holdings')}
                 className="w-full py-2 rounded-xl text-xs font-bold"
                 style={{ background: '#1A2232', color: '#BAC4D1' }}>
                 자세히 보기 ›

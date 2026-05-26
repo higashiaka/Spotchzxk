@@ -1,6 +1,6 @@
 /** 앱 전체에서 사용하는 탭 식별자
  *  Tab identifiers used across the entire app */
-export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile' | 'shop';
+export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'profile' | 'shop' | 'holdings';
 
 /** STOMP를 통해 실시간으로 수신되는 체결 이벤트
  *  Live trade event received via STOMP WebSocket */

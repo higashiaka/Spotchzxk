@@ -326,48 +326,35 @@ export const ProfileView = ({
         </div>
       )}
 
-      {/* 보유 주식 목록: 수익률 포함 / Holdings list with profit rate */}
-      <div className="mb-4">
-        <h2 className="text-white text-sm font-bold mb-3">나의 스트리머 보유 주식</h2>
-        {holdingCount > 0 ? (
-          <div className="space-y-2">
-            {Object.entries(portfolio.shares as Record<string, number>)
-              .filter(([, qty]) => qty > 0)
-              .map(([id, qty]) => {
-                // streamers 목록 우선, 없으면 DEFAULT_STOCKS 폴백
-                // Look up in streamers first, then fall back to DEFAULT_STOCKS
-                const s = streamers.find(st => st.id === id) || DEFAULT_STOCKS.find(ds => ds.id === id);
-                if (!s) return null;
-                const avgPrice = portfolio.avgPrices?.[id] ?? 0;
-                const profitRate = avgPrice > 0 ? ((s.price - avgPrice) / avgPrice) * 100 : 0;
-                return (
-                  <div key={id} className="rounded-xl border p-4 cursor-pointer" style={{ background: '#131924', borderColor: '#222A3A' }}
-                    onClick={() => { onSelect(s); onNavigate('prices'); }}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-white text-sm font-bold">{s.name}</p>
-                        <p className="text-xs mt-1" style={{ color: '#8491A5' }}>
-                          {qty}주 · 평단 {fmt(avgPrice)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-sm font-mono text-white">{fmt(s.price)}</p>
-                        <p className="text-xs font-bold mt-1" style={{ color: priceColor(profitRate) }}>
-                          {profitRate >= 0 ? '+' : ''}{profitRate.toFixed(2)}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm"
-            style={{ background: '#131924', borderColor: '#222A3A', color: '#626B7A' }}>
-            보유 종목 없음. 거래를 시작하세요.
-          </div>
-        )}
-      </div>
+      {/* 보유 주식 바로가기 버튼 / Holdings shortcut button */}
+      <button
+        type="button"
+        onClick={() => onNavigate('holdings')}
+        className="w-full rounded-2xl border p-4 mb-4 flex items-center gap-4 transition-colors hover:opacity-80 active:opacity-60"
+        style={{ background: '#1A2232', borderColor: '#26334D' }}
+      >
+        {/* 아이콘 / Icon */}
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#00E67622' }}
+        >
+          <svg className="w-5 h-5" style={{ color: '#00E676' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        </div>
+        {/* 텍스트 / Text */}
+        <div className="flex-1 text-left">
+          <p className="text-white text-sm font-bold">나의 스트리머 보유 주식</p>
+          <p className="text-xs mt-0.5" style={{ color: '#8491A5' }}>
+            {holdingCount > 0 ? `${holdingCount}개 종목 보유 중` : '보유 종목 없음'}
+          </p>
+        </div>
+        {/* 화살표 / Arrow */}
+        <svg className="w-4 h-4 shrink-0" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
       {/* 모의투자 요약: 총 자산, 캐시, 주식 평가액, 누적 매매 횟수
           Investment summary: total assets, cash, holdings value, cumulative order count */}
