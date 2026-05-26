@@ -7,6 +7,7 @@ import {
 import { auth, googleProvider } from './firebase';
 import { subscribeStomp } from './lib/stompClient';
 import { apiFetch } from './lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStocks, Stock } from './hooks/useStocks';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useTransactionHistory } from './hooks/useTransactionHistory';
@@ -180,12 +181,24 @@ function App() {
     }
   };
 
+  const queryClient = useQueryClient();
+
   /** 현재 사용자의 포트폴리오 데이터 / Current user's portfolio data */
   const { data: portfolio } = usePortfolio(user?.uid);
   /** 현재 사용자의 체결 내역 / Current user's transaction history */
   const { data: history } = useTransactionHistory(user?.uid);
   /** 포트폴리오 초기화 뮤테이션 / Portfolio reset mutation */
   const resetMutation = useResetPortfolio(user?.uid);
+
+  // 배당 수령 시 포트폴리오 쿼리를 즉시 무효화 → 캐시·총자산 실시간 반영
+  // Invalidate the portfolio query immediately on dividend receipt → reflects balance/total assets in real time
+  useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    const sub = subscribeStomp(`/topic/user-dividends/${user.uid}`, () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
+    });
+    return () => sub.unsubscribe();
+  }, [user, queryClient]);
 
   /** 초기화 확인 대화상자 표시 후 뮤테이션 실행
    *  Shows a confirmation dialog then executes the reset mutation */

@@ -31,5 +31,8 @@ export const usePortfolio = (userId: string | undefined): UseQueryResult<Portfol
       return res.json();
     },
     enabled: !!userId,
+    /** 12초 간격 폴링: 배당·어드민 조정 등 STOMP로 잡히지 않는 변경의 안전망
+     *  Poll every 12s as a safety net for changes not covered by STOMP (dividends, admin adjustments) */
+    refetchInterval: 12000,
   });
 };
