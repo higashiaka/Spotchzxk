@@ -336,7 +336,7 @@ function App() {
             <PricesView
               streamers={streamers}
               selectedStreamer={selectedStreamer}
-              onSelectStreamer={s => setSelectedStreamer(s)}
+              onSelectStreamer={s => s ? handleSelectStreamer(s) : setSelectedStreamer(null)}
               onNavigate={handleNavigate}
               liveTrades={liveTrades}
             />
