@@ -53,7 +53,9 @@ public class DividendService {
         if (updatedUsers > 0) {
             List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(stock.getChannelId());
             List<UserDividendLog> logs = shares.stream()
-                    .filter(us -> us.getPreStreamQuantity() > 0 && !"__house__".equals(us.getUser().getId()))
+                    .filter(us -> us.getPreStreamQuantity() > 0
+                            && !"__house__".equals(us.getUser().getId())
+                            && !us.getUser().isBot())
                     .map(us -> UserDividendLog.builder()
                             .userId(us.getUser().getId())
                             .channelId(stock.getChannelId())
