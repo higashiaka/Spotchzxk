@@ -124,20 +124,39 @@ export const ProfileView = ({
     fetchDividendHistory();
   }, [user]);
 
-  // STOMP /topic/user-dividends/{uid} 구독: 내 배당 발생 시 REST 재조회 없이 직접 추가
-  // Subscribe to personal dividend topic; prepend new entry directly (no REST re-fetch)
+  // STOMP 구독: 배당 발생 시 목록 갱신
+  // STOMP subscriptions: refresh list on any dividend event
   useEffect(() => {
     if (!user || user.isAnonymous) return;
-    const sub = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
+
+    // ① /topic/dividends: 구·신 백엔드 공통 — 전체 배당 이벤트 시 재조회
+    //    Works with both old & new backend; refetches the list on any dividend event
+    const subGlobal = subscribeStomp('/topic/dividends', () => {
+      fetchDividendHistory();
+    });
+
+    // ② /topic/user-dividends/{uid}: 신 백엔드 전용 — 내 배당 데이터를 즉시 목록 선두에 삽입
+    //    New backend only; prepends my own dividend entry without waiting for the REST round-trip
+    const subPersonal = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
       try {
         const entry = JSON.parse(message.body);
-        setDividendHistory(prev => [entry, ...prev].slice(0, 50));
-      } catch (e) {
-        // 파싱 실패 시 전체 재조회로 폴백 / Fall back to full re-fetch on parse error
-        fetchDividendHistory();
+        setDividendHistory(prev => {
+          // 이미 같은 시각의 항목이 있으면 추가하지 않음 (① 재조회로 중복 방지)
+          // Skip if an entry with the same timestamp is already present (dedup with ①)
+          if (prev.some(d => d.channelId === entry.channelId && d.createdAt === entry.createdAt)) {
+            return prev;
+          }
+          return [entry, ...prev].slice(0, 50);
+        });
+      } catch {
+        // parse 실패는 ① 재조회가 커버 / Parse failure is covered by the ① re-fetch
       }
     });
-    return () => sub.unsubscribe();
+
+    return () => {
+      subGlobal.unsubscribe();
+      subPersonal.unsubscribe();
+    };
   }, [user]);
 
   /** 종목 추가 입력 URL / URL input for adding a new stock */
