@@ -21,6 +21,7 @@ import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
 import { OrderView } from './components/order/OrderView';
 import { ShopView } from './components/shop/ShopView';
+import { HoldingsView } from './components/holdings/HoldingsView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
 /** 앱 최상위 컴포넌트.
@@ -312,6 +313,14 @@ function App() {
               streamers={streamers}
               user={user}
               balance={balance}
+            />
+          )}
+          {rightTab === 'holdings' && (
+            <HoldingsView
+              portfolio={portfolio}
+              streamers={streamers}
+              onNavigate={handleNavigate}
+              onSelect={handleSelectStreamer}
             />
           )}
         </div>
