@@ -39,11 +39,27 @@ export const PricesView = ({
   // 종목이 선택된 경우 상세 화면으로 전환 / Switch to detail view when a stock is selected
   if (selectedStreamer) {
     return (
-      <StockDetail
-        streamer={selectedStreamer}
-        onOrder={() => onNavigate('order')}
-        liveTrades={liveTrades}
-      />
+      <div className="h-full flex flex-col overflow-hidden">
+        {/* 목록으로 돌아가는 뒤로가기 버튼 / Back button to return to the stock list */}
+        <button
+          type="button"
+          onClick={() => onSelectStreamer(null)}
+          className="flex items-center gap-1.5 px-4 py-2.5 shrink-0 text-sm font-bold transition-colors hover:opacity-70"
+          style={{ color: '#626B7A', borderBottom: '1px solid #222A3A', background: '#0E121A' }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+          시세 목록
+        </button>
+        <div className="flex-1 overflow-hidden">
+          <StockDetail
+            streamer={selectedStreamer}
+            onOrder={() => onNavigate('order')}
+            liveTrades={liveTrades}
+          />
+        </div>
+      </div>
     );
   }
 
