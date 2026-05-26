@@ -124,7 +124,6 @@
     "basePrice": 10000,
     "currentPrice": 10500,
     "isLive": false,
-    "dividendPool": 0,
     "liveStartedAt": null,
     "dividendAccumulationCount": 0,
     "issuedShares": 20,
@@ -582,7 +581,6 @@ Payload: `MegaphonePost`
 | `basePrice` | number | 기준 가격 |
 | `currentPrice` | number | 현재 가격 |
 | `isLive` | boolean | 라이브 여부 |
-| `dividendPool` | number | 배당 풀 |
 | `liveStartedAt` | string/null | 라이브 시작 시각 |
 | `dividendAccumulationCount` | number | 배당 누적 카운트 |
 | `issuedShares` | number | 현재 발행 주식 수 |

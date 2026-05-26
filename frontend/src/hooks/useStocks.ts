@@ -1,4 +1,3 @@
-// 종목 목록을 REST로 초기화하고 STOMP 메시지로 최신 상태를 병합합니다.
 import { useState, useEffect } from 'react';
 import { DEFAULT_STOCKS, Stock } from '../data/stocks';
 import { subscribeStomp } from '../lib/stompClient';
@@ -7,68 +6,64 @@ import { apiFetch } from '../lib/api';
 export type { Stock } from '../data/stocks';
 export { DEFAULT_STOCKS };
 
+/** 백엔드 REST 응답을 클라이언트 Stock 모델로 변환
+ *  Maps a raw backend response object to the client-side Stock model */
+function mapRawToStock(r: any): Stock {
+  return {
+    id: r.channelId || r.id,
+    name: r.streamerName || r.name,
+    price: r.currentPrice ?? r.price ?? 1000,
+    totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
+    basePrice: r.basePrice ?? 1000,
+    profileImageUrl: r.profileImageUrl,
+    isLive: r.isLive ?? false,
+    totalSupply: Number(r.totalSupply ?? 0),
+    baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
+    liveStartedAt: r.liveStartedAt ?? null,
+    dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
+    preStreamFloat: Number(r.preStreamFloat ?? 0),
+    listedAt: r.listedAt ?? null,
+  };
+}
+
+/** 종목 목록을 관리하는 훅.
+ *  마운트 시 REST API로 전체 종목을 초기 로드하고,
+ *  이후 STOMP /topic/streamers 메시지로 실시간 병합 업데이트
+ *
+ *  Hook that manages the full list of stocks.
+ *  Fetches all stocks via REST on mount, then applies
+ *  real-time merge updates from STOMP /topic/streamers */
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
 
   // 초기 로드: REST API로 DB 전체 목록 가져오기
+  // Initial load: fetch all stocks from the REST API
   useEffect(() => {
     apiFetch('/api/stocks')
       .then(res => res.ok ? res.json() : null)
       .then((rawStocks: any[] | null) => {
         if (!rawStocks || rawStocks.length === 0) return;
-        const dbStocks: Stock[] = rawStocks.map(r => ({
-          id: r.channelId || r.id,
-          name: r.streamerName || r.name,
-          price: r.currentPrice ?? r.price ?? 1000,
-          totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
-          basePrice: r.basePrice ?? 1000,
-          profileImageUrl: r.profileImageUrl,
-          isLive: r.isLive ?? false,
-          dividendPool: Number(r.dividendPool ?? 0),
-          totalSupply: Number(r.totalSupply ?? 0),
-          baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
-          liveStartedAt: r.liveStartedAt ?? null,
-          dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
-          preStreamFloat: Number(r.preStreamFloat ?? 0),
-          listedAt: r.listedAt ?? null,
-        }));
-        setStocks(dbStocks);
+        setStocks(rawStocks.map(mapRawToStock));
       })
-      .catch(() => {/* 오프라인일 때는 DEFAULT_STOCKS 유지 */});
+      .catch(() => {/* 오프라인일 때는 DEFAULT_STOCKS 유지 / Keep DEFAULT_STOCKS when offline */});
   }, []);
 
-  // 실시간 업데이트: STOMP
+  // 실시간 업데이트: STOMP /topic/streamers 구독
+  // Real-time update: subscribe to STOMP /topic/streamers
   useEffect(() => {
     const handleMessage = (rawStocks: any[]) => {
       if (!rawStocks || rawStocks.length === 0) return;
-      const dbStocks: Stock[] = rawStocks.map(r => ({
-        id: r.channelId || r.id,
-        name: r.streamerName || r.name,
-        price: r.currentPrice ?? r.price ?? 1000,
-        totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
-        basePrice: r.basePrice ?? 1000,
-        profileImageUrl: r.profileImageUrl,
-        isLive: r.isLive ?? false,
-        dividendPool: Number(r.dividendPool ?? 0),
-        totalSupply: Number(r.totalSupply ?? 0),
-        baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
-        liveStartedAt: r.liveStartedAt ?? null,
-        dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
-        preStreamFloat: Number(r.preStreamFloat ?? 0),
-        listedAt: r.listedAt ?? null,
-      }));
+      const dbStocks = rawStocks.map(mapRawToStock);
       const dbMap = new Map(dbStocks.map(s => [s.id, s]));
 
       setStocks(prev => {
         const merged = prev.map(s => {
           const db = dbMap.get(s.id);
-          return db ? { ...s, price: db.price, totalVolume: db.totalVolume, basePrice: db.basePrice, profileImageUrl: db.profileImageUrl, isLive: db.isLive, dividendPool: db.dividendPool, totalSupply: db.totalSupply, baseBroadcastHours: db.baseBroadcastHours, liveStartedAt: db.liveStartedAt, dividendAccumulationCount: db.dividendAccumulationCount, preStreamFloat: db.preStreamFloat, listedAt: db.listedAt } : s;
+          return db ? { ...s, ...db } : s;
         });
-        // DB에만 있는 새 종목 추가 (prev에 없는 것)
+        // DB에만 있는 새 종목 추가 / Append stocks that exist in DB but not in prev
         const prevIds = new Set(prev.map(s => s.id));
-        dbStocks.forEach(s => {
-          if (!prevIds.has(s.id)) merged.push(s);
-        });
+        dbStocks.forEach(s => { if (!prevIds.has(s.id)) merged.push(s); });
         return merged;
       });
     };

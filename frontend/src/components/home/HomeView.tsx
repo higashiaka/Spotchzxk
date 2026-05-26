@@ -1,4 +1,3 @@
-// 홈 화면: 투자 요약, 보유 종목, 최근 본 종목, 실시간 거래 피드를 구성합니다.
 import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
@@ -7,73 +6,90 @@ import { fmt, fmtCompact, changePct, priceColor, avatarColor, INITIAL_BALANCE, g
 import { Ticker } from '../Ticker';
 import { MegaphonePost, useMegaphonePosts } from '../../hooks/useMegaphone';
 import { subscribeStomp } from '../../lib/stompClient';
+import { useHoldings } from '../../hooks/useHoldings';
 
+/** 홈 화면 컴포넌트.
+ *  티커, 최신 확성기 배너, 투자 요약, 보유 종목(최대 3개),
+ *  거래 현황 rows, 최근 본 종목, 실시간 거래 피드, 거래량 차트를 렌더링
+ *
+ *  Home screen component.
+ *  Renders the ticker, latest megaphone banner, investment summary,
+ *  holdings (up to 3), stat rows, recently viewed, live trade feed,
+ *  and volume chart */
 export const HomeView = ({
   streamers, portfolio, user, totalAssets, history, recentlyViewedIds,
   onSelect, onNavigate, onRemoveRecent, liveTrades,
 }: {
+  /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
+  /** 포트폴리오 데이터 / Portfolio data */
   portfolio: any;
+  /** 로그인 사용자 / Authenticated user */
   user: User | null;
+  /** 총 자산 (현금 + 주식 평가액) / Total assets (cash + stock market value) */
   totalAssets: number;
+  /** 주문/거래 내역 목록 / Order and transaction history list */
   history: any[];
+  /** 최근 본 종목 ID 배열 (최신순) / Recently viewed stock IDs in recency order */
   recentlyViewedIds: string[];
+  /** 종목 선택 핸들러 / Stock selection handler */
   onSelect: (s: Stock) => void;
+  /** 탭 전환 핸들러 / Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
+  /** 최근 본 종목 제거 핸들러 / Handler to remove a stock from recently viewed */
   onRemoveRecent: (id: string) => void;
+  /** 실시간 체결 내역 / Live trade events */
   liveTrades: LiveTrade[];
 }) => {
+  /** 주문내역 모달 표시 여부 / Whether the order history modal is visible */
   const [showOrderHistory, setShowOrderHistory] = useState(false);
 
   const { data: initialPosts = [] } = useMegaphonePosts();
+  /** 배너에 표시할 최신 확성기 게시물 / Latest megaphone post shown in the banner */
   const [latestMegaphone, setLatestMegaphone] = useState<MegaphonePost | null>(null);
 
+  // REST 초기 로드 후 가장 최신 게시물을 배너에 표시
+  // Display the most recent post in the banner after initial REST load
   useEffect(() => {
     if (initialPosts.length > 0) setLatestMegaphone(initialPosts[0]);
   }, [initialPosts]);
 
+  // STOMP 실시간 확성기 이벤트 수신 / Receive real-time megaphone events via STOMP
   useEffect(() => {
     const sub = subscribeStomp('/topic/megaphone', msg => {
       try { setLatestMegaphone(JSON.parse(msg.body) as MegaphonePost); } catch { /* ignore */ }
     });
     return () => sub.unsubscribe();
   }, []);
+
+  /** 총 수익 (총 자산 - 초기 투자금) / Total return (total assets - initial balance) */
   const totalReturn = totalAssets - INITIAL_BALANCE;
+  /** 총 수익률 (%) / Total return rate in % */
   const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
+  /** 총 자산 기준 투자 등급 / Investor grade based on total assets */
   const userGrade = grade(totalAssets);
 
-  const holdings = useMemo(() => {
-    if (!portfolio?.shares) return [];
-    return Object.entries(portfolio.shares as Record<string, number>)
-      .filter(([, qty]) => qty > 0)
-      .map(([id, qty]) => {
-        const s = streamers.find(st => st.id === id);
-        if (!s) return null;
-        const avgPrice = portfolio.avgPrices?.[id] ?? 0;
-        const profitRate = avgPrice > 0 ? ((s.price - avgPrice) / avgPrice) * 100 : 0;
-        return { streamer: s, qty, value: s.price * qty, pct: profitRate, avgPrice };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b!.value - a!.value)
-      .slice(0, 3) as { streamer: Stock; qty: number; value: number; pct: number; avgPrice: number }[];
-  }, [portfolio, streamers]);
+  /** 보유 종목 목록 (평가금액 내림차순, 최대 3개 표시)
+   *  Holdings sorted by value descending, limited to 3 for display */
+  const { holdings, holdingCount } = useHoldings(portfolio, streamers, { limit: 3 });
 
-  const holdingCount = useMemo(() =>
-    Object.values(portfolio?.shares as Record<string, number> ?? {}).filter(q => q > 0).length,
-    [portfolio]);
-
+  /** 최근 본 종목 Stock 객체 배열 (ID 순서 유지)
+   *  Recently viewed Stock objects in recency order */
   const recentlyViewed = useMemo(() =>
     recentlyViewedIds.map(id => streamers.find(s => s.id === id)).filter(Boolean) as Stock[],
     [recentlyViewedIds, streamers]);
 
+  /** 거래량 기준 상위 5개 종목 / Top 5 stocks by trading volume */
   const top5 = useMemo(() =>
     [...streamers].sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 5),
     [streamers]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden relative">
+      {/* 상단 티커 / Top ticker */}
       <Ticker streamers={streamers} liveTrades={liveTrades} />
 
+      {/* 최신 확성기 배너 (게시물이 있을 때만 표시) / Latest megaphone banner (shown only when available) */}
       {latestMegaphone && (
         <a
           href={latestMegaphone.liveUrl}
@@ -101,7 +117,7 @@ export const HomeView = ({
 
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
 
-        {/* 내 투자 */}
+        {/* 내 투자 요약 / My investment summary */}
         <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>
           <p className="text-xs font-bold mb-1" style={{ color: '#8491A5' }}>내 투자</p>
           {user ? (
@@ -130,7 +146,7 @@ export const HomeView = ({
           )}
         </div>
 
-        {/* 나의 종목 */}
+        {/* 나의 종목 (보유 종목 최대 3개) / My stocks (up to 3 holdings) */}
         <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid #222A3A' }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">나의 종목</p>
@@ -146,9 +162,7 @@ export const HomeView = ({
                       style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
                       {s.profileImageUrl ? (
                         <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
-                      ) : (
-                        s.name.slice(0, 2)
-                      )}
+                      ) : s.name.slice(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-bold truncate">{s.name}</p>
@@ -176,7 +190,7 @@ export const HomeView = ({
           )}
         </div>
 
-        {/* 거래 현황 rows */}
+        {/* 거래 현황 요약 rows / Trading summary stat rows */}
         <div style={{ borderBottom: '1px solid #222A3A' }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
@@ -194,7 +208,7 @@ export const HomeView = ({
           ))}
         </div>
 
-        {/* 최근 본 종목 */}
+        {/* 최근 본 종목 (가로 스크롤 칩) / Recently viewed stocks (horizontal scroll chips) */}
         {recentlyViewed.length > 0 && (
           <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
             <p className="text-sm font-bold text-white mb-3">최근 본 종목</p>
@@ -211,6 +225,7 @@ export const HomeView = ({
                         {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                       </span>
                     </button>
+                    {/* 최근 본 종목 제거 버튼 / Remove from recently viewed */}
                     <button type="button" onClick={() => onRemoveRecent(s.id)}
                       className="text-xs ml-0.5" style={{ color: '#626B7A' }}>×</button>
                   </div>
@@ -220,7 +235,7 @@ export const HomeView = ({
           </div>
         )}
 
-        {/* 실시간 거래 피드 */}
+        {/* 실시간 거래 피드 (최근 3건) / Live trade feed (most recent 3) */}
         <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -247,10 +262,7 @@ export const HomeView = ({
                         {trade.streamerName}
                       </span>
                       <span className="px-1 py-0.5 rounded text-[10px] font-bold shrink-0"
-                        style={{
-                          backgroundColor: isBuy ? '#FF525220' : '#3D8BFF20',
-                          color: isBuy ? '#FF5252' : '#3D8BFF'
-                        }}>
+                        style={{ backgroundColor: isBuy ? '#FF525220' : '#3D8BFF20', color: isBuy ? '#FF5252' : '#3D8BFF' }}>
                         {isBuy ? '매수' : '매도'}
                       </span>
                     </div>
@@ -267,7 +279,7 @@ export const HomeView = ({
           </div>
         </div>
 
-        {/* 실시간 거래량 차트 */}
+        {/* 실시간 거래량 차트 (상위 5개 종목) / Real-time volume chart (top 5 stocks) */}
         <div className="px-4 pt-4 pb-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">실시간 거래량 차트</p>
@@ -283,21 +295,18 @@ export const HomeView = ({
                 <div key={s.id} className="flex items-center gap-3 py-3 cursor-pointer"
                   style={{ borderBottom: i < top5.length - 1 ? '1px solid #1A2232' : 'none' }}
                   onClick={() => { onSelect(s); onNavigate('prices'); }}>
+                  {/* 순위 번호 / Rank number */}
                   <span className="w-5 text-sm font-bold shrink-0 text-center"
                     style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>{i + 1}</span>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
                     style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
                     {s.profileImageUrl ? (
                       <img src={s.profileImageUrl} alt={s.name} className="w-full h-full object-cover" />
-                    ) : (
-                      s.name.slice(0, 2)
-                    )}
+                    ) : s.name.slice(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-bold truncate">{s.name}</p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>
-                      {fmt(s.price)}
-                    </p>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>{fmt(s.price)}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold" style={{ color: priceColor(pct) }}>
@@ -315,7 +324,7 @@ export const HomeView = ({
 
       </div>
 
-      {/* 주문내역 모달 */}
+      {/* 주문내역 모달 (전체 화면 오버레이) / Order history modal (full-screen overlay) */}
       {showOrderHistory && (
         <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#080A0F' }}>
           <div className="flex items-center justify-between px-4 py-4 shrink-0"
@@ -343,6 +352,7 @@ export const HomeView = ({
                     style={{ borderBottom: '1px solid #1A2232' }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
+                        {/* 매수/매도 뱃지 / Buy/sell badge */}
                         <span className="text-xs font-bold px-1.5 py-0.5 rounded"
                           style={{
                             background: item.type === 'buy' ? '#FF525226' : '#3D8BFF26',

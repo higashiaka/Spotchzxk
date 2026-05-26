@@ -2,8 +2,14 @@ package com.spotchzxk.service;
 
 import com.spotchzxk.dto.TradeRequest;
 import com.spotchzxk.dto.TradeResponse;
-import com.spotchzxk.entity.*;
-import com.spotchzxk.repository.*;
+import com.spotchzxk.entity.Order;
+import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.User;
+import com.spotchzxk.entity.UserShare;
+import com.spotchzxk.repository.OrderRepository;
+import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.UserRepository;
+import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -13,7 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -23,7 +30,6 @@ import java.util.concurrent.locks.ReentrantLock;
 public class TradeEngine {
 
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
-    // dev engine.ts 동일: 1주당 0.05% 가격 충격
     private static final double PRICE_IMPACT_PER_SHARE = 0.0005;
 
     private final UserRepository userRepository;
@@ -34,18 +40,12 @@ public class TradeEngine {
     private final PlatformTransactionManager txManager;
     private final CandleService candleService;
 
-    // ── 읽기 캐시 ──────────────────────────────────────────────────────────────
     private final ConcurrentHashMap<String, BigDecimal> balanceCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<String, Long>> sharesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BigDecimal> priceCache = new ConcurrentHashMap<>();
 
-    // ── 종목별 / 유저별 독립 락 ──────────────────────────────────────────────────
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> stockLocks = new ConcurrentHashMap<>();
-
-    // ---------------------------------------------------------------
-    // Public API
-    // ---------------------------------------------------------------
 
     public TradeResponse submitTrade(TradeRequest req) {
         String userId = req.getUserId();
@@ -75,119 +75,167 @@ public class TradeEngine {
         sharesCache.remove(userId);
     }
 
-    // ---------------------------------------------------------------
-    // 시장가 체결 — 1주씩 순차 체결하는 지수 가격충격 공식
-    // 매수: price *= (1 + 0.0005)^qty
-    // 매도: price *= (1 - 0.0005)^qty  → qty가 커도 절대 0·음수 불가
-    // ---------------------------------------------------------------
-
     private TradeResponse executeMarketOrder(String userId, String channelId,
                                              boolean isBuy, int qty,
                                              BigDecimal fallbackPrice) {
-        BigDecimal currentPrice = priceCache.computeIfAbsent(channelId, k ->
-                stockRepository.findById(k)
-                        .map(s -> BigDecimal.valueOf(s.getCurrentPrice()))
-                        .orElse(fallbackPrice));
-
-        // 1주씩 순차 체결 시뮬레이션 → 지수 공식으로 O(1) 계산
-        // 매수: price * (1+k)^qty,  매도: price * (1-k)^qty  (k=PRICE_IMPACT_PER_SHARE)
-        // 선형 공식(1 ± qty*k)과 달리 qty가 아무리 커도 음수·0 불가
-        double r = isBuy ? (1.0 + PRICE_IMPACT_PER_SHARE) : (1.0 - PRICE_IMPACT_PER_SHARE);
-        double finalPriceRaw = currentPrice.doubleValue() * Math.pow(r, qty);
-        BigDecimal executedPrice = BigDecimal.valueOf(Math.max(1.0, finalPriceRaw))
-                .setScale(0, RoundingMode.HALF_UP);
-
+        BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
+        BigDecimal executedPrice = calculateExecutedPrice(currentPrice, isBuy, qty);
         BigDecimal cost = executedPrice.multiply(BigDecimal.valueOf(qty));
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
         Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
         long heldQty = shares.getOrDefault(channelId, 0L);
 
-        // 사전 검증
-        if (isBuy) {
-            if (currentBalance.compareTo(cost) < 0)
-                throw new IllegalStateException("잔액이 부족합니다.");
-            Stock s = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("종목을 찾을 수 없습니다."));
-            if (s.getTotalSupply() > 0 && s.getIssuedShares() + qty > s.getTotalSupply())
-                throw new IllegalStateException("발행량 한도를 초과했습니다.");
-        } else {
-            if (heldQty < qty)
-                throw new IllegalStateException("보유 주식이 부족합니다.");
+        validateTrade(channelId, isBuy, qty, cost, currentBalance, heldQty);
+        persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost);
+        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, executedPrice,
+                currentBalance, shares, heldQty, cost);
+        broadcastTrade(channelId, isBuy, qty, executedPrice);
+
+        return new TradeResponse("executed", executedPrice, newBalance,
+                BigDecimal.ZERO, UUID.randomUUID().toString(), "market");
+    }
+
+    private BigDecimal loadPrice(String channelId, BigDecimal fallbackPrice) {
+        return priceCache.computeIfAbsent(channelId, k ->
+                stockRepository.findById(k)
+                        .map(stock -> BigDecimal.valueOf(stock.getCurrentPrice()))
+                        .orElse(fallbackPrice));
+    }
+
+    private BigDecimal calculateExecutedPrice(BigDecimal currentPrice, boolean isBuy, int qty) {
+        double rate = isBuy ? (1.0 + PRICE_IMPACT_PER_SHARE) : (1.0 - PRICE_IMPACT_PER_SHARE);
+        double finalPriceRaw = currentPrice.doubleValue() * Math.pow(rate, qty);
+        return BigDecimal.valueOf(Math.max(1.0, finalPriceRaw))
+                .setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private void validateTrade(String channelId, boolean isBuy, int qty, BigDecimal cost,
+                               BigDecimal currentBalance, long heldQty) {
+        if (!isBuy) {
+            if (heldQty < qty) {
+                throw new IllegalStateException("Insufficient shares.");
+            }
+            return;
         }
 
-        // DB 트랜잭션
-        BigDecimal finalExecutedPrice = executedPrice;
+        if (currentBalance.compareTo(cost) < 0) {
+            throw new IllegalStateException("Insufficient balance.");
+        }
+
+        Stock stock = stockRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalStateException("Stock not found."));
+        if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + qty > stock.getTotalSupply()) {
+            throw new IllegalStateException("Issued share limit exceeded.");
+        }
+    }
+
+    private void persistTrade(String userId, String channelId, boolean isBuy, int qty,
+                              BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost) {
         new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
-            stock.setCurrentPrice(finalExecutedPrice.intValue());
-            stock.setDailyVolume(stock.getDailyVolume() + qty);
-            if (isBuy) {
-                stock.setIssuedShares(stock.getIssuedShares() + qty);
-            } else {
-                stock.setIssuedShares(Math.max(0, stock.getIssuedShares() - qty));
-            }
-            stockRepository.save(stock);
-
             User user = userRepository.findById(userId)
                     .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
-            if (isBuy) {
-                user.setCoinBalance(user.getCoinBalance().subtract(cost));
-            } else {
-                user.setCoinBalance(user.getCoinBalance().add(cost));
-            }
-            userRepository.save(user);
 
-            // 보유 주식 갱신
-            UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
-                    .orElseGet(() -> UserShare.builder().user(user).stock(stock)
-                            .quantity(0L).avgPrice(BigDecimal.ZERO).build());
-            if (isBuy) {
-                long prevQty = share.getQuantity();
-                long newQty = prevQty + qty;
-                BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
-                BigDecimal newAvg = prevAvg.multiply(BigDecimal.valueOf(prevQty))
-                        .add(cost)
-                        .divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP);
-                share.setAvgPrice(newAvg);
-                share.setQuantity(newQty);
-                userShareRepository.save(share);
-            } else {
-                long newQty = share.getQuantity() - qty;
-                if (newQty <= 0) {
-                    userShareRepository.delete(share);
-                } else {
-                    share.setQuantity(newQty);
-                    userShareRepository.save(share);
-                }
-            }
-
-            // 주문 이력 기록
-            orderRepository.save(Order.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(userId)
-                    .streamerId(channelId)
-                    .type(isBuy ? "buy" : "sell")
-                    .quantity(qty)
-                    .estimatedPrice(fallbackPrice)
-                    .executedPrice(finalExecutedPrice)
-                    .orderMode("market")
-                    .status("completed")
-                    .createdAt(System.currentTimeMillis())
-                    .build());
-
+            updateStock(stock, isBuy, qty, executedPrice);
+            updateUserBalance(user, isBuy, cost);
+            updateUserShare(user, stock, channelId, isBuy, qty, cost);
+            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice);
             return null;
         });
+    }
 
-        // 캐시 갱신
+    private void updateStock(Stock stock, boolean isBuy, int qty, BigDecimal executedPrice) {
+        stock.setCurrentPrice(executedPrice.intValue());
+        stock.setDailyVolume(stock.getDailyVolume() + qty);
+        if (isBuy) {
+            stock.setIssuedShares(stock.getIssuedShares() + qty);
+        } else {
+            stock.setIssuedShares(Math.max(0, stock.getIssuedShares() - qty));
+        }
+        stockRepository.save(stock);
+    }
+
+    private void updateUserBalance(User user, boolean isBuy, BigDecimal cost) {
+        if (isBuy) {
+            user.setCoinBalance(user.getCoinBalance().subtract(cost));
+        } else {
+            user.setCoinBalance(user.getCoinBalance().add(cost));
+        }
+        userRepository.save(user);
+    }
+
+    private void updateUserShare(User user, Stock stock, String channelId, boolean isBuy,
+                                 int qty, BigDecimal cost) {
+        UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
+                .orElseGet(() -> UserShare.builder()
+                        .user(user)
+                        .stock(stock)
+                        .quantity(0L)
+                        .avgPrice(BigDecimal.ZERO)
+                        .build());
+
+        if (isBuy) {
+            updateBoughtShare(share, qty, cost);
+        } else {
+            updateSoldShare(share, qty);
+        }
+    }
+
+    private void updateBoughtShare(UserShare share, int qty, BigDecimal cost) {
+        long prevQty = share.getQuantity();
+        long newQty = prevQty + qty;
+        BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
+        BigDecimal newAvg = prevAvg.multiply(BigDecimal.valueOf(prevQty))
+                .add(cost)
+                .divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP);
+        share.setAvgPrice(newAvg);
+        share.setQuantity(newQty);
+        userShareRepository.save(share);
+    }
+
+    private void updateSoldShare(UserShare share, int qty) {
+        long newQty = share.getQuantity() - qty;
+        if (newQty <= 0) {
+            userShareRepository.delete(share);
+            return;
+        }
+        share.setQuantity(newQty);
+        userShareRepository.save(share);
+    }
+
+    private void saveOrder(String userId, String channelId, boolean isBuy, int qty,
+                           BigDecimal fallbackPrice, BigDecimal executedPrice) {
+        orderRepository.save(Order.builder()
+                .id(UUID.randomUUID().toString())
+                .userId(userId)
+                .streamerId(channelId)
+                .type(isBuy ? "buy" : "sell")
+                .quantity(qty)
+                .estimatedPrice(fallbackPrice)
+                .executedPrice(executedPrice)
+                .orderMode("market")
+                .status("completed")
+                .createdAt(System.currentTimeMillis())
+                .build());
+    }
+
+    private BigDecimal updateCaches(String userId, String channelId, boolean isBuy, int qty,
+                                    BigDecimal executedPrice, BigDecimal currentBalance,
+                                    Map<String, Long> shares, long heldQty, BigDecimal cost) {
         priceCache.put(channelId, executedPrice);
+
         BigDecimal newBalance = isBuy
                 ? currentBalance.subtract(cost)
                 : currentBalance.add(cost);
         balanceCache.put(userId, newBalance);
-        shares.put(channelId, isBuy ? heldQty + qty : heldQty - qty);
 
-        // 브로드캐스트
+        long newHeldQty = isBuy ? heldQty + qty : heldQty - qty;
+        shares.put(channelId, newHeldQty);
+        return newBalance;
+    }
+
+    private void broadcastTrade(String channelId, boolean isBuy, int qty, BigDecimal executedPrice) {
         candleService.onTrade(channelId, executedPrice, System.currentTimeMillis());
         messagingTemplate.convertAndSend("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
@@ -200,23 +248,20 @@ public class TradeEngine {
                 "price", executedPrice,
                 "timestamp", System.currentTimeMillis()
         ));
-
-        return new TradeResponse("executed", executedPrice, newBalance,
-                BigDecimal.ZERO, UUID.randomUUID().toString(), "market");
     }
 
-    // ---------------------------------------------------------------
-    // 캐시 로딩
-    // ---------------------------------------------------------------
-
     private void loadPortfolioIfAbsent(String userId) {
-        if (balanceCache.containsKey(userId)) return;
+        if (balanceCache.containsKey(userId)) {
+            return;
+        }
+
         User user = userRepository.findById(userId)
                 .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
         balanceCache.put(userId, user.getCoinBalance());
+
         Map<String, Long> shares = new ConcurrentHashMap<>();
         userShareRepository.findByUserId(userId)
-                .forEach(s -> shares.put(s.getStock().getChannelId(), s.getQuantity()));
+                .forEach(share -> shares.put(share.getStock().getChannelId(), share.getQuantity()));
         sharesCache.put(userId, shares);
     }
 }
