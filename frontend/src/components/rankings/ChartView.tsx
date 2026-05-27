@@ -189,7 +189,7 @@ export const ChartView = ({
       </div>
 
       {/* 종목 랭킹 행 목록 / Stock ranking row list */}
-      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
         {list.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
             데이터가 없습니다

@@ -64,7 +64,7 @@ export const PricesView = ({
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
       {/* 종목 검색 입력 / Stock search input */}
       <div className="relative mb-4">
         <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }}

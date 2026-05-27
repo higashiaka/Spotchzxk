@@ -204,7 +204,7 @@ export const ShopView = ({ streamers, user, balance }: Props) => {
   };
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 max-w-2xl mx-auto">
+    <div className="h-full overflow-y-auto px-4 py-6 max-w-2xl mx-auto touch-pan-y">
       {showModal && (
         <MegaphoneModal
           streamers={streamers}
