@@ -209,6 +209,13 @@ export const StockDetail = ({
         />
       </div>
 
+      {/* 주문하기 버튼 / Order entry button */}
+      <button type="button" onClick={onOrder}
+        className="w-full rounded-xl py-4 mb-4 text-white font-bold text-base"
+        style={{ backgroundColor: '#FF5252' }}>
+        주문하기
+      </button>
+
       {/* 실시간 체결 내역 / Real-time execution history for this stock */}
       <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <div className="flex items-center justify-between mb-3">
@@ -265,12 +272,6 @@ export const StockDetail = ({
         </div>
       </div>
 
-      {/* 주문하기 버튼 / Order entry button */}
-      <button type="button" onClick={onOrder}
-        className="w-full rounded-xl py-4 text-white font-bold text-base"
-        style={{ backgroundColor: '#FF5252' }}>
-        주문하기
-      </button>
     </div>
   );
 };
