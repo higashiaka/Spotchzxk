@@ -9,6 +9,16 @@ import { fmt, fmtCompact, changePct, priceColor } from '../../utils';
 import { InteractiveChart } from '../chart/InteractiveChart';
 import { Candle } from '../chart/chartUtils';
 
+interface StockOrderHistoryItem {
+  streamerId: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  executedPrice?: number;
+  estimatedPrice: number;
+  status: string;
+  createdAt: number;
+}
+
 /** 종목 상세 화면 컴포넌트.
  *  실시간 가격, 인터벌별 캔들 차트, 종목 내 체결 내역, 주문 진입 버튼을 제공
  *
@@ -35,6 +45,8 @@ export const StockDetail = ({
 
   /** 캔들 데이터 배열 / Candlestick data array */
   const [candles, setCandles] = useState<Candle[]>([]);
+  /** 서버에서 불러온 선택 종목의 전체 체결 내역 / Full execution history loaded for the selected stock */
+  const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
 
   /** 재연결 핸들러에서 최신 종목·인터벌을 참조하기 위한 ref
    *  Ref holding latest stockId and interval for use inside the reconnect handler */
@@ -62,6 +74,30 @@ export const StockDetail = ({
   useEffect(() => {
     fetchCandles(streamer.id, interval, true);
   }, [streamer.id, interval]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 종목 변경 시 해당 종목의 전체 체결 내역 로드
+  // Load the selected stock's full execution history when the stock changes
+  useEffect(() => {
+    setStockTrades([]);
+    apiFetch(`/api/orders/history?streamerId=${encodeURIComponent(streamer.id)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then((orders: StockOrderHistoryItem[] | null) => {
+        if (!orders) return;
+        const trades = orders
+          .filter(order => order.status === 'completed')
+          .map(order => ({
+            streamerId: order.streamerId,
+            streamerName: streamer.name,
+            type: order.type,
+            quantity: order.quantity,
+            price: order.executedPrice ?? order.estimatedPrice,
+            timestamp: order.createdAt,
+          }))
+          .sort((a, b) => b.timestamp - a.timestamp);
+        setStockTrades(trades);
+      })
+      .catch(() => {/* 체결 내역 로드 실패 시 실시간 수신분만 표시 / Fall back to live trades only */});
+  }, [streamer.id, streamer.name]);
 
   // STOMP 재연결 시 캔들 재조회 (서버 재시작 후 데이터 복구)
   // Re-fetch candles on STOMP reconnect (recovers data after server restart)
@@ -102,11 +138,16 @@ export const StockDetail = ({
 
   const pct = changePct(currentPrice, streamer.basePrice);
 
-  /** 해당 종목의 실시간 체결 내역만 필터링
-   *  Live trades filtered to only this streamer's executions */
-  const streamerTrades = useMemo(() =>
-    liveTrades.filter(t => t.streamerId === streamer.id),
-    [liveTrades, streamer.id]);
+  /** 해당 종목의 전체 체결 내역과 실시간 수신분을 병합
+   *  Merges persisted stock history with live events for this streamer */
+  const streamerTrades = useMemo(() => {
+    const merged = new Map<string, LiveTrade>();
+    [...liveTrades.filter(t => t.streamerId === streamer.id), ...stockTrades].forEach(trade => {
+      const key = `${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
+      merged.set(key, trade);
+    });
+    return [...merged.values()].sort((a, b) => b.timestamp - a.timestamp);
+  }, [liveTrades, stockTrades, streamer.id]);
 
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">

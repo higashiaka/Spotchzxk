@@ -44,7 +44,7 @@ function App() {
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
   /** 최근 본 종목 ID 목록 (최대 10개, 최신순) / Recently viewed stock IDs, latest first, max 10 */
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
-  /** 실시간 체결 피드 (최대 50건) / Real-time trade feed, max 50 entries */
+  /** 실시간 체결 피드 / Real-time trade feed */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
 
@@ -97,18 +97,18 @@ function App() {
             timestamp: item.createdAt,
           };
         });
-        setLiveTrades(initialTrades.slice(0, 50));
+        setLiveTrades(initialTrades);
       })
       .catch(err => console.error('Failed to load recent orders', err));
   }, [streamers]);
 
-  // STOMP /topic/trades 구독: 신규 체결을 목록 맨 앞에 추가 (최대 50건)
-  // Subscribe to STOMP /topic/trades: prepend new trades, max 50
+  // STOMP /topic/trades 구독: 신규 체결을 목록 맨 앞에 추가
+  // Subscribe to STOMP /topic/trades: prepend new trades
   useEffect(() => {
     const subscription = subscribeStomp('/topic/trades', (message) => {
       try {
         const trade = JSON.parse(message.body) as LiveTrade;
-        setLiveTrades(prev => [trade, ...prev].slice(0, 50));
+        setLiveTrades(prev => [trade, ...prev]);
       } catch (e) {
         console.error('Failed to parse trade message', e);
       }
@@ -236,7 +236,14 @@ function App() {
   /** 초기화 확인 대화상자 표시 후 뮤테이션 실행
    *  Shows a confirmation dialog then executes the reset mutation */
   const handleReset = () => {
-    if (!window.confirm('투자 자금을 100만원으로 초기화하시겠습니까?\n보유 주식이 모두 삭제됩니다.')) return;
+    const shares = portfolio?.shares as Record<string, number> | undefined;
+    const hasHoldings = Object.values(shares ?? {}).some(qty => qty > 0);
+    if (hasHoldings) {
+      alert('보유 종목을 모두 매도한 후 투자 자금을 초기화할 수 있습니다.');
+      return;
+    }
+
+    if (!window.confirm('투자 자금을 100만원으로 초기화하시겠습니까?')) return;
     resetMutation.mutate();
   };
 
