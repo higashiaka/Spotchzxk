@@ -4,6 +4,25 @@ import {
   IChartApi, ISeriesApi, UTCTimestamp,
 } from 'lightweight-charts';
 import { Candle, formatCandleTime, applySeriesData, updateSeriesLast } from './chartUtils';
+import { useTheme } from '../../contexts/ThemeContext';
+
+/** 테마별 차트 색상 / Theme-specific chart colors */
+const chartColors = {
+  dark: {
+    bg:        '#0E121A',
+    text:      '#626B7A',
+    grid:      '#1A2232',
+    border:    '#1A2232',
+    timeBadge: '#1A2232',
+  },
+  light: {
+    bg:        '#FFFFFF',
+    text:      '#94A3B8',
+    grid:      '#E2E8F0',
+    border:    '#E2E8F0',
+    timeBadge: '#E9EEF4',
+  },
+};
 
 /** lightweight-charts 기반 인터랙티브 차트 컴포넌트.
  *  봉차트/선차트 전환, 크로스헤어 이동 시 OHLC 정보 표시,
@@ -27,6 +46,9 @@ export const InteractiveChart = ({
   /** 현재 선택된 인터벌 (시간 포맷에 사용) / Currently selected interval (used for time formatting) */
   interval: string;
 }) => {
+  /** 현재 테마 / Current theme */
+  const { theme } = useTheme();
+
   /** 차트가 마운트될 DOM 컨테이너 ref / DOM container ref where the chart is mounted */
   const containerRef = useRef<HTMLDivElement>(null);
   /** lightweight-charts IChartApi 인스턴스 ref / lightweight-charts IChartApi instance ref */
@@ -43,26 +65,49 @@ export const InteractiveChart = ({
   /** 이전 렌더링 시점의 캔들 배열 (증분 업데이트 판별용)
    *  Previous candles array used to determine if an update is incremental */
   const prevCandlesRef = useRef<Candle[]>([]);
+  /** 차트 생성 시 초기 테마를 참조하기 위한 ref / Ref for initial theme at chart creation */
+  const themeRef = useRef(theme);
+  useEffect(() => { themeRef.current = theme; }, [theme]);
 
   useEffect(() => { candlesRef.current = candles; }, [candles]);
+
+  // 테마 변경 시 차트 색상 업데이트 / Update chart colors when theme changes
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const c = chartColors[theme];
+    chart.applyOptions({
+      layout: {
+        background: { type: ColorType.Solid, color: c.bg },
+        textColor: c.text,
+      },
+      grid: {
+        vertLines: { color: c.grid, style: LineStyle.Dashed },
+        horzLines: { color: c.grid, style: LineStyle.Dashed },
+      },
+      rightPriceScale: { borderColor: c.border },
+      timeScale: { borderColor: c.border, timeVisible: true, secondsVisible: false },
+    });
+  }, [theme]);
 
   // 차트 인스턴스 생성 및 크로스헤어 이벤트 구독 (마운트 시 1회)
   // Create chart instance and subscribe to crosshair events (once on mount)
   useEffect(() => {
     if (!containerRef.current) return;
+    const c = chartColors[themeRef.current];
     const chart = createChart(containerRef.current, {
       autoSize: true,
       layout: {
-        background: { type: ColorType.Solid, color: '#0E121A' },
-        textColor: '#626B7A',
+        background: { type: ColorType.Solid, color: c.bg },
+        textColor: c.text,
         fontFamily: 'monospace',
       },
       grid: {
-        vertLines: { color: '#1A2232', style: LineStyle.Dashed },
-        horzLines: { color: '#1A2232', style: LineStyle.Dashed },
+        vertLines: { color: c.grid, style: LineStyle.Dashed },
+        horzLines: { color: c.grid, style: LineStyle.Dashed },
       },
-      rightPriceScale: { borderColor: '#1A2232' },
-      timeScale: { borderColor: '#1A2232', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: c.border },
+      timeScale: { borderColor: c.border, timeVisible: true, secondsVisible: false },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: '#3D8BFF', style: LineStyle.Dashed, width: 1 },
@@ -158,7 +203,7 @@ export const InteractiveChart = ({
   return (
     <div className="w-full flex flex-col gap-2 relative select-none">
       {/* OHLC 정보 헤더 (크로스헤어 위치 기준) / OHLC info header based on crosshair position */}
-      <div className="flex items-center gap-3 text-[11px] font-mono select-none px-1" style={{ color: '#BAC4D1' }}>
+      <div className="flex items-center gap-3 text-[11px] font-mono select-none px-1" style={{ color: 'var(--text-secondary)' }}>
         {displayActive ? (
           <>
             <span className="font-bold font-sans text-xs shrink-0" style={{ color: activeColor }}>
@@ -171,19 +216,20 @@ export const InteractiveChart = ({
               <span>종<strong className="ml-1" style={{ color: activeColor }}>{Math.round(displayActive.close).toLocaleString()}</strong></span>
             </div>
             {isHovering && (
-              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-[#1A2232] text-[#626B7A]">
+              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded"
+                style={{ background: 'var(--bg-card)', color: 'var(--text-dim)' }}>
                 {formatCandleTime(displayActive.time, interval)}
               </span>
             )}
           </>
         ) : (
           <>
-            <span className="font-bold font-sans text-xs shrink-0 text-[#626B7A]">○ 대기 중</span>
-            <div className="flex gap-2.5" style={{ color: '#4E5664' }}>
-              <span>시<strong className="ml-1 text-[#4E5664]">-</strong></span>
-              <span>고<strong className="ml-1 text-[#4E5664]">-</strong></span>
-              <span>저<strong className="ml-1 text-[#4E5664]">-</strong></span>
-              <span>종<strong className="ml-1 text-[#4E5664]">-</strong></span>
+            <span className="font-bold font-sans text-xs shrink-0" style={{ color: 'var(--text-dim)' }}>○ 대기 중</span>
+            <div className="flex gap-2.5" style={{ color: 'var(--text-dim)' }}>
+              <span>시<strong className="ml-1" style={{ color: 'var(--text-dim)' }}>-</strong></span>
+              <span>고<strong className="ml-1" style={{ color: 'var(--text-dim)' }}>-</strong></span>
+              <span>저<strong className="ml-1" style={{ color: 'var(--text-dim)' }}>-</strong></span>
+              <span>종<strong className="ml-1" style={{ color: 'var(--text-dim)' }}>-</strong></span>
             </div>
           </>
         )}
@@ -191,11 +237,14 @@ export const InteractiveChart = ({
 
       {/* 차트 렌더링 영역 / Chart rendering area */}
       <div className="h-56 relative w-full">
-        <div ref={containerRef} className="w-full h-full rounded-xl border border-[#1A2232] overflow-hidden" />
+        <div ref={containerRef} className="w-full h-full rounded-xl border overflow-hidden"
+          style={{ borderColor: 'var(--border-card)' }} />
         {/* 데이터 없음 플레이스홀더 (신규 상장 종목) / Empty state placeholder for newly listed stocks */}
         {candles.length === 0 && (
-          <div className="absolute inset-0 bg-[#0E121A] rounded-xl border border-[#1A2232] flex flex-col items-center justify-center gap-2.5 p-6 text-center">
-            <div className="w-11 h-11 rounded-full bg-[#161D28] flex items-center justify-center text-lg text-[#626B7A] border border-[#222A3A] animate-pulse">
+          <div className="absolute inset-0 rounded-xl border flex flex-col items-center justify-center gap-2.5 p-6 text-center"
+            style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-card)' }}>
+            <div className="w-11 h-11 rounded-full flex items-center justify-center text-lg border animate-pulse"
+              style={{ background: 'var(--bg-card)', color: 'var(--text-dim)', borderColor: 'var(--border-primary)' }}>
               📊
             </div>
             <div>
@@ -203,7 +252,7 @@ export const InteractiveChart = ({
                 신규 상장 종목
               </div>
               <h4 className="text-white text-xs font-bold mb-1">거래 내역이 존재하지 않습니다</h4>
-              <p className="text-[10px]" style={{ color: '#626B7A' }}>
+              <p className="text-[10px]" style={{ color: 'var(--text-dim)' }}>
                 아직 체결된 거래가 없습니다. 실시간으로 매수/매도 주문을<br />
                 체결하여 이 종목의 첫 번째 역사적 캔들을 생성해보세요!
               </p>

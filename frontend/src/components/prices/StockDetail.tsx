@@ -129,16 +129,16 @@ export const StockDetail = ({
       </div>
 
       {/* 차트 컨트롤 및 InteractiveChart / Chart controls and InteractiveChart */}
-      <div className="rounded-xl border p-4 mb-4 flex flex-col gap-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
-        <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid #1A2232' }}>
+      <div className="rounded-xl border p-4 mb-4 flex flex-col gap-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid var(--border-card)' }}>
           {/* 인터벌 선택 버튼 / Interval selector buttons */}
-          <div className="flex gap-1 bg-[#0E121A] p-0.5 rounded-lg border border-[#222A3A]">
+          <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
             {(['1m', '5m', '1h', '1d', '1w'] as const).map(i => (
               <button key={i} type="button" onClick={() => setInterval(i)}
                 className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
                 style={{
-                  background: interval === i ? '#1A2232' : 'transparent',
-                  color: interval === i ? '#00E676' : '#626B7A',
+                  background: interval === i ? 'var(--bg-card)' : 'transparent',
+                  color: interval === i ? '#00E676' : 'var(--text-dim)',
                 }}>
                 {i === '1m' ? '1분' : i === '5m' ? '5분' : i === '1h' ? '1시' : i === '1d' ? '일봉' : '주봉'}
               </button>
@@ -146,13 +146,13 @@ export const StockDetail = ({
           </div>
 
           {/* 차트 타입 선택 버튼 / Chart type selector buttons */}
-          <div className="flex gap-1 bg-[#0E121A] p-0.5 rounded-lg border border-[#222A3A]">
+          <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
             {(['candle', 'line'] as const).map(type => (
               <button key={type} type="button" onClick={() => setChartType(type)}
                 className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
                 style={{
-                  background: chartType === type ? '#1A2232' : 'transparent',
-                  color: chartType === type ? '#00E676' : '#626B7A',
+                  background: chartType === type ? 'var(--bg-card)' : 'transparent',
+                  color: chartType === type ? '#00E676' : 'var(--text-dim)',
                 }}>
                 {type === 'candle' ? '봉차트 🕯️' : '선차트 📈'}
               </button>
@@ -169,7 +169,7 @@ export const StockDetail = ({
       </div>
 
       {/* 실시간 체결 내역 / Real-time execution history for this stock */}
-      <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
+      <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white text-sm font-bold">실시간 체결 내역</h3>
           <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -180,7 +180,7 @@ export const StockDetail = ({
         </div>
         <div className="space-y-2 max-h-48 overflow-y-auto hide-scrollbar">
           {streamerTrades.length === 0 ? (
-            <div className="text-center py-6 text-xs" style={{ color: '#626B7A' }}>
+            <div className="text-center py-6 text-xs" style={{ color: 'var(--text-dim)' }}>
               새로운 거래 체결을 대기하고 있습니다...
             </div>
           ) : (
@@ -189,9 +189,9 @@ export const StockDetail = ({
               const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
               const isBuy = trade.type === 'buy';
               return (
-                <div key={idx} className="flex items-center justify-between py-1.5 text-xs border-b border-dashed" style={{ borderColor: '#1A2232' }}>
+                <div key={idx} className="flex items-center justify-between py-1.5 text-xs border-b border-dashed" style={{ borderColor: 'var(--bg-card)' }}>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono" style={{ color: '#626B7A' }}>{timeStr}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-dim)' }}>{timeStr}</span>
                     <span className="font-bold px-1.5 py-0.5 rounded text-[10px]"
                       style={{ backgroundColor: isBuy ? '#FF525220' : '#3D8BFF20', color: isBuy ? '#FF5252' : '#3D8BFF' }}>
                       {isBuy ? '매수' : '매도'}
@@ -212,12 +212,12 @@ export const StockDetail = ({
 
       {/* 종목 통계 요약 / Stock statistics summary */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="rounded-xl border p-3" style={{ background: '#131924', borderColor: '#222A3A' }}>
-          <p className="text-xs" style={{ color: '#8491A5' }}>총 거래량</p>
+        <div className="rounded-xl border p-3" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>총 거래량</p>
           <p className="text-white font-bold font-mono mt-1">{fmtCompact(streamer.totalVolume)}</p>
         </div>
-        <div className="rounded-xl border p-3" style={{ background: '#131924', borderColor: '#222A3A' }}>
-          <p className="text-xs" style={{ color: '#8491A5' }}>시초가 대비</p>
+        <div className="rounded-xl border p-3" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>시초가 대비</p>
           <p className="font-bold font-mono mt-1" style={{ color: priceColor(pct) }}>
             {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
           </p>

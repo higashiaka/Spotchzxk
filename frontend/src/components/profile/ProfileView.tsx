@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { User, updateProfile } from 'firebase/auth';
-import { Stock, DEFAULT_STOCKS } from '../../hooks/useStocks';
+import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
-import { fmt, grade, priceColor } from '../../utils';
+import { fmt, grade } from '../../utils';
 import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { useHoldings } from '../../hooks/useHoldings';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /** 프로필 화면 컴포넌트.
  *  미로그인 시 로그인 화면, 로그인 시 보유 주식·투자 요약·배당 내역·종목 추가·자금 초기화를 표시
@@ -16,7 +17,7 @@ import { useHoldings } from '../../hooks/useHoldings';
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
   onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
-  onSelect, onNavigate,
+  onSelect: _onSelect, onNavigate,
 }: {
   /** 로그인된 Firebase 사용자 (미로그인 시 null) / Authenticated Firebase user, null if not logged in */
   user: User | null;
@@ -49,6 +50,9 @@ export const ProfileView = ({
   /** 탭 이동 핸들러 / Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
+  /** 테마 / Theme */
+  const { theme, toggleTheme } = useTheme();
+
   /** 사용자 등급 (총 자산 기준) / User grade derived from total assets */
   const userGrade = grade(totalAssets);
   /** 보유 주식 평가액 (총 자산 - 현금) / Evaluated holdings value (total assets minus cash) */
@@ -130,26 +134,22 @@ export const ProfileView = ({
     if (!user || user.isAnonymous) return;
 
     // ① /topic/dividends: 구·신 백엔드 공통 — 전체 배당 이벤트 시 재조회
-    //    Works with both old & new backend; refetches the list on any dividend event
     const subGlobal = subscribeStomp('/topic/dividends', () => {
       fetchDividendHistory();
     });
 
     // ② /topic/user-dividends/{uid}: 신 백엔드 전용 — 내 배당 데이터를 즉시 목록 선두에 삽입
-    //    New backend only; prepends my own dividend entry without waiting for the REST round-trip
     const subPersonal = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
       try {
         const entry = JSON.parse(message.body);
         setDividendHistory(prev => {
-          // 이미 같은 시각의 항목이 있으면 추가하지 않음 (① 재조회로 중복 방지)
-          // Skip if an entry with the same timestamp is already present (dedup with ①)
           if (prev.some(d => d.channelId === entry.channelId && d.createdAt === entry.createdAt)) {
             return prev;
           }
           return [entry, ...prev].slice(0, 50);
         });
       } catch {
-        // parse 실패는 ① 재조회가 커버 / Parse failure is covered by the ① re-fetch
+        // parse 실패는 ① 재조회가 커버
       }
     });
 
@@ -167,10 +167,7 @@ export const ProfileView = ({
   const [addMsg, setAddMsg] = useState('');
 
   /** 종목 추가 핸들러.
-   *  치지직 URL 또는 채널 ID를 파싱한 뒤 서버 POST /api/stocks 로 전송
-   *
-   *  Stock addition handler.
-   *  Parses a Chzzk URL or channel ID, then POSTs to /api/stocks */
+   *  치지직 URL 또는 채널 ID를 파싱한 뒤 서버 POST /api/stocks 로 전송 */
   const handleAddStock = async () => {
     if (!addUrl.trim()) return;
 
@@ -192,10 +189,8 @@ export const ProfileView = ({
         return;
       }
     }
-    // 쿼리스트링·해시 제거 / Strip query string and hash
     channelId = channelId.replace(/[?#].*/g, "").trim();
 
-    // 이미 등록된 종목 중복 검사 / Check for duplicate stock
     const alreadyExists = streamers.some(s => s.id === channelId);
     if (alreadyExists) {
       setAddStatus('error');
@@ -232,14 +227,14 @@ export const ProfileView = ({
     return (
       <div className="h-full flex flex-col items-center justify-center p-8 text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 border"
-          style={{ background: '#1A2232', borderColor: '#222A3A' }}>
-          <svg className="w-8 h-8" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <svg className="w-8 h-8" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
               d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
         </div>
         <h2 className="text-white text-lg font-bold mb-2">로그인이 필요합니다</h2>
-        <p className="text-sm mb-6" style={{ color: '#8491A5' }}>로그인하여 내 포트폴리오를 확인하세요</p>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>로그인하여 내 포트폴리오를 확인하세요</p>
         <div className="w-full space-y-3">
           <button type="button" onClick={onLoginGoogle}
             className="w-full bg-white text-gray-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2">
@@ -253,9 +248,15 @@ export const ProfileView = ({
           </button>
           <button type="button" onClick={onLoginGuest}
             className="w-full font-bold px-6 py-3 rounded-xl border"
-            style={{ background: '#1A2232', borderColor: '#222A3A', color: '#BAC4D1' }}>
+            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
             게스트로 플레이
           </button>
+        </div>
+
+        {/* 비로그인 상태에서도 테마 설정 표시 / Show theme setting even when not logged in */}
+        <div className="w-full mt-8 rounded-xl border p-4"
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+          <ThemeToggleRow theme={theme} onToggle={toggleTheme} />
         </div>
       </div>
     );
@@ -266,12 +267,12 @@ export const ProfileView = ({
       {/* 프로필 카드: 아바타, 이름 편집, 등급 배지, 로그아웃 버튼
           Profile card: avatar, name editing, grade badge, logout button */}
       <div className="rounded-2xl border p-5 mb-4 flex items-center gap-4"
-        style={{ background: '#1A2232', borderColor: '#26334D' }}>
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
         <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
-          style={{ background: '#131924', borderColor: '#222A3A' }}>
+          style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
           {user.photoURL
             ? <img src={user.photoURL} alt="profile" className="w-full h-full object-cover" />
-            : <svg className="w-7 h-7" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            : <svg className="w-7 h-7" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                 d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>}
@@ -308,14 +309,14 @@ export const ProfileView = ({
               <button type="button" onClick={startEditName}
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                 title="이름 변경">
-                <svg className="w-3.5 h-3.5" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                     d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
               </button>
             </div>
           )}
-          <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>UID: {user.uid.slice(0, 8)}</p>
+          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
           <div className="mt-2 flex gap-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
               style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
@@ -325,7 +326,7 @@ export const ProfileView = ({
         </div>
         <button type="button" onClick={onLogout}
           className="text-xs px-3 py-1.5 rounded-lg border shrink-0"
-          style={{ background: '#131924', borderColor: '#222A3A', color: '#626B7A' }}>
+          style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)', color: 'var(--text-dim)' }}>
           로그아웃
         </button>
       </div>
@@ -334,7 +335,7 @@ export const ProfileView = ({
           Prompt banner for linking a Google account when not yet linked */}
       {(user.isAnonymous || !user.providerData.some(p => p.providerId === 'google.com')) && (
         <div className="rounded-2xl border p-4 mb-4 flex items-center gap-3"
-          style={{ background: '#1A2232', borderColor: '#26334D' }}>
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
           <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -343,7 +344,7 @@ export const ProfileView = ({
           </svg>
           <div className="flex-1 min-w-0">
             <p className="text-white text-xs font-bold">Google 계정 연동</p>
-            <p className="text-xs mt-0.5" style={{ color: '#8491A5' }}>포트폴리오를 안전하게 보관하세요</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>포트폴리오를 안전하게 보관하세요</p>
           </div>
           <button type="button" onClick={onLinkGoogle}
             className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
@@ -358,9 +359,8 @@ export const ProfileView = ({
         type="button"
         onClick={() => onNavigate('holdings')}
         className="w-full rounded-2xl border p-4 mb-4 flex items-center gap-4 transition-colors hover:opacity-80 active:opacity-60"
-        style={{ background: '#1A2232', borderColor: '#26334D' }}
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}
       >
-        {/* 아이콘 / Icon */}
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
           style={{ background: '#00E67622' }}
@@ -370,23 +370,20 @@ export const ProfileView = ({
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
         </div>
-        {/* 텍스트 / Text */}
         <div className="flex-1 text-left">
           <p className="text-white text-sm font-bold">나의 스트리머 보유 주식</p>
-          <p className="text-xs mt-0.5" style={{ color: '#8491A5' }}>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             {holdingCount > 0 ? `${holdingCount}개 종목 보유 중` : '보유 종목 없음'}
           </p>
         </div>
-        {/* 화살표 / Arrow */}
-        <svg className="w-4 h-4 shrink-0" style={{ color: '#626B7A' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
         </svg>
       </button>
 
-      {/* 모의투자 요약: 총 자산, 캐시, 주식 평가액, 누적 매매 횟수
-          Investment summary: total assets, cash, holdings value, cumulative order count */}
-      <div className="rounded-xl border p-5 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
-        <h3 className="text-sm font-bold mb-4" style={{ color: '#BAC4D1' }}>스트리머 투자 요약</h3>
+      {/* 모의투자 요약 / Investment summary */}
+      <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
           { label: '총 스트리머 자산', value: fmt(totalAssets) },
           { label: '캐시', value: fmt(portfolio?.balance ?? 0) },
@@ -394,7 +391,7 @@ export const ProfileView = ({
           { label: '누적 매매 횟수', value: `${orderCount}회` },
         ].map(row => (
           <div key={row.label} className="flex justify-between items-center mb-3 last:mb-0">
-            <span className="text-sm" style={{ color: '#8491A5' }}>{row.label}</span>
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
             <span className="font-mono text-sm font-bold text-white">{row.value}</span>
           </div>
         ))}
@@ -402,12 +399,12 @@ export const ProfileView = ({
 
       {/* 배당 내역 (비익명 사용자만 표시) / Dividend history (non-anonymous users only) */}
       {!user.isAnonymous && (
-        <div className="rounded-xl border p-5 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
-          <h3 className="text-sm font-bold mb-4" style={{ color: '#BAC4D1' }}>배당 내역</h3>
+        <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>배당 내역</h3>
           {!dividendHistoryLoaded ? (
-            <p className="text-xs text-center py-4" style={{ color: '#626B7A' }}>불러오는 중...</p>
+            <p className="text-xs text-center py-4" style={{ color: 'var(--text-dim)' }}>불러오는 중...</p>
           ) : dividendHistory.length === 0 ? (
-            <p className="text-xs text-center py-4" style={{ color: '#626B7A' }}>배당 수령 내역이 없습니다.</p>
+            <p className="text-xs text-center py-4" style={{ color: 'var(--text-dim)' }}>배당 수령 내역이 없습니다.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto hide-scrollbar">
               {dividendHistory.map((d, i) => {
@@ -416,16 +413,16 @@ export const ProfileView = ({
                 const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
                 return (
                   <div key={i} className="flex items-center gap-3 py-2"
-                    style={{ borderBottom: '1px solid #1A2232' }}>
+                    style={{ borderBottom: '1px solid var(--bg-card)' }}>
                     <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-white text-xs font-bold"
-                      style={{ background: s?.profileImageUrl ? 'transparent' : '#2A3448' }}>
+                      style={{ background: s?.profileImageUrl ? 'transparent' : 'var(--bg-card)' }}>
                       {s?.profileImageUrl
                         ? <img src={s.profileImageUrl} alt="" className="w-full h-full object-cover" />
                         : d.streamerName.slice(0, 2)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{d.quantity}주 · {dateStr}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{d.quantity}주 · {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: '#00E676' }}>
                       +{Math.abs(Number(d.amount)).toFixed(2)}
@@ -440,9 +437,9 @@ export const ProfileView = ({
 
       {/* 종목 추가: Google 연동 계정만 허용 / Stock addition: Google-linked accounts only */}
       {user.providerData.some(p => p.providerId === 'google.com') ? (
-        <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
-          <h3 className="text-sm font-bold mb-3" style={{ color: '#BAC4D1' }}>종목 추가</h3>
-          <p className="text-xs mb-3" style={{ color: '#626B7A' }}>
+        <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
+          <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
             치지직 채널 URL 또는 채널 ID를 입력하세요
           </p>
           <div className="space-y-2">
@@ -452,7 +449,7 @@ export const ProfileView = ({
               value={addUrl}
               onChange={e => setAddUrl(e.target.value)}
               className="w-full rounded-xl border py-2.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500"
-              style={{ background: '#0E121A', borderColor: '#222A3A' }}
+              style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}
             />
             <button
               type="button"
@@ -471,33 +468,94 @@ export const ProfileView = ({
           </div>
         </div>
       ) : (
-        /* Google 미연동 안내 / Notice for non-Google-linked users */
-        <div className="rounded-xl border p-4 mb-4" style={{ background: '#131924', borderColor: '#222A3A' }}>
-          <h3 className="text-sm font-bold mb-2" style={{ color: '#BAC4D1' }}>종목 추가</h3>
-          <p className="text-xs" style={{ color: '#626B7A' }}>
+        <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
+          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
             종목 추가는 Google 로그인 후 이용할 수 있습니다.
           </p>
         </div>
       )}
 
-      {/* 투자 자금 초기화 버튼: 잔고·보유 주식을 초기값으로 리셋
-          Fund reset button: resets balance and holdings to the initial state */}
+      {/* ── 설정 ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>설정</h3>
+        <ThemeToggleRow theme={theme} onToggle={toggleTheme} />
+      </div>
+
+      {/* 투자 자금 초기화 버튼 / Fund reset button */}
       <button
         type="button"
         onClick={onReset}
         disabled={isResetting || remainingResets <= 0}
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-        style={{ background: '#1A2232', borderColor: '#222A3A' }}>
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <div className="flex flex-col items-start gap-0.5">
-          <span className="text-sm" style={{ color: '#BAC4D1' }}>투자 자금 초기화하기 (100만으로 세팅)</span>
-          <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : '#626B7A' }}>
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (100만으로 세팅)</span>
+          <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : 'var(--text-dim)' }}>
             오늘 남은 횟수: {remainingResets}회
           </span>
         </div>
-        <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? '#626B7A' : '#FF5252' }}>
+        <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? 'var(--text-dim)' : '#FF5252' }}>
           {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
         </span>
       </button>
     </div>
   );
 };
+
+/* ── 테마 토글 행 서브컴포넌트 ─────────────────────────────────── */
+function ThemeToggleRow({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle: () => void }) {
+  const isDark = theme === 'dark';
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        {/* 아이콘 */}
+        {isDark ? (
+          <svg className="w-4 h-4" style={{ color: '#BAC4D1' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" style={{ color: '#F59E0B' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M18.364 18.364l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+          </svg>
+        )}
+        <div>
+          <p className="text-sm font-bold text-white">
+            {isDark ? '다크 모드' : '라이트 모드'}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+            {isDark ? '어두운 화면' : '밝은 화면'}
+          </p>
+        </div>
+      </div>
+
+      {/* iOS 스타일 토글 스위치 / iOS-style toggle switch */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="relative shrink-0 transition-all duration-300"
+        style={{
+          width: 44,
+          height: 26,
+          borderRadius: 13,
+          background: isDark ? '#1A2232' : '#00E676',
+          border: `2px solid ${isDark ? '#222A3A' : '#00C864'}`,
+        }}
+        aria-label="테마 변경"
+      >
+        <span
+          className="absolute top-0.5 transition-all duration-300"
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            background: isDark ? '#626B7A' : '#FFFFFF',
+            left: isDark ? 2 : 20,
+          }}
+        />
+      </button>
+    </div>
+  );
+}

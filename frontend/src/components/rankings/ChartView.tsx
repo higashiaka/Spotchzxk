@@ -157,10 +157,10 @@ export const ChartView = ({
             onClick={() => handleCategoryClick(key)}
             className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
             style={{
-              background: category === key ? '#00E676' : '#131924',
-              color: category === key ? '#080A0F' : '#8491A5',
+              background: category === key ? '#00E676' : 'var(--bg-card-secondary)',
+              color: category === key ? 'var(--accent-foreground)' : 'var(--text-muted)',
               border: '1px solid',
-              borderColor: category === key ? '#00E676' : '#222A3A',
+              borderColor: category === key ? '#00E676' : 'var(--border-primary)',
             }}
           >
             {label}
@@ -171,7 +171,7 @@ export const ChartView = ({
       {/* 컬럼 헤더 / Column headers */}
       <div
         className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
-        style={{ color: '#626B7A', borderBottom: '1px solid #1A2232', background: '#0E121A' }}
+        style={{ color: 'var(--text-dim)', borderBottom: '1px solid #1A2232', background: 'var(--bg-sidebar)' }}
       >
         <span className="w-6 mr-3 text-center">#</span>
         <span className="flex-1">스트리머</span>
@@ -183,7 +183,7 @@ export const ChartView = ({
       {/* 종목 랭킹 행 목록 / Stock ranking row list */}
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
         {list.length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+          <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
             데이터가 없습니다
           </div>
         ) : (
@@ -199,7 +199,7 @@ export const ChartView = ({
                 {/* 순위 번호 (상위 3위는 밝은 색) / Rank number (brighter for top 3) */}
                 <span
                   className="w-6 mr-3 text-sm font-bold text-center shrink-0"
-                  style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}
+                  style={{ color: i < 3 ? 'var(--text-secondary)' : 'var(--text-dim)' }}
                 >
                   {i + 1}
                 </span>
@@ -235,13 +235,13 @@ export const ChartView = ({
                     <p className="text-xs font-bold font-mono" style={{ color: '#00E676' }}>
                       {fmtRemaining(dividendRemainingMs(s))}
                     </p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: '#8491A5' }}>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       {expectedPerShare(s)}/주
                     </p>
                   </div>
                 ) : (
                   <div className="w-24 text-right shrink-0">
-                    <p className="text-xs font-mono" style={{ color: '#8491A5' }}>
+                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
                       {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>

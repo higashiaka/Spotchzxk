@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import App from './App';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 /** 앱 전역 React Query 캐시 클라이언트
  *  Global React Query cache client for the entire app */
@@ -13,7 +14,9 @@ if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
       </QueryClientProvider>
     </StrictMode>,
   );

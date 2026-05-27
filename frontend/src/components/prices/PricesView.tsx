@@ -45,7 +45,7 @@ export const PricesView = ({
           type="button"
           onClick={() => onSelectStreamer(null)}
           className="flex items-center gap-1.5 px-4 py-2.5 shrink-0 text-sm font-bold transition-colors hover:opacity-70"
-          style={{ color: '#626B7A', borderBottom: '1px solid #222A3A', background: '#0E121A' }}
+          style={{ color: 'var(--text-dim)', borderBottom: '1px solid #222A3A', background: 'var(--bg-sidebar)' }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
@@ -67,7 +67,7 @@ export const PricesView = ({
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
       {/* 종목 검색 입력 / Stock search input */}
       <div className="relative mb-4">
-        <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#626B7A' }}
+        <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }}
           fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -78,12 +78,12 @@ export const PricesView = ({
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-3 rounded-xl border text-white text-sm focus:outline-none"
-          style={{ background: '#131924', borderColor: '#222A3A' }}
+          style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}
         />
       </div>
 
       {/* 컬럼 헤더 / Column headers */}
-      <div className="flex items-center text-xs font-bold uppercase tracking-wider px-4 mb-2" style={{ color: '#626B7A' }}>
+      <div className="flex items-center text-xs font-bold uppercase tracking-wider px-4 mb-2" style={{ color: 'var(--text-dim)' }}>
         <span className="flex-1">종목명</span>
         <span className="w-28 text-right">현재가</span>
         <span className="w-16 text-right">등락률</span>
@@ -96,7 +96,7 @@ export const PricesView = ({
           return (
             <div key={s.id} onClick={() => onSelectStreamer(s)}
               className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
-              style={{ background: '#131924', borderColor: '#222A3A' }}>
+              style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
               {/* 라이브 중이면 녹색 링 테두리 / Green ring border when streamer is live */}
               <div className="shrink-0 mr-3"
                 style={{ padding: 2, borderRadius: '50%', background: s.isLive ? '#22C55E' : 'transparent' }}>
@@ -118,7 +118,7 @@ export const PricesView = ({
                   )}
                 </div>
                 {/* 거래량 요약 / Volume summary */}
-                <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{fmtCompact(s.totalVolume)}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtCompact(s.totalVolume)}</p>
               </div>
               <div className="w-28 text-right">
                 <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>

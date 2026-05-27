@@ -34,7 +34,7 @@ export default function AnnouncementPopup() {
     >
       <div
         className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4"
-        style={{ background: '#12151C', border: '1px solid #1E2330' }}
+        style={{ background: 'var(--bg-card-secondary)', border: '1px solid #1E2330' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 닫기 버튼 (이번 세션만) / Close button (this session only) */}
@@ -52,13 +52,13 @@ export default function AnnouncementPopup() {
         </div>
 
         {/* 변경 내용 설명 / Change description */}
-        <div className="text-sm leading-relaxed" style={{ color: '#B0B8C8' }}>
+        <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           <p className="mb-3">
             배당 지급 기준이 발행량과 무관하게 단순화됩니다.
           </p>
           <div
             className="rounded-xl p-3 mb-3 text-sm"
-            style={{ background: '#0D1017', border: '1px solid #1E2330' }}
+            style={{ background: 'var(--bg-card-secondary)', border: '1px solid #1E2330' }}
           >
             <p className="mb-1">
               <span style={{ color: '#00E676' }}>변경 후</span>
@@ -79,7 +79,7 @@ export default function AnnouncementPopup() {
           {/* 확인 (이번 세션만 닫기) / Confirm (close for this session only) */}
           <button
             className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80"
-            style={{ background: '#00E676', color: '#080A0F' }}
+            style={{ background: '#00E676', color: 'var(--accent-foreground)' }}
             onClick={() => dismiss(false)}
           >
             확인
@@ -87,7 +87,7 @@ export default function AnnouncementPopup() {
           {/* 영구 숨김 / Permanently dismiss */}
           <button
             className="w-full py-2.5 rounded-xl text-sm transition-colors"
-            style={{ color: '#5A6478', border: '1px solid #1E2330' }}
+            style={{ color: 'var(--text-dim)', border: '1px solid #1E2330' }}
             onClick={() => dismiss(true)}
           >
             다시 보지 않기

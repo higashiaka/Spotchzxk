@@ -86,19 +86,19 @@ export const HoldingsView = ({
   ];
 
   return (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#080A0F' }}>
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
 
       {/* ── 상단 헤더: 뒤로가기 + 제목 ──────────────────────────────
           Top header: back button + title */}
       <div
         className="flex items-center gap-3 px-4 py-3 shrink-0"
-        style={{ background: '#0E121A', borderBottom: '1px solid #222A3A' }}
+        style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #222A3A' }}
       >
         <button
           type="button"
           onClick={() => onNavigate('home')}
           className="flex items-center gap-1.5 text-sm font-bold transition-colors hover:opacity-70"
-          style={{ color: '#626B7A' }}
+          style={{ color: 'var(--text-dim)' }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -107,7 +107,7 @@ export const HoldingsView = ({
         </button>
         <h1 className="flex-1 text-white text-base font-bold">
           보유 종목
-          <span className="ml-2 text-sm font-normal" style={{ color: '#626B7A' }}>
+          <span className="ml-2 text-sm font-normal" style={{ color: 'var(--text-dim)' }}>
             {holdingCount}개
           </span>
         </h1>
@@ -117,9 +117,9 @@ export const HoldingsView = ({
           Summary card: total market value and P&L */}
       <div
         className="px-4 py-4 shrink-0"
-        style={{ background: '#0E121A', borderBottom: '1px solid #222A3A' }}
+        style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #222A3A' }}
       >
-        <p className="text-xs font-bold mb-1" style={{ color: '#8491A5' }}>총 평가금액</p>
+        <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>총 평가금액</p>
         <p className="text-2xl font-black font-mono text-white mb-1">{fmt(totalValue)}</p>
         <div className="flex items-center gap-2">
           <span
@@ -137,7 +137,7 @@ export const HoldingsView = ({
           >
             {totalPnLPct >= 0 ? '+' : ''}{totalPnLPct.toFixed(2)}%
           </span>
-          <span className="text-xs" style={{ color: '#626B7A' }}>매입 대비</span>
+          <span className="text-xs" style={{ color: 'var(--text-dim)' }}>매입 대비</span>
         </div>
       </div>
 
@@ -145,9 +145,9 @@ export const HoldingsView = ({
           Sort button bar */}
       <div
         className="flex items-center gap-1 px-4 py-2.5 shrink-0"
-        style={{ background: '#0B0E14', borderBottom: '1px solid #1A2232' }}
+        style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #1A2232' }}
       >
-        <span className="text-xs mr-1" style={{ color: '#626B7A' }}>정렬:</span>
+        <span className="text-xs mr-1" style={{ color: 'var(--text-dim)' }}>정렬:</span>
         {SORT_BUTTONS.map(({ key, label }) => (
           <button
             key={key}
@@ -155,8 +155,8 @@ export const HoldingsView = ({
             onClick={() => setSortKey(key)}
             className="px-2.5 py-1 rounded-full text-xs font-bold transition-colors"
             style={{
-              background:   sortKey === key ? '#00E67622' : '#1A2232',
-              color:        sortKey === key ? '#00E676'   : '#626B7A',
+              background:   sortKey === key ? '#00E67622' : 'var(--bg-card)',
+              color:        sortKey === key ? '#00E676'   : 'var(--text-dim)',
               border:       sortKey === key ? '1px solid #00E67644' : '1px solid transparent',
             }}
           >
@@ -172,7 +172,7 @@ export const HoldingsView = ({
           /* 보유 종목 없음 상태 / Empty state */
           <div
             className="flex flex-col items-center justify-center h-full gap-3"
-            style={{ color: '#626B7A' }}
+            style={{ color: 'var(--text-dim)' }}
           >
             <svg className="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
@@ -183,7 +183,7 @@ export const HoldingsView = ({
               type="button"
               onClick={() => onNavigate('prices')}
               className="text-xs font-bold px-4 py-2 rounded-xl"
-              style={{ background: '#1A2232', color: '#BAC4D1' }}
+              style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}
             >
               시세 화면으로 이동 ›
             </button>
@@ -227,7 +227,7 @@ export const HoldingsView = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-mono" style={{ color: '#626B7A' }}>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
                     {qty}주 &nbsp;·&nbsp; 평단 {fmt(avgPrice)}
                   </p>
                 </div>

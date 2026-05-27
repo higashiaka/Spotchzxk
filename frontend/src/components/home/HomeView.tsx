@@ -111,11 +111,11 @@ export const HomeView = ({
           <span className="text-[10px] font-bold px-1 py-0.5 rounded shrink-0"
             style={{ background: '#FF4444', color: '#FFF' }}>LIVE</span>
           {latestMegaphone.message && (
-            <span className="text-xs truncate" style={{ color: '#8899AA' }}>
+            <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
               {latestMegaphone.message}
             </span>
           )}
-          <span className="ml-auto text-[10px] shrink-0" style={{ color: '#626B7A' }}>
+          <span className="ml-auto text-[10px] shrink-0" style={{ color: 'var(--text-dim)' }}>
             라이브 보기 →
           </span>
         </a>
@@ -125,13 +125,13 @@ export const HomeView = ({
 
         {/* 내 투자 요약 / My investment summary */}
         <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>
-          <p className="text-xs font-bold mb-1" style={{ color: '#8491A5' }}>내 투자</p>
+          <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>내 투자</p>
           {user ? (
             <>
               <button type="button" onClick={() => onNavigate('profile')}
                 className="flex items-baseline gap-2">
                 <span className="text-3xl font-black font-mono text-white">{fmt(totalAssets)}</span>
-                <span className="text-base" style={{ color: '#626B7A' }}>›</span>
+                <span className="text-base" style={{ color: 'var(--text-dim)' }}>›</span>
               </button>
               <p className="text-sm font-bold mt-1" style={{ color: priceColor(totalReturnPct) }}>
                 {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn)}&nbsp;
@@ -146,7 +146,7 @@ export const HomeView = ({
             </>
           ) : (
             <button type="button" onClick={() => onNavigate('profile')}
-              className="text-lg font-bold mt-1 flex items-center gap-1" style={{ color: '#626B7A' }}>
+              className="text-lg font-bold mt-1 flex items-center gap-1" style={{ color: 'var(--text-dim)' }}>
               로그인 후 확인 가능 ›
             </button>
           )}
@@ -156,7 +156,7 @@ export const HomeView = ({
         <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid #222A3A' }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">나의 종목</p>
-            {user && <span className="text-xs" style={{ color: '#626B7A' }}>{holdingCount}개 보유</span>}
+            {user && <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{holdingCount}개 보유</span>}
           </div>
           {user && holdings.length > 0 ? (
             <>
@@ -172,7 +172,7 @@ export const HomeView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-bold truncate">{s.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{qty}주</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{qty}주</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono font-bold text-sm text-white">{fmt(value)}</p>
@@ -185,12 +185,12 @@ export const HomeView = ({
               </div>
               <button type="button" onClick={() => onNavigate('holdings')}
                 className="w-full py-2 rounded-xl text-xs font-bold"
-                style={{ background: '#1A2232', color: '#BAC4D1' }}>
+                style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
                 자세히 보기 ›
               </button>
             </>
           ) : (
-            <p className="text-sm py-2" style={{ color: '#626B7A' }}>
+            <p className="text-sm py-2" style={{ color: 'var(--text-dim)' }}>
               {user ? '보유 종목이 없습니다. 첫 거래를 시작하세요.' : '로그인 후 확인 가능'}
             </p>
           )}
@@ -206,10 +206,10 @@ export const HomeView = ({
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
               style={{ borderBottom: '1px solid #1A2232' }}
               onClick={row.action}>
-              <span className="flex-1 text-sm" style={{ color: '#8491A5' }}>{row.label}</span>
+              <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
               <span className="text-sm font-bold font-mono text-white mr-1">{row.value}</span>
-              {row.sub && <span className="text-xs" style={{ color: '#626B7A' }}>{row.sub}</span>}
-              <span className="ml-2 text-xs" style={{ color: '#626B7A' }}>›</span>
+              {row.sub && <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{row.sub}</span>}
+              <span className="ml-2 text-xs" style={{ color: 'var(--text-dim)' }}>›</span>
             </div>
           ))}
         </div>
@@ -223,7 +223,7 @@ export const HomeView = ({
                 const pct = changePct(s.price, s.basePrice);
                 return (
                   <div key={s.id} className="flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-full border"
-                    style={{ background: '#131924', borderColor: '#222A3A' }}>
+                    style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
                     <button type="button" onClick={() => onSelect(s)}
                       className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-white">{s.name}</span>
@@ -233,7 +233,7 @@ export const HomeView = ({
                     </button>
                     {/* 최근 본 종목 제거 버튼 / Remove from recently viewed */}
                     <button type="button" onClick={() => onRemoveRecent(s.id)}
-                      className="text-xs ml-0.5" style={{ color: '#626B7A' }}>×</button>
+                      className="text-xs ml-0.5" style={{ color: 'var(--text-dim)' }}>×</button>
                   </div>
                 );
               })}
@@ -254,14 +254,14 @@ export const HomeView = ({
             </div>
             {liveTrades.length > 0 && (
               <button type="button" onClick={() => setShowTradeFeed(true)}
-                className="text-xs" style={{ color: '#626B7A' }}>
+                className="text-xs" style={{ color: 'var(--text-dim)' }}>
                 더보기 ›
               </button>
             )}
           </div>
           <div className="max-h-[200px] overflow-y-auto hide-scrollbar space-y-2.5">
             {liveTrades.length === 0 ? (
-              <p className="text-xs py-2" style={{ color: '#626B7A' }}>
+              <p className="text-xs py-2" style={{ color: 'var(--text-dim)' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
               </p>
             ) : (
@@ -282,7 +282,7 @@ export const HomeView = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-mono" style={{ color: '#BAC4D1' }}>{trade.quantity}주</span>
+                      <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>{trade.quantity}주</span>
                       <span className="font-mono font-bold w-16 text-right" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
                         {fmt(trade.price)}
                       </span>
@@ -299,7 +299,7 @@ export const HomeView = ({
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">실시간 거래량 차트</p>
             <button type="button" onClick={() => onNavigate('chart')}
-              className="text-xs" style={{ color: '#626B7A' }}>
+              className="text-xs" style={{ color: 'var(--text-dim)' }}>
               다른 차트 보기 ›
             </button>
           </div>
@@ -312,7 +312,7 @@ export const HomeView = ({
                   onClick={() => onSelect(s)}>
                   {/* 순위 번호 / Rank number */}
                   <span className="w-5 text-sm font-bold shrink-0 text-center"
-                    style={{ color: i < 3 ? '#BAC4D1' : '#626B7A' }}>{i + 1}</span>
+                    style={{ color: i < 3 ? 'var(--text-secondary)' : 'var(--text-dim)' }}>{i + 1}</span>
                   <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
                     style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
                     {s.profileImageUrl ? (
@@ -321,13 +321,13 @@ export const HomeView = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-bold truncate">{s.name}</p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: '#626B7A' }}>{fmt(s.price)}</p>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmt(s.price)}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold" style={{ color: priceColor(pct) }}>
                       {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                       {fmtCompact(s.totalVolume)}
                     </p>
                   </div>
@@ -341,7 +341,7 @@ export const HomeView = ({
 
       {/* 전체 거래 피드 모달 / Full trade feed modal */}
       {showTradeFeed && (
-        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#080A0F' }}>
+        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
           <div className="flex items-center justify-between px-4 py-4 shrink-0"
             style={{ borderBottom: '1px solid #222A3A' }}>
             <div className="flex items-center gap-2">
@@ -354,13 +354,13 @@ export const HomeView = ({
             </div>
             <button type="button" onClick={() => setShowTradeFeed(false)}
               className="text-sm px-3 py-1.5 rounded-lg"
-              style={{ background: '#1A2232', color: '#BAC4D1' }}>
+              style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
               닫기
             </button>
           </div>
           <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
             {liveTrades.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+              <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
               </div>
             ) : (
@@ -385,7 +385,7 @@ export const HomeView = ({
                         </span>
                         <p className="text-white text-sm font-bold truncate">{trade.streamerName}</p>
                       </div>
-                      <p className="text-xs" style={{ color: '#626B7A' }}>{timeStr}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono font-bold text-sm text-white">{trade.quantity}주</p>
@@ -403,19 +403,19 @@ export const HomeView = ({
 
       {/* 주문내역 모달 (전체 화면 오버레이) / Order history modal (full-screen overlay) */}
       {showOrderHistory && (
-        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: '#080A0F' }}>
+        <div className="absolute inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
           <div className="flex items-center justify-between px-4 py-4 shrink-0"
             style={{ borderBottom: '1px solid #222A3A' }}>
             <h2 className="text-white font-bold text-base">주문내역 ({history.length}건)</h2>
             <button type="button" onClick={() => setShowOrderHistory(false)}
               className="text-sm px-3 py-1.5 rounded-lg"
-              style={{ background: '#1A2232', color: '#BAC4D1' }}>
+              style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
               닫기
             </button>
           </div>
           <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
             {history.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-sm" style={{ color: '#626B7A' }}>
+              <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
                 주문 내역이 없습니다
               </div>
             ) : (
@@ -439,11 +439,11 @@ export const HomeView = ({
                         </span>
                         <p className="text-white text-sm font-bold truncate">{s?.name ?? item.streamerId}</p>
                       </div>
-                      <p className="text-xs" style={{ color: '#626B7A' }}>{timeStr} · {item.status}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr} · {item.status}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono font-bold text-sm text-white">{item.quantity}주</p>
-                      <p className="text-xs font-mono mt-0.5" style={{ color: '#8491A5' }}>{fmt(price)}</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>{fmt(price)}</p>
                     </div>
                   </div>
                 );

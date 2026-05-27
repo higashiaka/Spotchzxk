@@ -273,7 +273,7 @@ function App() {
   // 인증 초기 확인 중 로딩 화면 / Loading screen while the initial auth check runs
   if (authChecking) {
     return (
-      <div className="h-screen flex items-center justify-center font-mono" style={{ background: '#080A0F', color: '#626B7A' }}>
+      <div className="h-screen flex items-center justify-center font-mono" style={{ background: 'var(--bg-app)', color: 'var(--text-dim)' }}>
         거래소 엔진 초기화 중...
       </div>
     );
@@ -286,7 +286,7 @@ function App() {
   const balance = portfolio?.balance ?? 0;
 
   return (
-    <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: '#080A0F' }}>
+    <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden" style={{ background: 'var(--bg-app)' }}>
       <AnnouncementPopup />
 
       {/* 좌측 사이드바: 프로필·인증·포트폴리오 요약 포함
@@ -312,7 +312,7 @@ function App() {
       {/* 우측 콘텐츠 영역: profile 탭 활성 시 모바일에서 숨김
           Right content area: hidden on mobile when the profile tab is active */}
       <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden`}
-        style={{ background: '#080A0F' }}>
+        style={{ background: 'var(--bg-app)' }}>
 
         <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />
 
