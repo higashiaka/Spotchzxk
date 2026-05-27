@@ -105,13 +105,22 @@ body {
   to   { transform: translateX(-50%); }
 }
 
-/* 스크롤바 숨김 유틸리티 */
-.hide-scrollbar {
+/* 스크롤바 전역 숨김 / Hide scrollbars globally */
+* {
   scrollbar-width: none;       /* Firefox */
   -ms-overflow-style: none;    /* IE/Edge */
 }
+*::-webkit-scrollbar {
+  display: none;               /* Chrome/Safari/WebKit */
+}
+
+/* 하위 호환용 유틸리티 클래스 (레거시) / Legacy utility class kept for compatibility */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .hide-scrollbar::-webkit-scrollbar {
-  display: none;               /* Chrome/Safari */
+  display: none;
 }
 
 .surface-app {

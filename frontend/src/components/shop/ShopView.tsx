@@ -78,7 +78,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
               스트리머 선택
             </label>
             {/* 라이브 종목 선택 그리드 / Live streamer selection grid */}
-            <div className="grid grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto hide-scrollbar">
               {liveStreamers.map(s => (
                 <button
                   key={s.id}
