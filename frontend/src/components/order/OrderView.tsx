@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { changePct, priceColorClass, fmt, fmtCompact } from '../../utils';
@@ -11,7 +11,7 @@ import { OrderForm } from './OrderForm';
  *  Shows OrderForm when a stock is selected; otherwise shows
  *  the stock list sorted by trading volume */
 export const OrderView = ({
-  streamers, selectedStreamer, user, onSelectStreamer,
+  streamers, selectedStreamer, user, initialOrderType, onSelectStreamer,
 }: {
   /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
@@ -19,6 +19,8 @@ export const OrderView = ({
   selectedStreamer: Stock | null;
   /** 로그인 사용자 (미로그인 시 null) / Authenticated user, null if not logged in */
   user: User | null;
+  /** 주문 화면 최초 진입 시 선택할 주문 방향 / Initial order direction when entering the order screen */
+  initialOrderType: 'buy' | 'sell';
   /** 종목 선택 핸들러 / Stock selection handler */
   onSelectStreamer: (s: Stock) => void;
 }) => {
@@ -29,6 +31,10 @@ export const OrderView = ({
   /** 이전에 선택된 종목 ID (종목 변경 시 수량 초기화 감지용)
    *  Previously selected stock ID; used to detect stock changes and reset quantity */
   const [prevId, setPrevId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrderType(initialOrderType);
+  }, [initialOrderType]);
 
   // 종목이 변경되면 수량을 1로 초기화 / Reset quantity to 1 when the selected stock changes
   if (selectedStreamer && selectedStreamer.id !== prevId) {

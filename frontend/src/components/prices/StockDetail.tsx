@@ -31,7 +31,7 @@ export const StockDetail = ({
   /** 표시할 종목 데이터 / Stock data to display */
   streamer: Stock;
   /** 주문 화면으로 이동하는 핸들러 / Handler to navigate to the order screen */
-  onOrder: () => void;
+  onOrder: (type: 'buy' | 'sell') => void;
   /** 전체 실시간 체결 내역 (해당 종목 필터링에 사용) / All live trades; filtered to this stock */
   liveTrades: LiveTrade[];
 }) => {
@@ -209,12 +209,19 @@ export const StockDetail = ({
         />
       </div>
 
-      {/* 주문하기 버튼 / Order entry button */}
-      <button type="button" onClick={onOrder}
-        className="w-full rounded-xl py-4 mb-4 text-white font-bold text-base"
-        style={{ backgroundColor: '#FF5252' }}>
-        주문하기
-      </button>
+      {/* 매수/매도 버튼 / Buy and sell entry buttons */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button type="button" onClick={() => onOrder('buy')}
+          className="rounded-xl py-4 text-white font-bold text-base transition-all hover:brightness-110 active:scale-[0.99]"
+          style={{ backgroundColor: '#FF5252' }}>
+          매수
+        </button>
+        <button type="button" onClick={() => onOrder('sell')}
+          className="rounded-xl py-4 text-white font-bold text-base transition-all hover:brightness-110 active:scale-[0.99]"
+          style={{ backgroundColor: '#3D8BFF' }}>
+          매도
+        </button>
+      </div>
 
       {/* 실시간 체결 내역 / Real-time execution history for this stock */}
       <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>

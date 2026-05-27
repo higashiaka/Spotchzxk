@@ -42,6 +42,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   /** 가격 화면에서 선택된 종목 (null이면 목록 표시) / Selected stock in the price screen, null shows the list */
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
+  /** 주문 화면 진입 시 기본 주문 방향 / Initial order direction when opening the order screen */
+  const [initialOrderType, setInitialOrderType] = useState<'buy' | 'sell'>('buy');
   /** 최근 본 종목 ID 목록 (최대 10개, 최신순) / Recently viewed stock IDs, latest first, max 10 */
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
   /** 실시간 체결 피드 / Real-time trade feed */
@@ -271,6 +273,11 @@ function App() {
     setActiveTab(tab);
   };
 
+  const handleOrderFromDetail = (type: 'buy' | 'sell') => {
+    setInitialOrderType(type);
+    setActiveTab('order');
+  };
+
   /** 최근 본 종목에서 특정 항목 제거
    *  Removes a specific entry from the recently viewed list */
   const handleRemoveRecent = (id: string) => {
@@ -343,7 +350,7 @@ function App() {
               streamers={streamers}
               selectedStreamer={selectedStreamer}
               onSelectStreamer={s => s ? handleSelectStreamer(s) : setSelectedStreamer(null)}
-              onNavigate={handleNavigate}
+              onOrder={handleOrderFromDetail}
               liveTrades={liveTrades}
             />
           )}
@@ -358,6 +365,7 @@ function App() {
               streamers={streamers}
               selectedStreamer={selectedStreamer}
               user={user}
+              initialOrderType={initialOrderType}
               onSelectStreamer={s => setSelectedStreamer(s)}
             />
           )}
