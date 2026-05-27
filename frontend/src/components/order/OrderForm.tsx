@@ -3,7 +3,7 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { fmt, changePct, priceColor } from '../../utils';
+import { fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
 
 /** 매수/매도 주문 폼 컴포넌트.
  *  실시간 현재가, 보유 수량, 잔고를 기반으로 주문 가능 여부를 계산하고
@@ -85,17 +85,15 @@ export const OrderForm = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar text-white" style={{ background: 'var(--bg-sidebar)' }}>
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar text-white surface-sidebar">
       {/* 매수/매도 탭 전환 / Buy/sell tab toggle */}
-      <div className="rounded-xl p-1 flex mb-4" style={{ background: 'var(--bg-card-secondary)' }}>
+      <div className="rounded-xl p-1 flex mb-4 surface-card-secondary">
         <button type="button" onClick={() => setOrderType('buy')}
-          className="flex-1 py-2 rounded-lg text-xs font-extrabold transition-all"
-          style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : 'transparent', color: orderType === 'buy' ? '#fff' : 'var(--text-dim)' }}>
+          className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderType === 'buy' ? 'bg-danger text-white' : 'bg-transparent text-dim-token'}`}>
           매수
         </button>
         <button type="button" onClick={() => setOrderType('sell')}
-          className="flex-1 py-2 rounded-lg text-xs font-extrabold transition-all"
-          style={{ backgroundColor: orderType === 'sell' ? '#3D8BFF' : 'transparent', color: orderType === 'sell' ? '#fff' : 'var(--text-dim)' }}>
+          className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderType === 'sell' ? 'bg-info text-white' : 'bg-transparent text-dim-token'}`}>
           매도
         </button>
       </div>
@@ -103,10 +101,10 @@ export const OrderForm = ({
       {/* 선택 종목 표시 / Selected stock display */}
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">선택 종목</p>
-        <div className="rounded-xl border px-3 py-2" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <div className="rounded-xl border px-3 py-2 surface-card-secondary border-primary-token">
           <p className="text-white font-bold text-sm">
             {streamer.name}
-            <span className="font-mono ml-2" style={{ color: priceColor(pct) }}>
+            <span className={`font-mono ml-2 ${priceColorClass(pct)}`}>
               ({fmt(currentPrice)})
             </span>
           </p>
@@ -116,8 +114,8 @@ export const OrderForm = ({
       {/* 현재가 (시장가 기준) / Current price (market order basis) */}
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">현재가 (체결 기준)</p>
-        <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
-          <p className="font-mono font-bold text-base" style={{ color: priceColor(pct) }}>
+        <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center surface-card-secondary border-primary-token">
+          <p className={`font-mono font-bold text-base ${priceColorClass(pct)}`}>
             {fmt(currentPrice)}
           </p>
           <span className="text-[10px] text-[var(--text-dim)]">시장가</span>
@@ -134,7 +132,7 @@ export const OrderForm = ({
           min="1"
           disabled={!user}
           placeholder={!user ? '로그인 필요' : '수량 입력'}
-          className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}
+          className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50 surface-card-secondary border-primary-token"
         />
       </div>
 
@@ -142,18 +140,17 @@ export const OrderForm = ({
       <div className="grid grid-cols-4 gap-2 mb-4">
         {([0.1, 0.25, 0.5, 1.0] as const).map((r) => (
           <button key={r} type="button" onClick={() => setQuick(r)}
-            className="rounded-lg py-1.5 text-[11px] font-bold transition-colors" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+            className="rounded-lg py-1.5 text-[11px] font-bold transition-colors surface-card text-secondary-token">
             {r * 100}%
           </button>
         ))}
       </div>
 
       {/* 주문 요약 (총액 / 예상 잔액 / 보유량) / Order summary (total / estimated balance / holdings) */}
-      <div className="pt-3 mb-5 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+      <div className="pt-3 mb-5 border-t border-primary-token">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs text-[var(--text-muted)]">주문 총액</span>
-          <span className="font-mono text-lg font-extrabold"
-            style={{ color: orderType === 'buy' ? '#FF5252' : '#3D8BFF' }}>
+          <span className={`font-mono text-lg font-extrabold ${tradeColorClass(orderType)}`}>
             {fmt(totalCost)}
           </span>
         </div>
@@ -179,8 +176,7 @@ export const OrderForm = ({
       {/* 주문 제출 버튼 / Order submit button */}
       <button type="button" onClick={handleSubmit}
         disabled={tradeMutation.isPending || !canSubmit}
-        className="w-full rounded-xl py-3.5 text-white font-extrabold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99]"
-        style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : '#3D8BFF' }}>
+        className={`w-full rounded-xl py-3.5 text-white font-extrabold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99] ${orderType === 'buy' ? 'bg-danger' : 'bg-info'}`}>
         {tradeMutation.isPending
           ? '주문 처리 중...'
           : orderType === 'buy' && !!user && qty > 0 && balance < totalCost

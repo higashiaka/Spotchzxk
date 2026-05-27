@@ -58,15 +58,14 @@ export const Sidebar = ({
 }) => {
   return (
     <div
-      className={`${activeTab === 'profile' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[300px] md:shrink-0 h-full overflow-hidden`}
-      style={{ background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-primary)' }}
+      className={`${activeTab === 'profile' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[300px] md:shrink-0 h-full overflow-hidden surface-sidebar border-r border-primary-token`}
     >
       {/* 로고 헤더 / Logo header */}
-      <div className="p-5" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+      <div className="p-5 border-bottom-primary">
         <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 tracking-tighter">
           Spotchzxk
         </h1>
-        <p className="text-xs font-bold uppercase tracking-widest mt-1" style={{ color: 'var(--text-dim)' }}>
+        <p className="text-xs font-bold uppercase tracking-widest mt-1 text-dim-token">
           Global Streamer Exchange
         </p>
       </div>

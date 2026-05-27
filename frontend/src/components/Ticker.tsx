@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 import { Stock } from '../hooks/useStocks';
 import { LiveTrade } from '../types';
-import { changePct, priceColor } from '../utils';
+import { changePct, priceColorClass } from '../utils';
 
 /** 상단 수평 스크롤 티커 컴포넌트.
  *  최근 거래 종목 우선으로 종목 가격과 등락률을 무한 가로 스크롤로 표시.
@@ -41,25 +42,22 @@ export const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrad
   if (items.length === 0) return null;
 
   return (
-    <div className="relative overflow-hidden shrink-0"
-      style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border-primary)' }}>
+    <div className="relative overflow-hidden shrink-0 surface-sidebar border-bottom-primary">
       {/* 좌우 그라디언트 페이드 오버레이 / Left and right gradient fade overlays */}
-      <div className="absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to right, var(--bg-sidebar), transparent)' }} />
-      <div className="absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to left, var(--bg-sidebar), transparent)' }} />
+      <div className="absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none ticker-fade-left" />
+      <div className="absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none ticker-fade-right" />
 
       {/* 스크롤 트랙 / Scrolling track */}
-      <div className="flex py-2" style={{ width: 'max-content', animation: `ticker-scroll ${duration}s linear infinite` }}>
+      <div className="flex py-2 ticker-track" style={{ '--ticker-duration': `${duration}s` } as CSSProperties}>
         {items.map((s, i) => {
           const pct = changePct(s.price, s.basePrice);
           return (
             <span key={i} className="inline-flex items-center gap-1.5 px-4">
-              <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{s.name}</span>
-              <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
+              <span className="text-xs font-bold text-secondary-token">{s.name}</span>
+              <span className={`text-xs font-bold font-mono ${priceColorClass(pct)}`}>
                 {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
               </span>
-              <span className="text-xs" style={{ color: 'var(--border-secondary)' }}>|</span>
+              <span className="text-xs text-[var(--border-secondary)]">|</span>
             </span>
           );
         })}

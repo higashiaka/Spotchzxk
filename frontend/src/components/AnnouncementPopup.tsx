@@ -28,13 +28,11 @@ export default function AnnouncementPopup() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
       onClick={() => dismiss(false)}
     >
       <div
-        className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4"
-        style={{ background: 'var(--bg-card-secondary)', border: '1px solid #1E2330' }}
+        className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel"
         onClick={e => e.stopPropagation()}
       >
         {/* 닫기 버튼 (이번 세션만) / Close button (this session only) */}
@@ -47,25 +45,22 @@ export default function AnnouncementPopup() {
 
         {/* 공지 제목 / Announcement title */}
         <div className="flex items-center gap-2">
-          <span style={{ color: '#00E676', fontSize: 20 }}>$</span>
+          <span className="text-accent text-xl">$</span>
           <span className="font-bold text-white text-base">배당 정책 변경 안내</span>
         </div>
 
         {/* 변경 내용 설명 / Change description */}
-        <div className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+        <div className="text-sm leading-relaxed text-secondary-token">
           <p className="mb-3">
             배당 지급 기준이 발행량과 무관하게 단순화됩니다.
           </p>
-          <div
-            className="rounded-xl p-3 mb-3 text-sm"
-            style={{ background: 'var(--bg-card-secondary)', border: '1px solid #1E2330' }}
-          >
+          <div className="rounded-xl p-3 mb-3 text-sm modal-panel">
             <p className="mb-1">
-              <span style={{ color: '#00E676' }}>변경 후</span>
+              <span className="text-accent">변경 후</span>
               <span className="ml-2 text-white">주당 현재가의 5% 지급</span>
             </p>
             <p>
-              <span style={{ color: '#FF6B6B' }}>기존</span>
+              <span className="text-[#FF6B6B]">기존</span>
               <span className="ml-2 text-white">발행량/유통량 기준 배당 계산</span>
             </p>
           </div>
@@ -78,16 +73,14 @@ export default function AnnouncementPopup() {
         <div className="flex flex-col gap-2 mt-1">
           {/* 확인 (이번 세션만 닫기) / Confirm (close for this session only) */}
           <button
-            className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80"
-            style={{ background: '#00E676', color: 'var(--accent-foreground)' }}
+            className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80 accent-button"
             onClick={() => dismiss(false)}
           >
             확인
           </button>
           {/* 영구 숨김 / Permanently dismiss */}
           <button
-            className="w-full py-2.5 rounded-xl text-sm transition-colors"
-            style={{ color: 'var(--text-dim)', border: '1px solid #1E2330' }}
+            className="w-full py-2.5 rounded-xl text-sm transition-colors text-dim-token border border-[#1E2330]"
             onClick={() => dismiss(true)}
           >
             다시 보지 않기
