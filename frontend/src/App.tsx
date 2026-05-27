@@ -51,6 +51,7 @@ function App() {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSwiping, setIsSwiping] = useState(false);
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const [mobileRouteMotion, setMobileRouteMotion] = useState<'from-left' | 'from-right' | null>(null);
   /** 가격 화면에서 선택된 종목 (null이면 목록 표시) / Selected stock in the price screen, null shows the list */
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
   /** 주문 화면 진입 시 기본 주문 방향 / Initial order direction when opening the order screen */
@@ -86,6 +87,12 @@ function App() {
     setSwipeOffset(0);
     setIsSwiping(false);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!mobileRouteMotion) return;
+    const timer = window.setTimeout(() => setMobileRouteMotion(null), 240);
+    return () => window.clearTimeout(timer);
+  }, [mobileRouteMotion]);
 
   useEffect(() => {
     const loadOnlineCount = () => {
@@ -324,6 +331,20 @@ function App() {
     setActiveTab(snapshot.tab);
   }, [streamers]);
 
+  const prepareMobileRouteMotion = useCallback((targetTab: AppTab) => {
+    if (isDesktopLayout) return;
+    const activeIsStacked = activeTab === 'order' || activeTab === 'holdings';
+    const targetIsStacked = targetTab === 'order' || targetTab === 'holdings';
+
+    if (activeIsStacked && !targetIsStacked) {
+      setMobileRouteMotion('from-left');
+      return;
+    }
+    if (!activeIsStacked && targetIsStacked) {
+      setMobileRouteMotion('from-right');
+    }
+  }, [activeTab, isDesktopLayout]);
+
   const handleGoBack = useCallback((fallback: ScreenSnapshot) => {
     const next = [...screenHistory];
     let target = next.pop() ?? fallback;
@@ -333,23 +354,26 @@ function App() {
     }
 
     setScreenHistory(next);
+    prepareMobileRouteMotion(target.tab);
     restoreScreen(target);
-  }, [currentScreen, restoreScreen, sameScreen, screenHistory]);
+  }, [currentScreen, prepareMobileRouteMotion, restoreScreen, sameScreen, screenHistory]);
 
   /** 종목 선택 핸들러: 가격 탭으로 이동 + 최근 본 목록 갱신 (최대 10개)
    *  Stock selection handler: navigates to prices tab and updates recently viewed list (max 10) */
   const handleSelectStreamer = useCallback((s: Stock) => {
     pushCurrentScreen();
+    prepareMobileRouteMotion('prices');
     setSelectedStreamer(s);
     setActiveTab('prices');
     setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
-  }, [pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushCurrentScreen]);
 
   const handleNavigate = useCallback((tab: AppTab) => {
     pushCurrentScreen();
+    prepareMobileRouteMotion(tab);
     if (tab === 'prices') setSelectedStreamer(null);
     setActiveTab(tab);
-  }, [pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushCurrentScreen]);
 
   const activeSwipeIndex = Math.max(0, SWIPE_TABS.indexOf(activeTab));
   const isSwipeTab = SWIPE_TABS.includes(activeTab);
@@ -420,9 +444,10 @@ function App() {
 
   const handleOrderFromDetail = useCallback((type: 'buy' | 'sell') => {
     pushCurrentScreen();
+    prepareMobileRouteMotion('order');
     setInitialOrderType(type);
     setActiveTab('order');
-  }, [pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushCurrentScreen]);
 
   const handleSelectStreamerForPrices = useCallback((s: Stock | null) => {
     if (s) {
@@ -559,6 +584,10 @@ function App() {
     return <Sidebar activeTab="profile" {...sidebarProps} />;
   };
 
+  const mobileRouteClass = mobileRouteMotion
+    ? `mobile-route-enter-${mobileRouteMotion}`
+    : '';
+
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden surface-app">
       <AnnouncementPopup />
@@ -593,26 +622,30 @@ function App() {
             onPointerCancel={cancelSwipe}
           >
             {isSwipeTab ? (
-              <div
-                className="h-full flex"
-                style={{
-                  width: swipeViewportWidth ? swipeViewportWidth * SWIPE_TABS.length : '100%',
-                  transform: `translate3d(${-activeSwipeIndex * swipeViewportWidth + swipeOffset}px, 0, 0)`,
-                  transition: isSwiping ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
-                }}
-              >
-                {SWIPE_TABS.map(tab => (
-                  <div
-                    key={tab}
-                    className="h-full overflow-hidden shrink-0"
-                    style={{ width: swipeViewportWidth || '100%' }}
-                  >
-                    {renderTabContent(tab)}
-                  </div>
-                ))}
+              <div className={`h-full ${mobileRouteClass}`}>
+                <div
+                  className="h-full flex"
+                  style={{
+                    width: swipeViewportWidth ? swipeViewportWidth * SWIPE_TABS.length : '100%',
+                    transform: `translate3d(${-activeSwipeIndex * swipeViewportWidth + swipeOffset}px, 0, 0)`,
+                    transition: isSwiping ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  {SWIPE_TABS.map(tab => (
+                    <div
+                      key={tab}
+                      className="h-full overflow-hidden shrink-0"
+                      style={{ width: swipeViewportWidth || '100%' }}
+                    >
+                      {renderTabContent(tab)}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              renderTabContent(activeTab)
+              <div className={`h-full ${mobileRouteClass}`}>
+                {renderTabContent(activeTab)}
+              </div>
             )}
           </div>
         )}
