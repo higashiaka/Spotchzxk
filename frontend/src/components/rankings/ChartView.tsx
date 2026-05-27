@@ -70,6 +70,14 @@ export const ChartView = ({
    *  Up to 30 stocks filtered and sorted by the selected category */
   const list = useMemo(() => {
     const s = [...streamers];
+    const remainingMs = (st: Stock): number => {
+      if (!st.isLive || !st.liveStartedAt) return Number.POSITIVE_INFINITY;
+      const startMs = new Date(st.liveStartedAt).getTime();
+      const nextMs = ((st.dividendAccumulationCount ?? 0) + 1) * 10 * 60 * 1000;
+      return nextMs - (Date.now() - startMs);
+    };
+
+    void tick;
     switch (category) {
       case 'volume':
         return volumeAsc
@@ -102,13 +110,13 @@ export const ChartView = ({
           .slice(0, 30);
       }
       case 'dividend':
-        // 현재 라이브 중인 종목을 현재가 내림차순으로 표시
-        // Show currently live stocks sorted by price descending
-        return s.filter(st => st.isLive).sort((a, b) => b.price - a.price);
+        // 현재 라이브 중인 종목을 다음 배당까지 남은 시간 오름차순으로 표시
+        // Show live stocks sorted by remaining time until next dividend ascending
+        return s.filter(st => st.isLive).sort((a, b) => remainingMs(a) - remainingMs(b));
       default:
         return s.slice(0, 30);
     }
-  }, [streamers, category, volumeAsc, valueAsc]);
+  }, [streamers, category, volumeAsc, valueAsc, tick]);
 
   /** 카테고리에 따른 오른쪽 컬럼 헤더 라벨
    *  Right column header label based on current category */
