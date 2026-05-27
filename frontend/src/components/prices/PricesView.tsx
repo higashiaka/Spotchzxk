@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Stock } from '../../hooks/useStocks';
-import { AppTab, LiveTrade } from '../../types';
+import { LiveTrade } from '../../types';
 import { changePct, priceColor, avatarColor, fmt, fmtCompact } from '../../utils';
 import { StockDetail } from './StockDetail';
 
@@ -12,7 +12,7 @@ import { StockDetail } from './StockDetail';
  *  Shows a searchable stock list when no stock is selected;
  *  switches to StockDetail when a stock is selected */
 export const PricesView = ({
-  streamers, selectedStreamer, onSelectStreamer, onNavigate, liveTrades,
+  streamers, selectedStreamer, onSelectStreamer, onOrder, liveTrades,
 }: {
   /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
@@ -20,8 +20,8 @@ export const PricesView = ({
   selectedStreamer: Stock | null;
   /** 종목 선택/해제 핸들러 / Handler to select or deselect a stock */
   onSelectStreamer: (s: Stock | null) => void;
-  /** 탭 전환 핸들러 / Tab navigation handler */
-  onNavigate: (tab: AppTab) => void;
+  /** 주문 화면으로 이동하는 핸들러 / Handler to navigate to the order screen */
+  onOrder: (type: 'buy' | 'sell') => void;
   /** 실시간 체결 내역 (StockDetail로 전달) / Live trades passed down to StockDetail */
   liveTrades: LiveTrade[];
 }) => {
@@ -55,7 +55,7 @@ export const PricesView = ({
         <div className="flex-1 overflow-hidden">
           <StockDetail
             streamer={selectedStreamer}
-            onOrder={() => onNavigate('order')}
+            onOrder={onOrder}
             liveTrades={liveTrades}
           />
         </div>
