@@ -28,6 +28,23 @@ import AnnouncementPopup from './components/AnnouncementPopup';
 
 const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'shop', 'profile'];
 type ScreenSnapshot = { tab: AppTab; streamerId: string | null };
+const APP_HISTORY_KEY = 'spotchzxk-screen';
+
+const toBrowserHistoryState = (screen: ScreenSnapshot) => ({
+  [APP_HISTORY_KEY]: true,
+  screen,
+});
+
+const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapshot } => {
+  if (!state || typeof state !== 'object') return false;
+  const candidate = state as { [APP_HISTORY_KEY]?: unknown; screen?: Partial<ScreenSnapshot> };
+  return (
+    candidate[APP_HISTORY_KEY] === true &&
+    !!candidate.screen &&
+    typeof candidate.screen.tab === 'string' &&
+    (candidate.screen.streamerId === null || typeof candidate.screen.streamerId === 'string')
+  );
+};
 
 /** 앱 최상위 컴포넌트.
  *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
@@ -61,6 +78,10 @@ function App() {
   /** 실시간 체결 피드 / Real-time trade feed */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+  const currentScreenRef = useRef<ScreenSnapshot>({ tab: 'home', streamerId: null });
+  const restoreFromBrowserRef = useRef(false);
+  const prepareMobileRouteMotionRef = useRef<(targetTab: AppTab) => void>(() => {});
+  const restoreScreenRef = useRef<(snapshot: ScreenSnapshot) => void>(() => {});
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
@@ -309,6 +330,10 @@ function App() {
     streamerId: selectedStreamer?.id ?? null,
   }), [activeTab, selectedStreamer?.id]);
 
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+  }, [currentScreen]);
+
   const sameScreen = useCallback(
     (a: ScreenSnapshot, b: ScreenSnapshot) =>
       a.tab === b.tab && a.streamerId === b.streamerId,
@@ -331,6 +356,12 @@ function App() {
     setActiveTab(snapshot.tab);
   }, [streamers]);
 
+  const pushBrowserScreen = useCallback((snapshot: ScreenSnapshot) => {
+    if (restoreFromBrowserRef.current) return;
+    if (sameScreen(currentScreenRef.current, snapshot)) return;
+    window.history.pushState(toBrowserHistoryState(snapshot), '');
+  }, [sameScreen]);
+
   const prepareMobileRouteMotion = useCallback((targetTab: AppTab) => {
     if (isDesktopLayout) return;
     const activeIsStacked = activeTab === 'order' || activeTab === 'holdings';
@@ -345,35 +376,64 @@ function App() {
     }
   }, [activeTab, isDesktopLayout]);
 
-  const handleGoBack = useCallback((fallback: ScreenSnapshot) => {
-    const next = [...screenHistory];
-    let target = next.pop() ?? fallback;
+  useEffect(() => {
+    prepareMobileRouteMotionRef.current = prepareMobileRouteMotion;
+  }, [prepareMobileRouteMotion]);
 
-    while (next.length > 0 && sameScreen(target, currentScreen)) {
-      target = next.pop() ?? fallback;
+  useEffect(() => {
+    restoreScreenRef.current = restoreScreen;
+  }, [restoreScreen]);
+
+  useEffect(() => {
+    window.history.replaceState(toBrowserHistoryState(currentScreenRef.current), '');
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (!isBrowserHistoryState(event.state)) return;
+
+      const target = event.state.screen;
+      restoreFromBrowserRef.current = true;
+      setScreenHistory(prev => prev.slice(0, -1));
+      prepareMobileRouteMotionRef.current(target.tab);
+      restoreScreenRef.current(target);
+      window.setTimeout(() => {
+        restoreFromBrowserRef.current = false;
+      }, 0);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleGoBack = useCallback((fallback: ScreenSnapshot) => {
+    if (screenHistory.length > 0) {
+      window.history.back();
+      return;
     }
 
-    setScreenHistory(next);
-    prepareMobileRouteMotion(target.tab);
-    restoreScreen(target);
-  }, [currentScreen, prepareMobileRouteMotion, restoreScreen, sameScreen, screenHistory]);
+    prepareMobileRouteMotion(fallback.tab);
+    restoreScreen(fallback);
+  }, [prepareMobileRouteMotion, restoreScreen, screenHistory.length]);
 
   /** 종목 선택 핸들러: 가격 탭으로 이동 + 최근 본 목록 갱신 (최대 10개)
    *  Stock selection handler: navigates to prices tab and updates recently viewed list (max 10) */
   const handleSelectStreamer = useCallback((s: Stock) => {
+    const target = { tab: 'prices' as AppTab, streamerId: s.id };
     pushCurrentScreen();
     prepareMobileRouteMotion('prices');
+    pushBrowserScreen(target);
     setSelectedStreamer(s);
     setActiveTab('prices');
     setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
-  }, [prepareMobileRouteMotion, pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushBrowserScreen, pushCurrentScreen]);
 
   const handleNavigate = useCallback((tab: AppTab) => {
+    const target = { tab, streamerId: tab === 'prices' ? null : selectedStreamer?.id ?? null };
     pushCurrentScreen();
     prepareMobileRouteMotion(tab);
+    pushBrowserScreen(target);
     if (tab === 'prices') setSelectedStreamer(null);
     setActiveTab(tab);
-  }, [prepareMobileRouteMotion, pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushBrowserScreen, pushCurrentScreen, selectedStreamer?.id]);
 
   const activeSwipeIndex = Math.max(0, SWIPE_TABS.indexOf(activeTab));
   const isSwipeTab = SWIPE_TABS.includes(activeTab);
@@ -430,6 +490,7 @@ function App() {
 
     if (nextIndex !== start.tabIndex) {
       const nextTab = SWIPE_TABS[nextIndex];
+      pushBrowserScreen({ tab: nextTab, streamerId: nextTab === 'prices' ? null : selectedStreamer?.id ?? null });
       if (nextTab === 'prices') setSelectedStreamer(null);
       setActiveTab(nextTab);
     }
@@ -443,11 +504,13 @@ function App() {
   };
 
   const handleOrderFromDetail = useCallback((type: 'buy' | 'sell') => {
+    const target = { tab: 'order' as AppTab, streamerId: selectedStreamer?.id ?? null };
     pushCurrentScreen();
     prepareMobileRouteMotion('order');
+    pushBrowserScreen(target);
     setInitialOrderType(type);
     setActiveTab('order');
-  }, [prepareMobileRouteMotion, pushCurrentScreen]);
+  }, [prepareMobileRouteMotion, pushBrowserScreen, pushCurrentScreen, selectedStreamer?.id]);
 
   const handleSelectStreamerForPrices = useCallback((s: Stock | null) => {
     if (s) {
@@ -458,9 +521,11 @@ function App() {
   }, [handleSelectStreamer]);
 
   const handleSelectStreamerForOrder = useCallback((s: Stock) => {
+    const target = { tab: 'order' as AppTab, streamerId: s.id };
     pushCurrentScreen();
+    pushBrowserScreen(target);
     setSelectedStreamer(s);
-  }, [pushCurrentScreen]);
+  }, [pushBrowserScreen, pushCurrentScreen]);
 
   const handleBackFromPrices = useCallback(
     () => handleGoBack({ tab: 'prices', streamerId: null }),
