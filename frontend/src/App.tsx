@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import type { PointerEvent } from 'react';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
   User, signInAnonymously, signInWithCustomToken,
@@ -25,6 +26,8 @@ import { ShopView } from './components/shop/ShopView';
 import { HoldingsView } from './components/holdings/HoldingsView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
+const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'shop', 'profile'];
+
 /** 앱 최상위 컴포넌트.
  *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
  *
@@ -40,6 +43,12 @@ function App() {
   const streamers = useStocks();
   /** 현재 활성 탭 / Currently active tab */
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const swipeViewportRef = useRef<HTMLDivElement | null>(null);
+  const swipeStartRef = useRef({ x: 0, y: 0, tabIndex: 0, pointerId: -1, horizontal: false });
+  const [swipeViewportWidth, setSwipeViewportWidth] = useState(() => window.innerWidth);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   /** 가격 화면에서 선택된 종목 (null이면 목록 표시) / Selected stock in the price screen, null shows the list */
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
   /** 주문 화면 진입 시 기본 주문 방향 / Initial order direction when opening the order screen */
@@ -49,6 +58,32 @@ function App() {
   /** 실시간 체결 피드 / Real-time trade feed */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const updateLayout = () => setIsDesktopLayout(media.matches);
+    updateLayout();
+    media.addEventListener('change', updateLayout);
+    return () => media.removeEventListener('change', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (isDesktopLayout) return;
+    const viewport = swipeViewportRef.current;
+    if (!viewport) return;
+
+    const updateWidth = () => setSwipeViewportWidth(viewport.clientWidth);
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [isDesktopLayout, authChecking]);
+
+  useEffect(() => {
+    setSwipeOffset(0);
+    setIsSwiping(false);
+  }, [activeTab]);
 
   useEffect(() => {
     const loadOnlineCount = () => {
@@ -273,6 +308,71 @@ function App() {
     setActiveTab(tab);
   };
 
+  const activeSwipeIndex = Math.max(0, SWIPE_TABS.indexOf(activeTab));
+  const isSwipeTab = SWIPE_TABS.includes(activeTab);
+
+  const handleSwipePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isSwipeTab || event.pointerType === 'mouse') return;
+    if (swipeStartRef.current.pointerId !== -1) return;
+    swipeStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      tabIndex: activeSwipeIndex,
+      pointerId: event.pointerId,
+      horizontal: false,
+    };
+  };
+
+  const handleSwipePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    if (start.pointerId !== event.pointerId || !swipeViewportWidth) return;
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!start.horizontal && Math.abs(dx) < 8) return;
+    if (!start.horizontal && Math.abs(dy) > Math.abs(dx)) return;
+
+    start.horizontal = true;
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    setIsSwiping(true);
+    const isFirst = start.tabIndex === 0 && dx > 0;
+    const isLast = start.tabIndex === SWIPE_TABS.length - 1 && dx < 0;
+    const resistance = isFirst || isLast ? 0.28 : 1;
+    setSwipeOffset(dx * resistance);
+  };
+
+  const finishSwipe = (event: PointerEvent<HTMLDivElement>) => {
+    const start = swipeStartRef.current;
+    if (start.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - start.x;
+    const threshold = Math.min(90, Math.max(48, swipeViewportWidth * 0.18));
+    let nextIndex = start.tabIndex;
+
+    if (start.horizontal && dx <= -threshold) {
+      nextIndex = Math.min(SWIPE_TABS.length - 1, start.tabIndex + 1);
+    } else if (start.horizontal && dx >= threshold) {
+      nextIndex = Math.max(0, start.tabIndex - 1);
+    }
+
+    setSwipeOffset(0);
+    setIsSwiping(false);
+    swipeStartRef.current.pointerId = -1;
+
+    if (nextIndex !== start.tabIndex) {
+      handleNavigate(SWIPE_TABS[nextIndex]);
+    }
+  };
+
+  const cancelSwipe = () => {
+    setSwipeOffset(0);
+    setIsSwiping(false);
+    swipeStartRef.current.pointerId = -1;
+    swipeStartRef.current.horizontal = false;
+  };
+
   const handleOrderFromDetail = (type: 'buy' | 'sell') => {
     setInitialOrderType(type);
     setActiveTab('order');
@@ -299,93 +399,146 @@ function App() {
   /** 현재 현금 잔고 / Current cash balance */
   const balance = portfolio?.balance ?? 0;
 
+  const sidebarProps = {
+    user,
+    portfolio,
+    history: history ?? [],
+    streamers,
+    totalAssets,
+    isResetting: resetMutation.isPending,
+    remainingResets: portfolio?.remainingResets ?? 3,
+    onLoginGoogle: handleGoogleLogin,
+    onLoginGuest: handleGuestLogin,
+    onLogout: handleLogout,
+    onReset: handleReset,
+    onLinkGoogle: handleLinkGoogle,
+    onSelect: handleSelectStreamer,
+    onNavigate: handleNavigate,
+  };
+
+  const renderTabContent = (tab: AppTab) => {
+    if (tab === 'home') {
+      return (
+        <HomeView
+          streamers={streamers}
+          portfolio={portfolio}
+          user={user}
+          totalAssets={totalAssets}
+          history={history ?? []}
+          recentlyViewedIds={recentlyViewedIds}
+          onlineCount={onlineCount}
+          onSelect={handleSelectStreamer}
+          onNavigate={handleNavigate}
+          onRemoveRecent={handleRemoveRecent}
+          liveTrades={liveTrades}
+        />
+      );
+    }
+
+    if (tab === 'prices') {
+      return (
+        <PricesView
+          streamers={streamers}
+          selectedStreamer={selectedStreamer}
+          onSelectStreamer={s => s ? handleSelectStreamer(s) : setSelectedStreamer(null)}
+          onOrder={handleOrderFromDetail}
+          liveTrades={liveTrades}
+        />
+      );
+    }
+
+    if (tab === 'chart') {
+      return <ChartView streamers={streamers} onSelect={handleSelectStreamer} />;
+    }
+
+    if (tab === 'order') {
+      return (
+        <OrderView
+          streamers={streamers}
+          selectedStreamer={selectedStreamer}
+          user={user}
+          initialOrderType={initialOrderType}
+          onSelectStreamer={s => setSelectedStreamer(s)}
+        />
+      );
+    }
+
+    if (tab === 'shop') {
+      return <ShopView streamers={streamers} user={user} balance={balance} />;
+    }
+
+    if (tab === 'holdings') {
+      return (
+        <HoldingsView
+          portfolio={portfolio}
+          streamers={streamers}
+          history={history ?? []}
+          onNavigate={handleNavigate}
+          onSelect={handleSelectStreamer}
+        />
+      );
+    }
+
+    return <Sidebar activeTab="profile" {...sidebarProps} />;
+  };
+
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row overflow-hidden surface-app">
       <AnnouncementPopup />
 
       {/* 좌측 사이드바: 프로필·인증·포트폴리오 요약 포함
           Left sidebar: includes profile, auth, and portfolio summary */}
-      <Sidebar
-        activeTab={activeTab}
-        user={user}
-        portfolio={portfolio}
-        history={history ?? []}
-        streamers={streamers}
-        totalAssets={totalAssets}
-        isResetting={resetMutation.isPending}
-        remainingResets={portfolio?.remainingResets ?? 3}
-        onLoginGoogle={handleGoogleLogin}
-        onLoginGuest={handleGuestLogin}
-        onLogout={handleLogout}
-        onReset={handleReset}
-        onLinkGoogle={handleLinkGoogle}
-        onSelect={handleSelectStreamer}
-        onNavigate={handleNavigate}
-      />
+      {isDesktopLayout && (
+        <div className="flex shrink-0">
+          <Sidebar activeTab={activeTab} {...sidebarProps} />
+        </div>
+      )}
 
       {/* 우측 콘텐츠 영역: profile 탭 활성 시 모바일에서 숨김
           Right content area: hidden on mobile when the profile tab is active */}
-      <div className={`${activeTab !== 'profile' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-hidden surface-app`}>
+      <div className="flex flex-col flex-1 overflow-hidden surface-app">
 
-        <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />
+        {isDesktopLayout && <DesktopTabBar activeTab={rightTab} onNavigate={handleNavigate} />}
 
-        <div className="flex-1 overflow-hidden">
-          {rightTab === 'home' && (
-            <HomeView
-              streamers={streamers}
-              portfolio={portfolio}
-              user={user}
-              totalAssets={totalAssets}
-              history={history ?? []}
-              recentlyViewedIds={recentlyViewedIds}
-              onlineCount={onlineCount}
-              onSelect={handleSelectStreamer}
-              onNavigate={handleNavigate}
-              onRemoveRecent={handleRemoveRecent}
-              liveTrades={liveTrades}
-            />
-          )}
-          {rightTab === 'prices' && (
-            <PricesView
-              streamers={streamers}
-              selectedStreamer={selectedStreamer}
-              onSelectStreamer={s => s ? handleSelectStreamer(s) : setSelectedStreamer(null)}
-              onOrder={handleOrderFromDetail}
-              liveTrades={liveTrades}
-            />
-          )}
-          {rightTab === 'chart' && (
-            <ChartView
-              streamers={streamers}
-              onSelect={handleSelectStreamer}
-            />
-          )}
-          {rightTab === 'order' && (
-            <OrderView
-              streamers={streamers}
-              selectedStreamer={selectedStreamer}
-              user={user}
-              initialOrderType={initialOrderType}
-              onSelectStreamer={s => setSelectedStreamer(s)}
-            />
-          )}
-          {rightTab === 'shop' && (
-            <ShopView
-              streamers={streamers}
-              user={user}
-              balance={balance}
-            />
-          )}
-          {rightTab === 'holdings' && (
-            <HoldingsView
-              portfolio={portfolio}
-              streamers={streamers}
-              history={history ?? []}
-              onNavigate={handleNavigate}
-              onSelect={handleSelectStreamer}
-            />
-          )}
-        </div>
+        {isDesktopLayout && (
+          <div className="flex-1 overflow-hidden">
+            {renderTabContent(rightTab)}
+          </div>
+        )}
+
+        {!isDesktopLayout && (
+          <div
+            ref={swipeViewportRef}
+            className="flex-1 overflow-hidden touch-pan-y"
+            onPointerDown={handleSwipePointerDown}
+            onPointerMove={handleSwipePointerMove}
+            onPointerUp={finishSwipe}
+            onPointerCancel={cancelSwipe}
+          >
+            {isSwipeTab ? (
+              <div
+                className="h-full flex"
+                style={{
+                  width: swipeViewportWidth ? swipeViewportWidth * SWIPE_TABS.length : '100%',
+                  transform: `translate3d(${-activeSwipeIndex * swipeViewportWidth + swipeOffset}px, 0, 0)`,
+                  transition: isSwiping ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
+              >
+                {SWIPE_TABS.map(tab => (
+                  <div
+                    key={tab}
+                    className="h-full overflow-hidden shrink-0"
+                    style={{ width: swipeViewportWidth || '100%' }}
+                  >
+                    {renderTabContent(tab)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              renderTabContent(activeTab)
+            )}
+          </div>
+        )}
       </div>
 
       {/* 모바일 하단 내비게이션 바 / Mobile bottom navigation bar */}
