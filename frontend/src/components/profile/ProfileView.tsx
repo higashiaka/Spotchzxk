@@ -6,7 +6,6 @@ import { fmt, grade } from '../../utils';
 import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { useHoldings } from '../../hooks/useHoldings';
-import { useTheme } from '../../contexts/ThemeContext';
 
 /** 프로필 화면 컴포넌트.
  *  미로그인 시 로그인 화면, 로그인 시 보유 주식·투자 요약·배당 내역·종목 추가·자금 초기화를 표시
@@ -50,9 +49,6 @@ export const ProfileView = ({
   /** 탭 이동 핸들러 / Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
-  /** 테마 / Theme */
-  const { theme, toggleTheme } = useTheme();
-
   /** 사용자 등급 (총 자산 기준) / User grade derived from total assets */
   const userGrade = grade(totalAssets);
   /** 보유 주식 평가액 (총 자산 - 현금) / Evaluated holdings value (total assets minus cash) */
@@ -251,12 +247,6 @@ export const ProfileView = ({
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
             게스트로 플레이
           </button>
-        </div>
-
-        {/* 비로그인 상태에서도 테마 설정 표시 / Show theme setting even when not logged in */}
-        <div className="w-full mt-8 rounded-xl border p-4"
-          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-          <ThemeToggleRow theme={theme} onToggle={toggleTheme} />
         </div>
       </div>
     );
@@ -475,13 +465,6 @@ export const ProfileView = ({
           </p>
         </div>
       )}
-
-      {/* ── 설정 ─────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
-        <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>설정</h3>
-        <ThemeToggleRow theme={theme} onToggle={toggleTheme} />
-      </div>
-
       {/* 투자 자금 초기화 버튼 / Fund reset button */}
       <button
         type="button"
@@ -502,60 +485,3 @@ export const ProfileView = ({
     </div>
   );
 };
-
-/* ── 테마 토글 행 서브컴포넌트 ─────────────────────────────────── */
-function ThemeToggleRow({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle: () => void }) {
-  const isDark = theme === 'dark';
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        {/* 아이콘 */}
-        {isDark ? (
-          <svg className="w-4 h-4" style={{ color: '#BAC4D1' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        ) : (
-          <svg className="w-4 h-4" style={{ color: '#F59E0B' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M18.364 18.364l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
-          </svg>
-        )}
-        <div>
-          <p className="text-sm font-bold text-white">
-            {isDark ? '다크 모드' : '라이트 모드'}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-            {isDark ? '어두운 화면' : '밝은 화면'}
-          </p>
-        </div>
-      </div>
-
-      {/* iOS 스타일 토글 스위치 / iOS-style toggle switch */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="relative shrink-0 transition-all duration-300"
-        style={{
-          width: 44,
-          height: 26,
-          borderRadius: 13,
-          background: isDark ? '#1A2232' : '#00E676',
-          border: `2px solid ${isDark ? '#222A3A' : '#00C864'}`,
-        }}
-        aria-label="테마 변경"
-      >
-        <span
-          className="absolute top-0.5 transition-all duration-300"
-          style={{
-            width: 18,
-            height: 18,
-            borderRadius: '50%',
-            background: isDark ? '#626B7A' : '#FFFFFF',
-            left: isDark ? 2 : 20,
-          }}
-        />
-      </button>
-    </div>
-  );
-}
