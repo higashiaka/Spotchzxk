@@ -53,3 +53,19 @@ export const avatarColor = (name: string): string => {
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 };
+
+export const priceColorClass = (pct: number): string =>
+  pct > 0 ? 'tone-positive' : pct < 0 ? 'tone-negative' : 'tone-flat';
+
+export const tradeColorClass = (type: 'buy' | 'sell'): string =>
+  type === 'buy' ? 'trade-buy' : 'trade-sell';
+
+export const tradeBadgeClass = (type: 'buy' | 'sell'): string =>
+  type === 'buy' ? 'trade-buy-badge' : 'trade-sell-badge';
+
+export const avatarColorClass = (name: string, hasImage?: boolean): string => {
+  if (hasImage) return 'avatar-transparent';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return `avatar-color-${Math.abs(hash) % AVATAR_COLORS.length}`;
+};
