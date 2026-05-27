@@ -263,7 +263,7 @@ export const ProfileView = ({
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar">
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
       {/* 프로필 카드: 아바타, 이름 편집, 등급 배지, 로그아웃 버튼
           Profile card: avatar, name editing, grade badge, logout button */}
       <div className="rounded-2xl border p-5 mb-4 flex items-center gap-4"

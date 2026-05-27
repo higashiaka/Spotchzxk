@@ -121,7 +121,7 @@ export const HomeView = ({
         </a>
       )}
 
-      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
+      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
 
         {/* 내 투자 요약 / My investment summary */}
         <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>
@@ -160,7 +160,7 @@ export const HomeView = ({
           </div>
           {user && holdings.length > 0 ? (
             <>
-              <div className="space-y-3 mb-3 max-h-[188px] overflow-y-auto pr-1 hide-scrollbar">
+              <div className="space-y-3 mb-3 max-h-[188px] overflow-y-auto pr-1 hide-scrollbar touch-pan-y">
                 {holdings.map(({ streamer: s, qty, value, pct }) => (
                   <div key={s.id} className="flex items-center gap-3 cursor-pointer"
                     onClick={() => onSelect(s)}>
@@ -259,7 +259,7 @@ export const HomeView = ({
               </button>
             )}
           </div>
-          <div className="max-h-[200px] overflow-y-auto hide-scrollbar space-y-2.5">
+          <div className="max-h-[200px] overflow-y-auto hide-scrollbar space-y-2.5 touch-pan-y">
             {liveTrades.length === 0 ? (
               <p className="text-xs py-2" style={{ color: 'var(--text-dim)' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
@@ -358,7 +358,7 @@ export const HomeView = ({
               닫기
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
+          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24 touch-pan-y">
             {liveTrades.length === 0 ? (
               <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
@@ -413,7 +413,7 @@ export const HomeView = ({
               닫기
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
+          <div className="flex-1 overflow-y-auto hide-scrollbar pb-24 touch-pan-y">
             {history.length === 0 ? (
               <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
                 주문 내역이 없습니다
