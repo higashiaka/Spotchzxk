@@ -242,9 +242,9 @@ export const HomeView = ({
         )}
 
         {/* 실시간 거래 피드 (최근 10건, 스크롤 가능) / Live trade feed (most recent 10, scrollable) */}
-        <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+        <div className="px-4 pt-4 pb-3 min-w-0 overflow-hidden" style={{ borderBottom: '1px solid #222A3A' }}>
+          <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <p className="text-sm font-bold text-white">실시간 거래 피드</p>
               <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                 style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
@@ -254,12 +254,12 @@ export const HomeView = ({
             </div>
             {liveTrades.length > 0 && (
               <button type="button" onClick={() => setShowTradeFeed(true)}
-                className="text-xs" style={{ color: 'var(--text-dim)' }}>
+                className="text-xs shrink-0" style={{ color: 'var(--text-dim)' }}>
                 더보기 ›
               </button>
             )}
           </div>
-          <div className="max-h-[200px] overflow-y-auto hide-scrollbar space-y-2.5 touch-pan-y">
+          <div className="max-h-[200px] overflow-y-auto overflow-x-hidden hide-scrollbar space-y-2.5 touch-pan-y">
             {liveTrades.length === 0 ? (
               <p className="text-xs py-2" style={{ color: 'var(--text-dim)' }}>
                 대기 중... (시스템 내 거래가 실시간으로 표시됩니다)
@@ -270,10 +270,10 @@ export const HomeView = ({
                 const stock = streamers.find(s => s.id === trade.streamerId);
                 return (
                   <div key={idx}
-                    className={`flex items-center justify-between text-xs py-1 rounded${stock ? ' cursor-pointer hover:bg-white/5 -mx-1 px-1' : ''}`}
+                    className={`flex items-center justify-between gap-2 w-full min-w-0 text-xs py-1 rounded${stock ? ' cursor-pointer hover:bg-white/5 px-1' : ''}`}
                     onClick={() => { if (stock) onSelect(stock); }}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-bold truncate text-white" style={{ maxWidth: '100px' }}>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="font-bold truncate text-white min-w-0">
                         {trade.streamerName}
                       </span>
                       <span className="px-1 py-0.5 rounded text-[10px] font-bold shrink-0"
@@ -281,9 +281,9 @@ export const HomeView = ({
                         {isBuy ? '매수' : '매도'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>{trade.quantity}주</span>
-                      <span className="font-mono font-bold w-16 text-right" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
+                    <div className="flex items-center justify-end gap-2 shrink-0 min-w-0 max-w-[55%]">
+                      <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>{trade.quantity}주</span>
+                      <span className="font-mono font-bold w-16 max-w-16 text-right shrink-0 truncate" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
                         {fmt(trade.price)}
                       </span>
                     </div>
