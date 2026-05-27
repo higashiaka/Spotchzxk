@@ -24,6 +24,7 @@ import { ChartView } from './components/rankings/ChartView';
 import { OrderView } from './components/order/OrderView';
 import { ShopView } from './components/shop/ShopView';
 import { HoldingsView } from './components/holdings/HoldingsView';
+import { SettingsView } from './components/settings/SettingsView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
 const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'shop', 'profile'];
@@ -364,8 +365,8 @@ function App() {
 
   const prepareMobileRouteMotion = useCallback((targetTab: AppTab) => {
     if (isDesktopLayout) return;
-    const activeIsStacked = activeTab === 'order' || activeTab === 'holdings';
-    const targetIsStacked = targetTab === 'order' || targetTab === 'holdings';
+    const activeIsStacked = activeTab === 'order' || activeTab === 'holdings' || activeTab === 'settings';
+    const targetIsStacked = targetTab === 'order' || targetTab === 'holdings' || targetTab === 'settings';
 
     if (activeIsStacked && !targetIsStacked) {
       setMobileRouteMotion('from-left');
@@ -542,6 +543,11 @@ function App() {
     [handleGoBack],
   );
 
+  const handleBackFromSettings = useCallback(
+    () => handleGoBack({ tab: 'profile', streamerId: null }),
+    [handleGoBack],
+  );
+
   /** 최근 본 종목에서 특정 항목 제거
    *  Removes a specific entry from the recently viewed list */
   const handleRemoveRecent = (id: string) => {
@@ -644,6 +650,10 @@ function App() {
           onBack={handleBackFromHoldings}
         />
       );
+    }
+
+    if (tab === 'settings') {
+      return <SettingsView onBack={handleBackFromSettings} />;
     }
 
     return <Sidebar activeTab="profile" {...sidebarProps} />;
