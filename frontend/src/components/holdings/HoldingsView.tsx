@@ -20,6 +20,7 @@ export const HoldingsView = ({
   history,
   onNavigate,
   onSelect,
+  onBack,
 }: {
   /** 포트폴리오 데이터 (잔고·보유주식·평단가) / Portfolio data (balance, shares, avgPrices) */
   portfolio: any;
@@ -31,6 +32,7 @@ export const HoldingsView = ({
   onNavigate: (tab: AppTab) => void;
   /** 종목 선택 → 시세 상세로 이동하는 핸들러 / Handler to open stock detail in prices tab */
   onSelect: (s: Stock) => void;
+  onBack: () => void;
 }) => {
   /** 현재 정렬 기준 / Currently selected sort key */
   const [sortKey, setSortKey] = useState<SortKey>('recent');
@@ -96,7 +98,7 @@ export const HoldingsView = ({
       >
         <button
           type="button"
-          onClick={() => onNavigate('home')}
+          onClick={onBack}
           className="flex items-center gap-1.5 text-sm font-bold transition-colors hover:opacity-70"
           style={{ color: 'var(--text-dim)' }}
         >

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { PointerEvent } from 'react';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
@@ -27,6 +27,7 @@ import { HoldingsView } from './components/holdings/HoldingsView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
 const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'shop', 'profile'];
+type ScreenSnapshot = { tab: AppTab; streamerId: string | null };
 
 /** 앱 최상위 컴포넌트.
  *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
@@ -43,6 +44,7 @@ function App() {
   const streamers = useStocks();
   /** 현재 활성 탭 / Currently active tab */
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [screenHistory, setScreenHistory] = useState<ScreenSnapshot[]>([]);
   const swipeViewportRef = useRef<HTMLDivElement | null>(null);
   const swipeStartRef = useRef({ x: 0, y: 0, tabIndex: 0, pointerId: -1, horizontal: false });
   const [swipeViewportWidth, setSwipeViewportWidth] = useState(() => window.innerWidth);
@@ -295,18 +297,59 @@ function App() {
     return portfolio.balance + held;
   }, [portfolio, streamers]);
 
+  const currentScreen = useMemo<ScreenSnapshot>(() => ({
+    tab: activeTab,
+    streamerId: selectedStreamer?.id ?? null,
+  }), [activeTab, selectedStreamer?.id]);
+
+  const sameScreen = useCallback(
+    (a: ScreenSnapshot, b: ScreenSnapshot) =>
+      a.tab === b.tab && a.streamerId === b.streamerId,
+    [],
+  );
+
+  const pushCurrentScreen = useCallback(() => {
+    const snapshot = currentScreen;
+    setScreenHistory(prev => {
+      if (prev.length > 0 && sameScreen(prev[prev.length - 1], snapshot)) return prev;
+      return [...prev, snapshot].slice(-20);
+    });
+  }, [currentScreen, sameScreen]);
+
+  const restoreScreen = useCallback((snapshot: ScreenSnapshot) => {
+    const streamer = snapshot.streamerId
+      ? streamers.find(s => s.id === snapshot.streamerId) ?? null
+      : null;
+    setSelectedStreamer(streamer);
+    setActiveTab(snapshot.tab);
+  }, [streamers]);
+
+  const handleGoBack = useCallback((fallback: ScreenSnapshot) => {
+    const next = [...screenHistory];
+    let target = next.pop() ?? fallback;
+
+    while (next.length > 0 && sameScreen(target, currentScreen)) {
+      target = next.pop() ?? fallback;
+    }
+
+    setScreenHistory(next);
+    restoreScreen(target);
+  }, [currentScreen, restoreScreen, sameScreen, screenHistory]);
+
   /** 종목 선택 핸들러: 가격 탭으로 이동 + 최근 본 목록 갱신 (최대 10개)
    *  Stock selection handler: navigates to prices tab and updates recently viewed list (max 10) */
-  const handleSelectStreamer = (s: Stock) => {
+  const handleSelectStreamer = useCallback((s: Stock) => {
+    pushCurrentScreen();
     setSelectedStreamer(s);
     setActiveTab('prices');
     setRecentlyViewedIds(prev => [s.id, ...prev.filter(id => id !== s.id)].slice(0, 10));
-  };
+  }, [pushCurrentScreen]);
 
-  const handleNavigate = (tab: AppTab) => {
+  const handleNavigate = useCallback((tab: AppTab) => {
+    pushCurrentScreen();
     if (tab === 'prices') setSelectedStreamer(null);
     setActiveTab(tab);
-  };
+  }, [pushCurrentScreen]);
 
   const activeSwipeIndex = Math.max(0, SWIPE_TABS.indexOf(activeTab));
   const isSwipeTab = SWIPE_TABS.includes(activeTab);
@@ -362,7 +405,9 @@ function App() {
     swipeStartRef.current.pointerId = -1;
 
     if (nextIndex !== start.tabIndex) {
-      handleNavigate(SWIPE_TABS[nextIndex]);
+      const nextTab = SWIPE_TABS[nextIndex];
+      if (nextTab === 'prices') setSelectedStreamer(null);
+      setActiveTab(nextTab);
     }
   };
 
@@ -373,10 +418,39 @@ function App() {
     swipeStartRef.current.horizontal = false;
   };
 
-  const handleOrderFromDetail = (type: 'buy' | 'sell') => {
+  const handleOrderFromDetail = useCallback((type: 'buy' | 'sell') => {
+    pushCurrentScreen();
     setInitialOrderType(type);
     setActiveTab('order');
-  };
+  }, [pushCurrentScreen]);
+
+  const handleSelectStreamerForPrices = useCallback((s: Stock | null) => {
+    if (s) {
+      handleSelectStreamer(s);
+      return;
+    }
+    setSelectedStreamer(null);
+  }, [handleSelectStreamer]);
+
+  const handleSelectStreamerForOrder = useCallback((s: Stock) => {
+    pushCurrentScreen();
+    setSelectedStreamer(s);
+  }, [pushCurrentScreen]);
+
+  const handleBackFromPrices = useCallback(
+    () => handleGoBack({ tab: 'prices', streamerId: null }),
+    [handleGoBack],
+  );
+
+  const handleBackFromOrder = useCallback(
+    () => handleGoBack({ tab: 'prices', streamerId: selectedStreamer?.id ?? null }),
+    [handleGoBack, selectedStreamer?.id],
+  );
+
+  const handleBackFromHoldings = useCallback(
+    () => handleGoBack({ tab: 'home', streamerId: null }),
+    [handleGoBack],
+  );
 
   /** 최근 본 종목에서 특정 항목 제거
    *  Removes a specific entry from the recently viewed list */
@@ -440,7 +514,8 @@ function App() {
         <PricesView
           streamers={streamers}
           selectedStreamer={selectedStreamer}
-          onSelectStreamer={s => s ? handleSelectStreamer(s) : setSelectedStreamer(null)}
+          onSelectStreamer={handleSelectStreamerForPrices}
+          onBack={handleBackFromPrices}
           onOrder={handleOrderFromDetail}
           liveTrades={liveTrades}
         />
@@ -458,7 +533,8 @@ function App() {
           selectedStreamer={selectedStreamer}
           user={user}
           initialOrderType={initialOrderType}
-          onSelectStreamer={s => setSelectedStreamer(s)}
+          onSelectStreamer={handleSelectStreamerForOrder}
+          onBack={handleBackFromOrder}
         />
       );
     }
@@ -475,6 +551,7 @@ function App() {
           history={history ?? []}
           onNavigate={handleNavigate}
           onSelect={handleSelectStreamer}
+          onBack={handleBackFromHoldings}
         />
       );
     }

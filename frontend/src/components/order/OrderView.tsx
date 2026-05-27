@@ -11,7 +11,7 @@ import { OrderForm } from './OrderForm';
  *  Shows OrderForm when a stock is selected; otherwise shows
  *  the stock list sorted by trading volume */
 export const OrderView = ({
-  streamers, selectedStreamer, user, initialOrderType, onSelectStreamer,
+  streamers, selectedStreamer, user, initialOrderType, onSelectStreamer, onBack,
 }: {
   /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
@@ -23,6 +23,7 @@ export const OrderView = ({
   initialOrderType: 'buy' | 'sell';
   /** 종목 선택 핸들러 / Stock selection handler */
   onSelectStreamer: (s: Stock) => void;
+  onBack: () => void;
 }) => {
   /** 주문 수량 문자열 상태 / Order quantity as string state */
   const [qtyStr, setQtyStr] = useState('1');
@@ -37,30 +38,44 @@ export const OrderView = ({
   }, [initialOrderType]);
 
   // 종목이 변경되면 수량을 1로 초기화 / Reset quantity to 1 when the selected stock changes
-  if (selectedStreamer && selectedStreamer.id !== prevId) {
+  useEffect(() => {
+    if (!selectedStreamer || selectedStreamer.id === prevId) return;
     setPrevId(selectedStreamer.id);
     setQtyStr('1');
-  }
+  }, [selectedStreamer, prevId]);
+
+  const sorted = useMemo(() => [...streamers].sort((a, b) => b.totalVolume - a.totalVolume), [streamers]);
 
   // 종목이 선택된 경우 OrderForm 렌더링 / Render OrderForm when a stock is selected
   if (selectedStreamer) {
     return (
-      <div className="h-full overflow-hidden surface-sidebar">
-        <OrderForm
-          streamer={selectedStreamer}
-          user={user}
-          qtyStr={qtyStr}
-          setQtyStr={setQtyStr}
-          orderType={orderType}
-          setOrderType={setOrderType}
-        />
+      <div className="h-full flex flex-col overflow-hidden surface-sidebar">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-4 py-2.5 shrink-0 text-sm font-bold transition-colors hover:opacity-70"
+          style={{ color: 'var(--text-dim)', borderBottom: '1px solid #222A3A', background: 'var(--bg-sidebar)' }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+          이전 화면
+        </button>
+        <div className="flex-1 overflow-hidden">
+          <OrderForm
+            streamer={selectedStreamer}
+            user={user}
+            qtyStr={qtyStr}
+            setQtyStr={setQtyStr}
+            orderType={orderType}
+            setOrderType={setOrderType}
+          />
+        </div>
       </div>
     );
   }
 
   /** 거래량 내림차순 정렬된 종목 목록 / Stocks sorted by volume descending */
-  const sorted = useMemo(() => [...streamers].sort((a, b) => b.totalVolume - a.totalVolume), [streamers]);
-
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar surface-sidebar">
       <p className="text-white font-bold text-sm mb-4">주문할 종목을 선택하세요</p>
