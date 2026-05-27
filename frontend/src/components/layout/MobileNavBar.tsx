@@ -29,14 +29,14 @@ export const MobileNavBar = ({
 }) => {
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 flex z-50"
-      style={{ background: '#131924CC', backdropFilter: 'blur(8px)', borderTop: '1px solid #222A3A' }}>
+      style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(8px)', borderTop: '1px solid var(--border-primary)' }}>
       {NAV_ITEMS.map(({ tab, label, path }) => {
         const active = activeTab === tab;
         return (
           <button key={tab} type="button" onClick={() => onNavigate(tab)}
             className="flex-1 py-3 flex flex-col items-center gap-1 transition-colors"
-            // 활성 탭은 녹색, 비활성은 회색 / Active tab is green, inactive is gray
-            style={{ color: active ? '#00E676' : '#626B7A' }}>
+            // 활성 탭은 녹색, 비활성은 희미한 색 / Active tab is green, inactive is dimmed
+            style={{ color: active ? '#00E676' : 'var(--text-dim)' }}>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={path} />
             </svg>

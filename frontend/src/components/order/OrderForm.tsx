@@ -67,7 +67,7 @@ export const OrderForm = ({
 
   if (portfolioLoading) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-[#626B7A]">
+      <div className="h-full flex items-center justify-center text-sm text-[var(--text-dim)]">
         포트폴리오 불러오는 중...
       </div>
     );
@@ -85,25 +85,25 @@ export const OrderForm = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar bg-[#0B0E14] text-white">
+    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar text-white" style={{ background: 'var(--bg-sidebar)' }}>
       {/* 매수/매도 탭 전환 / Buy/sell tab toggle */}
-      <div className="rounded-xl p-1 flex mb-4 bg-[#131924]">
+      <div className="rounded-xl p-1 flex mb-4" style={{ background: 'var(--bg-card-secondary)' }}>
         <button type="button" onClick={() => setOrderType('buy')}
           className="flex-1 py-2 rounded-lg text-xs font-extrabold transition-all"
-          style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : 'transparent', color: orderType === 'buy' ? '#fff' : '#626B7A' }}>
+          style={{ backgroundColor: orderType === 'buy' ? '#FF5252' : 'transparent', color: orderType === 'buy' ? '#fff' : 'var(--text-dim)' }}>
           매수
         </button>
         <button type="button" onClick={() => setOrderType('sell')}
           className="flex-1 py-2 rounded-lg text-xs font-extrabold transition-all"
-          style={{ backgroundColor: orderType === 'sell' ? '#3D8BFF' : 'transparent', color: orderType === 'sell' ? '#fff' : '#626B7A' }}>
+          style={{ backgroundColor: orderType === 'sell' ? '#3D8BFF' : 'transparent', color: orderType === 'sell' ? '#fff' : 'var(--text-dim)' }}>
           매도
         </button>
       </div>
 
       {/* 선택 종목 표시 / Selected stock display */}
       <div className="mb-4">
-        <p className="text-[10px] font-bold mb-1 text-[#8491A5]">선택 종목</p>
-        <div className="rounded-xl border px-3 py-2 bg-[#131924] border-[#222A3A]">
+        <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">선택 종목</p>
+        <div className="rounded-xl border px-3 py-2" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <p className="text-white font-bold text-sm">
             {streamer.name}
             <span className="font-mono ml-2" style={{ color: priceColor(pct) }}>
@@ -115,18 +115,18 @@ export const OrderForm = ({
 
       {/* 현재가 (시장가 기준) / Current price (market order basis) */}
       <div className="mb-4">
-        <p className="text-[10px] font-bold mb-1 text-[#8491A5]">현재가 (체결 기준)</p>
-        <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center bg-[#131924] border-[#222A3A]">
+        <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">현재가 (체결 기준)</p>
+        <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <p className="font-mono font-bold text-base" style={{ color: priceColor(pct) }}>
             {fmt(currentPrice)}
           </p>
-          <span className="text-[10px] text-[#626B7A]">시장가</span>
+          <span className="text-[10px] text-[var(--text-dim)]">시장가</span>
         </div>
       </div>
 
       {/* 주문 수량 입력 / Order quantity input */}
       <div className="mb-3">
-        <p className="text-[10px] font-bold mb-1 text-[#8491A5]">주문 수량 (주)</p>
+        <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">주문 수량 (주)</p>
         <input
           type="number"
           value={qtyStr}
@@ -134,7 +134,7 @@ export const OrderForm = ({
           min="1"
           disabled={!user}
           placeholder={!user ? '로그인 필요' : '수량 입력'}
-          className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none bg-[#131924] border-[#222A3A] disabled:opacity-50"
+          className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}
         />
       </div>
 
@@ -142,28 +142,28 @@ export const OrderForm = ({
       <div className="grid grid-cols-4 gap-2 mb-4">
         {([0.1, 0.25, 0.5, 1.0] as const).map((r) => (
           <button key={r} type="button" onClick={() => setQuick(r)}
-            className="rounded-lg py-1.5 text-[11px] font-bold bg-[#1A2232] text-[#BAC4D1] hover:bg-[#222A3A] transition-colors">
+            className="rounded-lg py-1.5 text-[11px] font-bold transition-colors" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
             {r * 100}%
           </button>
         ))}
       </div>
 
       {/* 주문 요약 (총액 / 예상 잔액 / 보유량) / Order summary (total / estimated balance / holdings) */}
-      <div className="pt-3 mb-5 border-t border-[#222A3A]">
+      <div className="pt-3 mb-5 border-t" style={{ borderColor: 'var(--border-primary)' }}>
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs text-[#8491A5]">주문 총액</span>
+          <span className="text-xs text-[var(--text-muted)]">주문 총액</span>
           <span className="font-mono text-lg font-extrabold"
             style={{ color: orderType === 'buy' ? '#FF5252' : '#3D8BFF' }}>
             {fmt(totalCost)}
           </span>
         </div>
         <div className="flex justify-between items-center mb-1">
-          <span className="text-xs text-[#8491A5]">주문 후 예상 잔액</span>
+          <span className="text-xs text-[var(--text-muted)]">주문 후 예상 잔액</span>
           <span className="text-xs font-mono font-bold text-white">{fmt(Math.max(0, postBalance))}</span>
         </div>
         {orderType === 'sell' && (
           <div className="flex justify-between items-center">
-            <span className="text-xs text-[#8491A5]">현재 보유량</span>
+            <span className="text-xs text-[var(--text-muted)]">현재 보유량</span>
             <span className="text-xs font-mono font-bold text-white">{held}주</span>
           </div>
         )}

@@ -17,7 +17,7 @@ export const DesktopTabBar = ({
   return (
     <div
       className="hidden md:flex items-center px-5 shrink-0"
-      style={{ background: '#0E121A', borderBottom: '1px solid #222A3A' }}
+      style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border-primary)' }}
     >
       <div className="flex items-center">
         {tabs.map(({ tab, label }) => {
@@ -30,7 +30,7 @@ export const DesktopTabBar = ({
               className="py-4 px-5 text-sm font-bold border-b-2 transition-colors"
               style={{
                 borderBottomColor: active ? '#00E676' : 'transparent',
-                color: active ? '#00E676' : '#626B7A',
+                color: active ? '#00E676' : 'var(--text-dim)',
               }}
             >
               {label}

@@ -36,13 +36,13 @@ export const HoldingCard = ({
     return (
       <div
         className="rounded-xl border p-4 cursor-pointer"
-        style={{ background: '#131924', borderColor: '#222A3A' }}
+        style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}
         onClick={onClick}
       >
         <div className="flex justify-between items-start">
           <div>
             <p className="text-white text-sm font-bold">{streamer.name}</p>
-            <p className="text-xs mt-1" style={{ color: '#8491A5' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               {qty}주 · 평단 {fmt(avgPrice)}
             </p>
           </div>
@@ -75,7 +75,7 @@ export const HoldingCard = ({
       {/* 종목명 및 보유 수량 / Stock name and held quantity */}
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-bold truncate">{streamer.name}</p>
-        <p className="text-xs mt-0.5" style={{ color: '#626B7A' }}>{qty}주</p>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{qty}주</p>
       </div>
 
       {/* 평가금액 및 수익률 / Market value and return rate */}
