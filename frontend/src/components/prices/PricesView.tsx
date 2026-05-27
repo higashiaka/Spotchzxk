@@ -12,7 +12,7 @@ import { StockDetail } from './StockDetail';
  *  Shows a searchable stock list when no stock is selected;
  *  switches to StockDetail when a stock is selected */
 export const PricesView = ({
-  streamers, selectedStreamer, onSelectStreamer, onOrder, liveTrades,
+  streamers, selectedStreamer, onSelectStreamer, onBack, onOrder, liveTrades,
 }: {
   /** 전체 종목 목록 / Full list of stocks */
   streamers: Stock[];
@@ -20,6 +20,7 @@ export const PricesView = ({
   selectedStreamer: Stock | null;
   /** 종목 선택/해제 핸들러 / Handler to select or deselect a stock */
   onSelectStreamer: (s: Stock | null) => void;
+  onBack: () => void;
   /** 주문 화면으로 이동하는 핸들러 / Handler to navigate to the order screen */
   onOrder: (type: 'buy' | 'sell') => void;
   /** 실시간 체결 내역 (StockDetail로 전달) / Live trades passed down to StockDetail */
@@ -43,14 +44,14 @@ export const PricesView = ({
         {/* 목록으로 돌아가는 뒤로가기 버튼 / Back button to return to the stock list */}
         <button
           type="button"
-          onClick={() => onSelectStreamer(null)}
+          onClick={onBack}
           className="flex items-center gap-1.5 px-4 py-2.5 shrink-0 text-sm font-bold transition-colors hover:opacity-70"
           style={{ color: 'var(--text-dim)', borderBottom: '1px solid #222A3A', background: 'var(--bg-sidebar)' }}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
           </svg>
-          시세 목록
+          이전 화면
         </button>
         <div className="flex-1 overflow-hidden">
           <StockDetail
