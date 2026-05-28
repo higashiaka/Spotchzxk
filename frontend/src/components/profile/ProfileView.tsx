@@ -295,7 +295,7 @@ export const ProfileView = ({
             <p className="text-white font-bold truncate">게스트 투자자</p>
           ) : isEditingName ? (
             /* 닉네임 편집 인라인 폼 / Inline nickname edit form */
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0 w-full">
               <input
                 autoFocus
                 value={nameInput}
@@ -304,7 +304,7 @@ export const ProfileView = ({
                 maxLength={20}
                 placeholder="닉네임 입력"
                 aria-label="닉네임 변경"
-                className="text-white font-bold bg-transparent border-b outline-none w-full min-w-0"
+                className="text-white font-bold bg-transparent border-b outline-none flex-1 min-w-0"
                 style={{ borderColor: '#00E676' }}
                 disabled={nameUpdating}
               />
@@ -317,12 +317,12 @@ export const ProfileView = ({
             </div>
           ) : (
             /* 이름 표시 + 호버 시 편집 버튼 / Name display with edit button on hover */
-            <div className="flex items-start gap-1.5 group min-w-0">
-              <p className="text-white font-bold min-w-0 break-words leading-snug md:line-clamp-2 md:whitespace-normal truncate">
+            <div className="flex items-center gap-1.5 group min-w-0">
+              <p className="text-white font-bold flex-1 min-w-0 truncate leading-snug">
                 {currentName}
               </p>
               <button type="button" onClick={startEditName}
-                className="shrink-0 mt-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                className="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
                 title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
                 <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
