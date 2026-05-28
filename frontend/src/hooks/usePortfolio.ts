@@ -12,6 +12,9 @@ export interface Portfolio {
   avgPrices: Record<string, number>;
   /** 누적 수령 배당금 합계 / Total dividends received to date */
   dividendTotal: number;
+  displayName?: string | null;
+  realizedProfit?: number;
+  rankingNicknamePublic?: boolean;
   /** 오늘 남은 포트폴리오 초기화 횟수 / Remaining portfolio reset count for today */
   remainingResets: number;
 }
@@ -25,7 +28,7 @@ export const usePortfolio = (userId: string | undefined): UseQueryResult<Portfol
   return useQuery({
     queryKey: ['portfolio', userId],
     queryFn: async (): Promise<Portfolio> => {
-      if (!userId) return { balance: 0, shares: {} };
+      if (!userId) return { balance: 0, shares: {}, avgPrices: {}, dividendTotal: 0, remainingResets: 0 };
       const res = await apiFetch('/api/portfolio');
       if (!res.ok) throw new Error('포트폴리오 조회 실패');
       return res.json();

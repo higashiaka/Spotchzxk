@@ -653,7 +653,7 @@ function App() {
     }
 
     if (tab === 'settings') {
-      return <SettingsView onBack={handleBackFromSettings} />;
+      return <SettingsView userId={user?.uid} portfolio={portfolio} onBack={handleBackFromSettings} />;
     }
 
     return <Sidebar activeTab="profile" {...sidebarProps} />;

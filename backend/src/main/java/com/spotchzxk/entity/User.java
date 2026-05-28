@@ -22,6 +22,17 @@ public class User {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal coinBalance;
 
+    @Column(name = "display_name", length = 20)
+    private String displayName;
+
+    @Column(name = "realized_profit", nullable = false, precision = 14, scale = 2)
+    @Builder.Default
+    private BigDecimal realizedProfit = BigDecimal.ZERO;
+
+    @Column(name = "ranking_nickname_public", nullable = false)
+    @Builder.Default
+    private boolean rankingNicknamePublic = false;
+
     @Column(nullable = false)
     @Builder.Default
     private int resetCount = 0;

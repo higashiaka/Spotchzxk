@@ -7,6 +7,7 @@ import com.spotchzxk.service.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -27,7 +28,7 @@ public class StockController {
     }
 
     @PostMapping
-    public ResponseEntity<?> addStock(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> addStock(@AuthenticationPrincipal String uid, @RequestBody Map<String, String> body) {
         String channelUrl = body.getOrDefault("channelUrl", "").trim();
 
         if (channelUrl.isBlank()) {
@@ -63,7 +64,7 @@ public class StockController {
         }
 
         try {
-            Optional<Stock> result = stockService.addStockIfNew(channelId);
+            Optional<Stock> result = stockService.addStockIfNew(uid, channelId);
 
             if (result.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -83,6 +84,9 @@ public class StockController {
                     .body(Map.of("error", e.getMessage()));
         } catch (InsufficientFollowerCountException e) {
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
         }
     }
