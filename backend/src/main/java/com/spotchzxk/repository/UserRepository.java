@@ -11,4 +11,7 @@ import java.util.List;
 public interface UserRepository extends JpaRepository<User, String> {
     @Query(value = "SELECT * FROM users WHERE is_bot = 0 ORDER BY realized_profit DESC LIMIT 50", nativeQuery = true)
     List<User> findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+
+    @Query(value = "SELECT * FROM users WHERE is_bot = 0 ORDER BY dividend_total DESC LIMIT 50", nativeQuery = true)
+    List<User> findTop50ByIsBotFalseOrderByDividendTotalDesc();
 }

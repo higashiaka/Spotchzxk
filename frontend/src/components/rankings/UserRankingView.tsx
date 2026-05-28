@@ -1,33 +1,67 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { avatarColor, fmt, priceColor } from '../../utils';
 
+type RankingType = 'realized' | 'dividend';
+
 interface UserRankingEntry {
   rank: number;
   displayName: string;
-  realizedProfit: number;
+  value: number;
+  realizedProfit?: number;
+  dividendTotal?: number;
 }
 
 export function UserRankingView() {
+  const [rankingType, setRankingType] = useState<RankingType>('realized');
   const {
     data: rankings = [],
     isLoading,
   } = useQuery({
-    queryKey: ['rankings'],
+    queryKey: ['rankings', rankingType],
     queryFn: async (): Promise<UserRankingEntry[]> => {
-      const res = await apiFetch('/api/rankings');
+      const res = await apiFetch(`/api/rankings?type=${rankingType}`);
       if (!res.ok) throw new Error('랭킹 조회 실패');
       return res.json();
     },
   });
 
+  const valueLabel = rankingType === 'dividend' ? '배당수익' : '실현손익';
+  const categories: { key: RankingType; label: string }[] = [
+    { key: 'realized', label: '실현손익' },
+    { key: 'dividend', label: '배당수익' },
+  ];
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid #222A3A' }}>
+      <div className="px-4 py-4 shrink-0">
         <h2 className="text-lg font-black text-white">유저 랭킹</h2>
         <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
-          누적 실현손익 상위 50명
+          {valueLabel} 상위 50명
         </p>
+      </div>
+
+      <div
+        className="flex gap-2 px-4 py-3 shrink-0 overflow-x-auto hide-scrollbar"
+        style={{ borderTop: '1px solid #222A3A', borderBottom: '1px solid #222A3A' }}
+      >
+        {categories.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setRankingType(key)}
+            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+            style={{
+              background: rankingType === key ? '#00E676' : 'var(--bg-card-secondary)',
+              color: rankingType === key ? 'var(--accent-foreground)' : 'var(--text-muted)',
+              border: '1px solid',
+              borderColor: rankingType === key ? '#00E676' : 'var(--border-primary)',
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div
@@ -36,7 +70,7 @@ export function UserRankingView() {
       >
         <span className="w-6 mr-3 text-center">#</span>
         <span className="flex-1">유저</span>
-        <span className="w-32 text-right">실현손익</span>
+        <span className="w-32 text-right">{valueLabel}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
@@ -51,7 +85,7 @@ export function UserRankingView() {
         ) : (
           rankings.map(entry => (
             <div
-              key={`${entry.rank}-${entry.displayName}`}
+              key={`${rankingType}-${entry.rank}-${entry.displayName}`}
               className="flex items-center px-4 py-3"
               style={{ borderBottom: '1px solid #1A2232' }}
             >
@@ -73,9 +107,9 @@ export function UserRankingView() {
               <div className="w-32 text-right shrink-0">
                 <p
                   className="text-sm font-bold font-mono"
-                  style={{ color: priceColor(entry.realizedProfit) }}
+                  style={{ color: priceColor(entry.value) }}
                 >
-                  {entry.realizedProfit >= 0 ? '+' : ''}{fmt(entry.realizedProfit)}
+                  {entry.value >= 0 ? '+' : ''}{fmt(entry.value)}
                 </p>
               </div>
             </div>

@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
@@ -20,8 +21,14 @@ public class RankingController {
     private final UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getRankings() {
-        var users = userRepository.findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+    public ResponseEntity<List<Map<String, Object>>> getRankings(
+            @RequestParam(defaultValue = "realized") String type
+    ) {
+        boolean dividendRanking = "dividend".equals(type);
+        var users = dividendRanking
+                ? userRepository.findTop50ByIsBotFalseOrderByDividendTotalDesc()
+                : userRepository.findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+
         List<Map<String, Object>> rankings = new ArrayList<>();
         for (int i = 0; i < users.size(); i++) {
             var user = users.get(i);
@@ -30,10 +37,19 @@ public class RankingController {
                             ? "트레이더"
                             : user.getDisplayName())
                     : "비공개";
+            BigDecimal realizedProfit = user.getRealizedProfit() != null
+                    ? user.getRealizedProfit()
+                    : BigDecimal.ZERO;
+            BigDecimal dividendTotal = user.getDividendTotal() != null
+                    ? user.getDividendTotal()
+                    : BigDecimal.ZERO;
+
             rankings.add(Map.of(
                     "rank", i + 1,
                     "displayName", displayName,
-                    "realizedProfit", user.getRealizedProfit() != null ? user.getRealizedProfit() : BigDecimal.ZERO
+                    "value", dividendRanking ? dividendTotal : realizedProfit,
+                    "realizedProfit", realizedProfit,
+                    "dividendTotal", dividendTotal
             ));
         }
         return ResponseEntity.ok(rankings);
