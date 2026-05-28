@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
+import { subscribeStomp } from '../../lib/stompClient';
 import { avatarColor, fmt, priceColor } from '../../utils';
 
 type RankingType = 'realized' | 'dividend';
@@ -15,6 +16,7 @@ interface UserRankingEntry {
 
 export function UserRankingView() {
   const [rankingType, setRankingType] = useState<RankingType>('realized');
+  const queryClient = useQueryClient();
   const {
     data: rankings = [],
     isLoading,
@@ -33,6 +35,14 @@ export function UserRankingView() {
     { key: 'realized', label: '실현손익' },
     { key: 'dividend', label: '배당수익' },
   ];
+
+  useEffect(() => {
+    const sub = subscribeStomp('/topic/rankings-reset', () => {
+      queryClient.invalidateQueries({ queryKey: ['rankings'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+    });
+    return () => sub.unsubscribe();
+  }, [queryClient]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
