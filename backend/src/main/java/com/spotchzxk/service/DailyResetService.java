@@ -26,7 +26,7 @@ public class DailyResetService {
      * Updates base_price (yesterday's close) to current_price,
      * and resets daily_volume to 0.
      */
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyReset() {
         log.info("Starting daily reset at midnight...");
@@ -38,10 +38,15 @@ public class DailyResetService {
         });
         stockRepository.saveAll(stocks);
 
-        userRepository.resetAllRankingStats();
+        int resetUsers = userRepository.resetAllRankingStats();
 
         // Broadcast the reset stocks list to all clients instantly
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
-        log.info("Daily reset completed successfully. Updated {} stocks.", stocks.size());
+        messagingTemplate.convertAndSend("/topic/rankings-reset", java.util.Map.of(
+                "resetAt", java.time.LocalDateTime.now().toString(),
+                "resetUsers", resetUsers
+        ));
+        log.info("Daily reset completed successfully. Updated {} stocks and reset {} users ranking stats.",
+                stocks.size(), resetUsers);
     }
 }
