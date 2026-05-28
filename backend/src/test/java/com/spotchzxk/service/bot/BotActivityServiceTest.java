@@ -115,24 +115,16 @@ class BotActivityServiceTest {
         Stock inactive = stock("inactive", false);
         Stock live = stock("live", true);
 
-        assertThat(service.baseScoreStock(live, Map.of(), Map.of()))
-                .isGreaterThan(service.baseScoreStock(inactive, Map.of(), Map.of()));
+        assertThat(service.baseScoreStock(live, Map.of()))
+                .isGreaterThan(service.baseScoreStock(inactive, Map.of()));
     }
 
     @Test
     void recentBotTradesReduceSelectionScore() {
         Stock stock = stock("stock-1", false);
 
-        assertThat(service.baseScoreStock(stock, Map.of(), Map.of("stock-1", 3L)))
-                .isLessThan(service.baseScoreStock(stock, Map.of(), Map.of()));
-    }
-
-    @Test
-    void recentUserTradesReduceInactivityScore() {
-        Stock stock = stock("stock-1", false);
-
-        assertThat(service.baseScoreStock(stock, Map.of("stock-1", 8L), Map.of()))
-                .isLessThan(service.baseScoreStock(stock, Map.of(), Map.of()));
+        assertThat(service.baseScoreStock(stock, Map.of("stock-1", 3L)))
+                .isLessThan(service.baseScoreStock(stock, Map.of()));
     }
 
     @Test
@@ -154,7 +146,6 @@ class BotActivityServiceTest {
         Stock picked = service.pickStockForBot(
                 "bot_activity_001",
                 List.of(unheldLive, held),
-                Map.of(),
                 Map.of()
         );
 
@@ -181,7 +172,6 @@ class BotActivityServiceTest {
         boolean handled = service.handleBotAssetRecovery(
                 "bot_activity_001",
                 List.of(held),
-                Map.of(),
                 Map.of()
         );
 
@@ -209,7 +199,6 @@ class BotActivityServiceTest {
         boolean handled = service.handleBotAssetRecovery(
                 "bot_activity_001",
                 List.of(stock("unused", false)),
-                Map.of(),
                 Map.of()
         );
 
