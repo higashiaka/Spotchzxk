@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN ranking_nickname_public BOOLEAN NOT NULL DEFAULT FALSE;

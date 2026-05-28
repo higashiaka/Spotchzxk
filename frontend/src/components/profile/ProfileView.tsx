@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { User, updateProfile } from 'firebase/auth';
+import { User } from 'firebase/auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
 import { fmt, grade } from '../../utils';
 import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { useHoldings } from '../../hooks/useHoldings';
+
+const NICKNAME_CHANGE_PRICE = 30_000_000;
+const STOCK_ADD_PRICE = 100_000_000;
 
 /** 프로필 화면 컴포넌트.
  *  미로그인 시 로그인 화면, 로그인 시 보유 주식·투자 요약·배당 내역·종목 추가·자금 초기화를 표시
@@ -49,6 +53,7 @@ export const ProfileView = ({
   /** 탭 이동 핸들러 / Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
+  const queryClient = useQueryClient();
   /** 사용자 등급 (총 자산 기준) / User grade derived from total assets */
   const userGrade = grade(totalAssets);
   /** 보유 주식 평가액 (총 자산 - 현금) / Evaluated holdings value (total assets minus cash) */
@@ -58,8 +63,8 @@ export const ProfileView = ({
   /** 보유 종목 수 (기본 종목 포함) / Number of held stocks (including defaults) */
   const { holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
-  /** Firebase displayName 변경 후 즉시 반영할 오버라이드 이름
-   *  Name override applied immediately after a Firebase displayName update */
+  /** DB displayName 변경 후 즉시 반영할 오버라이드 이름
+   *  Name override applied immediately after a backend displayName update */
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   /** 닉네임 편집 모드 여부 / Whether the nickname edit mode is active */
   const [isEditingName, setIsEditingName] = useState(false);
@@ -68,9 +73,10 @@ export const ProfileView = ({
   /** 닉네임 저장 요청 진행 중 여부 / Whether a nickname save request is in progress */
   const [nameUpdating, setNameUpdating] = useState(false);
 
-  /** 오버라이드 → Firebase displayName → 기본값 순으로 표시할 현재 이름
-   *  Display name resolved from: override → Firebase displayName → default */
-  const currentName = nameOverride ?? (user?.displayName || '트레이더');
+  /** 오버라이드 → DB displayName → 기본값 순으로 표시할 현재 이름
+   *  Display name resolved from: override → backend displayName → default */
+  const currentName = nameOverride ?? (portfolio?.displayName || '트레이더');
+  const cashBalance = Number(portfolio?.balance ?? 0);
 
   /** 닉네임 편집 모드 시작: 현재 이름으로 입력값을 초기화
    *  Starts nickname edit mode with the current name pre-filled */
@@ -86,19 +92,31 @@ export const ProfileView = ({
     setNameInput('');
   };
 
-  /** 닉네임 저장: Firebase updateProfile 호출 후 오버라이드 적용
-   *  Saves the nickname by calling Firebase updateProfile and applying the override */
+  /** 닉네임 저장: 서버에서 잔고 차감 후 DB displayName 변경
+   *  Saves the nickname via the server, which charges the user and updates the DB */
   const saveEditName = async () => {
     if (!user) return;
     const trimmed = nameInput.trim();
     if (!trimmed || trimmed === currentName) { cancelEditName(); return; }
+    if (cashBalance < NICKNAME_CHANGE_PRICE) {
+      alert(`잔액이 부족합니다. 닉네임 변경에는 ${fmt(NICKNAME_CHANGE_PRICE)}코인이 필요합니다.`);
+      return;
+    }
     setNameUpdating(true);
     try {
-      await updateProfile(user, { displayName: trimmed });
+      const res = await apiFetch('/api/profile/nickname', {
+        method: 'POST',
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || '닉네임 변경 실패');
+      }
       setNameOverride(trimmed);
       setIsEditingName(false);
-    } catch {
-      alert('이름 변경에 실패했습니다.');
+      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '이름 변경에 실패했습니다.');
     } finally {
       setNameUpdating(false);
     }
@@ -194,10 +212,15 @@ export const ProfileView = ({
       setTimeout(() => setAddStatus('idle'), 3000);
       return;
     }
+    if (cashBalance < STOCK_ADD_PRICE) {
+      setAddStatus('error');
+      setAddMsg(`잔액이 부족합니다. 종목 추가에는 ${fmt(STOCK_ADD_PRICE)}코인이 필요합니다.`);
+      setTimeout(() => setAddStatus('idle'), 3000);
+      return;
+    }
 
     setAddStatus('loading');
     try {
-      const { apiFetch } = await import('../../lib/api');
       const res = await apiFetch('/api/stocks', {
         method: 'POST',
         body: JSON.stringify({ channelUrl: addUrl.trim() }),
@@ -210,6 +233,7 @@ export const ProfileView = ({
         setAddStatus('ok');
         setAddMsg(`'${json.name}' 종목이 추가되었습니다.`);
         setAddUrl('');
+        queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
       }
     } catch {
       setAddStatus('error');
@@ -298,7 +322,7 @@ export const ProfileView = ({
               <p className="text-white font-bold truncate">{currentName}</p>
               <button type="button" onClick={startEditName}
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="이름 변경">
+                title={`이름 변경 (${fmt(NICKNAME_CHANGE_PRICE)}코인)`}>
                 <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                     d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -307,6 +331,11 @@ export const ProfileView = ({
             </div>
           )}
           <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
+          {!user.isAnonymous && (
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+              닉네임 변경권 {fmt(NICKNAME_CHANGE_PRICE)}코인
+            </p>
+          )}
           <div className="mt-2 flex gap-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full"
               style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
@@ -430,7 +459,7 @@ export const ProfileView = ({
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
-            치지직 채널 URL 또는 채널 ID를 입력하세요
+            치지직 채널 URL 또는 채널 ID를 입력하세요. 등록 비용 {fmt(STOCK_ADD_PRICE)}코인
           </p>
           <div className="space-y-2">
             <input

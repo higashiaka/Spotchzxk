@@ -178,6 +178,7 @@ public class TradeEngine {
         if (isBuy) {
             updateBoughtShare(share, qty, cost);
         } else {
+            updateRealizedProfit(user, share, qty, cost);
             updateSoldShare(share, qty);
         }
     }
@@ -202,6 +203,15 @@ public class TradeEngine {
         }
         share.setQuantity(newQty);
         userShareRepository.save(share);
+    }
+
+    private void updateRealizedProfit(User user, UserShare share, int qty, BigDecimal proceeds) {
+        BigDecimal avgBuyPrice = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
+        BigDecimal costBasis = avgBuyPrice.multiply(BigDecimal.valueOf(qty));
+        BigDecimal profit = proceeds.subtract(costBasis).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentProfit = user.getRealizedProfit() != null ? user.getRealizedProfit() : BigDecimal.ZERO;
+        user.setRealizedProfit(currentProfit.add(profit));
+        userRepository.save(user);
     }
 
     private void saveOrder(String userId, String channelId, boolean isBuy, int qty,

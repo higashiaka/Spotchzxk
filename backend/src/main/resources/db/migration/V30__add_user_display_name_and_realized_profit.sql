@@ -1,0 +1,3 @@
+ALTER TABLE users
+    ADD COLUMN display_name VARCHAR(20) NULL,
+    ADD COLUMN realized_profit DECIMAL(14, 2) NOT NULL DEFAULT 0;

@@ -2,13 +2,13 @@ import { useState } from 'react';
 
 /** localStorage 키: 사용자가 '다시 보지 않기'를 선택했는지 기록
  *  localStorage key used to track if the user has permanently dismissed the popup */
-const NOTICE_KEY = 'notice_dividend_price5_v1';
+const NOTICE_KEY = 'notice_update_v3';
 
-/** 앱 최초 진입 시 배당 정책 변경 사항을 안내하는 팝업 컴포넌트.
+/** 앱 최초 진입 시 업데이트 사항을 안내하는 팝업 컴포넌트.
  *  localStorage에 해제 기록이 없으면 표시되고,
  *  '다시 보지 않기'를 누르면 영구적으로 숨김 처리
  *
- *  Announcement popup that informs users of dividend policy changes on first visit.
+ *  Announcement popup that informs users of update changes on first visit.
  *  Shown unless already dismissed in localStorage;
  *  permanently hidden when the user clicks "Don't show again" */
 export default function AnnouncementPopup() {
@@ -46,27 +46,61 @@ export default function AnnouncementPopup() {
         {/* 공지 제목 / Announcement title */}
         <div className="flex items-center gap-2">
           <span className="text-accent text-xl">$</span>
-          <span className="font-bold text-white text-base">배당 정책 변경 안내</span>
+          <span className="font-bold text-white text-base">업데이트 안내</span>
         </div>
 
         {/* 변경 내용 설명 / Change description */}
-        <div className="text-sm leading-relaxed text-secondary-token">
-          <p className="mb-3">
-            배당 지급 기준이 발행량과 무관하게 단순화됩니다.
-          </p>
-          <div className="rounded-xl p-3 mb-3 text-sm modal-panel">
-            <p className="mb-1">
-              <span className="text-accent">변경 후</span>
-              <span className="ml-2 text-white">주당 현재가의 5% 지급</span>
-            </p>
-            <p>
-              <span className="text-[#FF6B6B]">기존</span>
-              <span className="ml-2 text-white">발행량/유통량 기준 배당 계산</span>
-            </p>
+        <div className="text-sm leading-relaxed text-secondary-token flex flex-col gap-3">
+          {/* 배당 정책 변경 */}
+          <div>
+            <p className="text-white font-semibold mb-1.5">배당 정책 변경</p>
+            <div className="rounded-xl p-3 text-sm modal-panel">
+              <p className="mb-1">
+                <span className="text-accent">변경 후</span>
+                <span className="ml-2 text-white">주당 현재가의 0.7% 지급</span>
+              </p>
+              <p>
+                <span className="text-[#FF6B6B]">기존</span>
+                <span className="ml-2 text-white">발행량/유통량 기준 배당 계산</span>
+              </p>
+            </div>
           </div>
-          <p>
-            보유 수량에 따라 <span className="text-white font-medium">현재가의 5% x 보유 주식 수</span>만큼 배당이 지급됩니다.
-          </p>
+
+          {/* 닉네임 변경권 */}
+          <div>
+            <p className="text-white font-semibold mb-1.5">닉네임 변경권 출시</p>
+            <div className="rounded-xl p-3 text-sm modal-panel">
+              <p>
+                <span className="text-accent">비용</span>
+                <span className="ml-2 text-white">30,000,000 코인</span>
+              </p>
+              <p className="mt-1 text-xs text-dim-token">프로필 화면에서 이름 옆 편집 버튼으로 변경</p>
+            </div>
+          </div>
+
+          {/* 종목 추가 티켓 */}
+          <div>
+            <p className="text-white font-semibold mb-1.5">종목 추가 티켓 출시</p>
+            <div className="rounded-xl p-3 text-sm modal-panel">
+              <p>
+                <span className="text-accent">비용</span>
+                <span className="ml-2 text-white">100,000,000 코인</span>
+              </p>
+              <p className="mt-1 text-xs text-dim-token">프로필 화면에서 치지직 채널 URL로 종목 추가</p>
+            </div>
+          </div>
+
+          {/* 유저 랭킹 */}
+          <div>
+            <p className="text-white font-semibold mb-1.5">유저 랭킹 추가</p>
+            <div className="rounded-xl p-3 text-sm modal-panel">
+              <p>
+                <span className="text-accent">기준</span>
+                <span className="ml-2 text-white">누적 실현 수익 순위</span>
+              </p>
+              <p className="mt-1 text-xs text-dim-token">설정에서 랭킹 닉네임 공개 여부를 선택할 수 있습니다</p>
+            </div>
+          </div>
         </div>
 
         {/* 버튼 영역 / Action buttons */}

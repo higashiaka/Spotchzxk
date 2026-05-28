@@ -4,11 +4,13 @@ import com.spotchzxk.entity.Stock;
 import com.spotchzxk.exception.ChannelNotFoundException;
 import com.spotchzxk.exception.InsufficientFollowerCountException;
 import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,10 +19,13 @@ import java.util.Optional;
 public class StockService {
 
     private static final int MIN_FOLLOWER_COUNT = 100;
+    private static final BigDecimal STOCK_ADD_PRICE = new BigDecimal("100000000");
 
     private final StockRepository stockRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChzzkApiClient chzzkApiClient;
+    private final TradeEngine tradeEngine;
 
     public List<Stock> getAllStocks() {
         return stockRepository.findAll();
@@ -30,7 +35,7 @@ public class StockService {
      * @return empty if stock already exists, filled if newly created with Chzzk API name.
      */
     @Transactional
-    public Optional<Stock> addStockIfNew(String channelId) {
+    public Optional<Stock> addStockIfNew(String userId, String channelId) {
         if (stockRepository.existsById(channelId)) {
             return Optional.empty();
         }
@@ -52,6 +57,15 @@ public class StockService {
         if (stock.getFollowerCount() < MIN_FOLLOWER_COUNT) {
             throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
         }
+
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+        if (user.getCoinBalance().compareTo(STOCK_ADD_PRICE) < 0) {
+            throw new IllegalStateException("잔액이 부족합니다. 종목 추가에는 100,000,000코인이 필요합니다.");
+        }
+        user.setCoinBalance(user.getCoinBalance().subtract(STOCK_ADD_PRICE));
+        userRepository.save(user);
+        tradeEngine.evictUserCache(userId);
 
         int listingPrice = calcListingPrice(stock.getFollowerCount());
         stock.setCurrentPrice(listingPrice);

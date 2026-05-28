@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -54,7 +55,15 @@ public class PortfolioService {
                         s -> s.getStock().getChannelId(),
                         s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
                 ));
-        return Map.of("balance", p.getCoinBalance(), "shares", shares, "avgPrices", avgPrices, "dividendTotal", p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO);
+        Map<String, Object> response = new HashMap<>();
+        response.put("balance", p.getCoinBalance());
+        response.put("shares", shares);
+        response.put("avgPrices", avgPrices);
+        response.put("dividendTotal", p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO);
+        response.put("displayName", p.getDisplayName());
+        response.put("realizedProfit", p.getRealizedProfit() != null ? p.getRealizedProfit() : BigDecimal.ZERO);
+        response.put("rankingNicknamePublic", p.isRankingNicknamePublic());
+        return response;
     }
 
     @Transactional
@@ -83,6 +92,7 @@ public class PortfolioService {
 
         p.setResetCount(p.getResetCount() + 1);
         p.setCoinBalance(INITIAL_BALANCE);
+        p.setRealizedProfit(BigDecimal.ZERO);
         userRepository.save(p);
 
         userShareRepository.deleteAll(shares);
