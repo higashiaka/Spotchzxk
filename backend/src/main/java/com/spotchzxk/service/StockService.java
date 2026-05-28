@@ -10,7 +10,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,7 +18,6 @@ import java.util.Optional;
 public class StockService {
 
     private static final int MIN_FOLLOWER_COUNT = 100;
-    private static final BigDecimal STOCK_ADD_PRICE = new BigDecimal("100000000");
 
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
@@ -60,10 +58,10 @@ public class StockService {
 
         var user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        if (user.getCoinBalance().compareTo(STOCK_ADD_PRICE) < 0) {
-            throw new IllegalStateException("잔액이 부족합니다. 종목 추가에는 100,000,000코인이 필요합니다.");
+        if (user.getStockAddTickets() <= 0) {
+            throw new IllegalStateException("종목 추가 티켓이 없습니다.");
         }
-        user.setCoinBalance(user.getCoinBalance().subtract(STOCK_ADD_PRICE));
+        user.setStockAddTickets(user.getStockAddTickets() - 1);
         userRepository.save(user);
         tradeEngine.evictUserCache(userId);
 

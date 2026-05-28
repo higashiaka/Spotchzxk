@@ -15,6 +15,8 @@ export interface Portfolio {
   displayName?: string | null;
   realizedProfit?: number;
   rankingNicknamePublic?: boolean;
+  nicknameChangeTickets?: number;
+  stockAddTickets?: number;
   /** 오늘 남은 포트폴리오 초기화 횟수 / Remaining portfolio reset count for today */
   remainingResets: number;
 }

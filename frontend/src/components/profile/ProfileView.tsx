@@ -8,9 +8,6 @@ import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { useHoldings } from '../../hooks/useHoldings';
 
-const NICKNAME_CHANGE_PRICE = 30_000_000;
-const STOCK_ADD_PRICE = 100_000_000;
-
 /** 프로필 화면 컴포넌트.
  *  미로그인 시 로그인 화면, 로그인 시 보유 주식·투자 요약·배당 내역·종목 추가·자금 초기화를 표시
  *
@@ -76,7 +73,8 @@ export const ProfileView = ({
   /** 오버라이드 → DB displayName → 기본값 순으로 표시할 현재 이름
    *  Display name resolved from: override → backend displayName → default */
   const currentName = nameOverride ?? (portfolio?.displayName || '트레이더');
-  const cashBalance = Number(portfolio?.balance ?? 0);
+  const nicknameChangeTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
+  const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
 
   /** 닉네임 편집 모드 시작: 현재 이름으로 입력값을 초기화
    *  Starts nickname edit mode with the current name pre-filled */
@@ -98,8 +96,8 @@ export const ProfileView = ({
     if (!user) return;
     const trimmed = nameInput.trim();
     if (!trimmed || trimmed === currentName) { cancelEditName(); return; }
-    if (cashBalance < NICKNAME_CHANGE_PRICE) {
-      alert(`잔액이 부족합니다. 닉네임 변경에는 ${fmt(NICKNAME_CHANGE_PRICE)}코인이 필요합니다.`);
+    if (nicknameChangeTickets <= 0) {
+      alert('닉네임 변경권이 없습니다. 상점에서 먼저 구매해 주세요.');
       return;
     }
     setNameUpdating(true);
@@ -212,9 +210,9 @@ export const ProfileView = ({
       setTimeout(() => setAddStatus('idle'), 3000);
       return;
     }
-    if (cashBalance < STOCK_ADD_PRICE) {
+    if (stockAddTickets <= 0) {
       setAddStatus('error');
-      setAddMsg(`잔액이 부족합니다. 종목 추가에는 ${fmt(STOCK_ADD_PRICE)}코인이 필요합니다.`);
+      setAddMsg('종목 추가 티켓이 없습니다. 상점에서 먼저 구매해 주세요.');
       setTimeout(() => setAddStatus('idle'), 3000);
       return;
     }
@@ -322,7 +320,7 @@ export const ProfileView = ({
               <p className="text-white font-bold truncate">{currentName}</p>
               <button type="button" onClick={startEditName}
                 className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                title={`이름 변경 (${fmt(NICKNAME_CHANGE_PRICE)}코인)`}>
+                title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
                 <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                     d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -333,7 +331,7 @@ export const ProfileView = ({
           <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
           {!user.isAnonymous && (
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-              닉네임 변경권 {fmt(NICKNAME_CHANGE_PRICE)}코인
+              닉네임 변경권 {nicknameChangeTickets}개
             </p>
           )}
           <div className="mt-2 flex gap-2">
@@ -459,7 +457,7 @@ export const ProfileView = ({
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
-            치지직 채널 URL 또는 채널 ID를 입력하세요. 등록 비용 {fmt(STOCK_ADD_PRICE)}코인
+            치지직 채널 URL 또는 채널 ID를 입력하세요. 보유 티켓 {stockAddTickets}개
           </p>
           <div className="space-y-2">
             <input

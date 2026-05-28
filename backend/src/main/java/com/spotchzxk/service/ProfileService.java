@@ -5,13 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-
 @Service
 @RequiredArgsConstructor
 public class ProfileService {
-
-    private static final BigDecimal NICKNAME_CHANGE_PRICE = new BigDecimal("30000000");
 
     private final UserRepository userRepository;
     private final TradeEngine tradeEngine;
@@ -28,12 +24,12 @@ public class ProfileService {
 
         var user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        if (user.getCoinBalance().compareTo(NICKNAME_CHANGE_PRICE) < 0) {
-            throw new IllegalStateException("잔액이 부족합니다. 닉네임 변경에는 30,000,000코인이 필요합니다.");
+        if (user.getNicknameChangeTickets() <= 0) {
+            throw new IllegalStateException("닉네임 변경권이 없습니다.");
         }
 
         user.setDisplayName(trimmed);
-        user.setCoinBalance(user.getCoinBalance().subtract(NICKNAME_CHANGE_PRICE));
+        user.setNicknameChangeTickets(user.getNicknameChangeTickets() - 1);
         userRepository.save(user);
         tradeEngine.evictUserCache(uid);
     }

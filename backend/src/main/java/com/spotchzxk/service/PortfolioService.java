@@ -63,6 +63,8 @@ public class PortfolioService {
         response.put("displayName", p.getDisplayName());
         response.put("realizedProfit", p.getRealizedProfit() != null ? p.getRealizedProfit() : BigDecimal.ZERO);
         response.put("rankingNicknamePublic", p.isRankingNicknamePublic());
+        response.put("nicknameChangeTickets", p.getNicknameChangeTickets());
+        response.put("stockAddTickets", p.getStockAddTickets());
         return response;
     }
 

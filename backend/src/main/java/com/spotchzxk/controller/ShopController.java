@@ -2,6 +2,7 @@ package com.spotchzxk.controller;
 
 import com.spotchzxk.entity.MegaphonePost;
 import com.spotchzxk.service.MegaphoneService;
+import com.spotchzxk.service.ShopItemService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +17,7 @@ import java.util.Map;
 public class ShopController {
 
     private final MegaphoneService megaphoneService;
+    private final ShopItemService shopItemService;
 
     @GetMapping("/megaphone/posts")
     public ResponseEntity<List<MegaphonePost>> getPosts() {
@@ -46,6 +48,20 @@ public class ShopController {
             MegaphonePost post = megaphoneService.useMegaphone(uid, channelId, message);
             return ResponseEntity.ok(post);
         } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/items/purchase")
+    public ResponseEntity<?> purchaseItem(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal String uid) {
+        if (uid == null || uid.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
+        }
+        try {
+            return ResponseEntity.ok(shopItemService.purchase(uid, body.getOrDefault("item", "")));
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
