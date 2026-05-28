@@ -24,14 +24,21 @@ export const fmtCompact = (n: number): string => {
 export const changePct = (price: number, basePrice: number = BASE_PRICE) =>
   ((price - basePrice) / basePrice) * 100;
 
-/** 총 자산에 따른 투자자 등급 라벨과 색상 반환
- *  Returns investor grade label and color based on total assets */
-export const grade = (assets: number): { label: string; color: string } => {
-  if (assets >= 30_000_000) return { label: '다이아 리그', color: '#00BCD4' };
-  if (assets >= 15_000_000) return { label: '플래티넘 리그', color: '#C0C0C0' };
-  if (assets >= 12_000_000) return { label: '골드 리그', color: '#FFD700' };
-  if (assets >= 10_000_000) return { label: '실버 리그', color: '#A8A8A8' };
-  return { label: '브론즈 리그', color: '#CD7F32' };
+/** 전체 유저 중 상대 순위(rank: 1-indexed)를 기준으로 LoL 티어 라벨과 색상 반환
+ *  Returns LoL-style tier label and color based on relative rank among all users */
+export const grade = (rank: number, total: number): { label: string; color: string } => {
+  if (total === 0) return { label: '아이언', color: '#6B6B6B' };
+  const pct = ((total - rank) / total) * 100;
+  if (pct >= 99)   return { label: '챌린저', color: '#FF8C00' };
+  if (pct >= 97)   return { label: '그랜드마스터', color: '#F44336' };
+  if (pct >= 94)   return { label: '마스터', color: '#9C27B0' };
+  if (pct >= 88)   return { label: '다이아몬드', color: '#00BCD4' };
+  if (pct >= 75)   return { label: '에메랄드', color: '#00E676' };
+  if (pct >= 55)   return { label: '플래티넘', color: '#00BFA5' };
+  if (pct >= 35)   return { label: '골드', color: '#FFD700' };
+  if (pct >= 18)   return { label: '실버', color: '#C0C0C0' };
+  if (pct >= 7)    return { label: '브론즈', color: '#CD7F32' };
+  return { label: '아이언', color: '#6B6B6B' };
 };
 
 /** 등락률에 따른 색상 반환 (상승 빨강, 하락 파랑, 보합 회색)

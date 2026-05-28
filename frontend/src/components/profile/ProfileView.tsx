@@ -51,8 +51,9 @@ export const ProfileView = ({
   onNavigate: (tab: AppTab) => void;
 }) => {
   const queryClient = useQueryClient();
-  /** 사용자 등급 (총 자산 기준) / User grade derived from total assets */
-  const userGrade = grade(totalAssets);
+  const userGrade = !user?.isAnonymous && portfolio?.leagueRank != null
+    ? grade(portfolio.leagueRank, portfolio.leagueTotal)
+    : null;
   /** 보유 주식 평가액 (총 자산 - 현금) / Evaluated holdings value (total assets minus cash) */
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
   /** 누적 체결 주문 수 / Total number of completed orders */
@@ -336,12 +337,14 @@ export const ProfileView = ({
               닉네임 변경권 {nicknameChangeTickets}개
             </p>
           )}
-          <div className="mt-2 flex gap-2">
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
-              {userGrade.label}
-            </span>
-          </div>
+          {userGrade && (
+            <div className="mt-2 flex gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
+                {userGrade.label}
+              </span>
+            </div>
+          )}
         </div>
         <button type="button" onClick={onLogout}
           className="text-xs px-3 py-1.5 rounded-lg border shrink-0"

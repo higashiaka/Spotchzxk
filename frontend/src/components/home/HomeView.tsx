@@ -70,8 +70,9 @@ export const HomeView = ({
   const totalReturn = totalAssets - INITIAL_BALANCE;
   /** 총 수익률 (%) / Total return rate in % */
   const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
-  /** 총 자산 기준 투자 등급 / Investor grade based on total assets */
-  const userGrade = grade(totalAssets);
+  const userGrade = portfolio?.leagueRank != null
+    ? grade(portfolio.leagueRank, portfolio.leagueTotal)
+    : null;
   /** 봇 거래 활동을 반영한 표시용 동접자 수 / Display count adjusted for bot trading activity */
   const displayedOnlineCount = (onlineCount ?? 0) + 5;
 
@@ -137,12 +138,14 @@ export const HomeView = ({
                 {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn)}&nbsp;
                 ({totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)
               </p>
-              <div className="mt-2">
-                <span className="text-xs font-bold px-2.5 py-1 rounded-full"
-                  style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
-                  {userGrade.label}
-                </span>
-              </div>
+              {userGrade && (
+                <div className="mt-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
+                    {userGrade.label}
+                  </span>
+                </div>
+              )}
             </>
           ) : (
             <button type="button" onClick={() => onNavigate('profile')}
