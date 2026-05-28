@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
+import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import {
   MegaphonePost,
@@ -11,6 +13,8 @@ import {
 
 /** 확성기 아이템 1회 사용 비용 (원) / Cost per megaphone use in KRW */
 const MEGAPHONE_PRICE = 1_000_000_000;
+const NICKNAME_TICKET_PRICE = 30_000_000;
+const STOCK_ADD_TICKET_PRICE = 100_000_000;
 /** 확성기 1일 최대 사용 횟수 / Max megaphone uses per day */
 const DAILY_LIMIT = 3;
 
@@ -25,6 +29,60 @@ function formatTime(iso: string) {
  *  Formats a number with Korean locale comma separators */
 function formatPrice(n: number) {
   return n.toLocaleString('ko-KR');
+}
+
+function ShopItemCard({
+  title,
+  description,
+  owned,
+  price,
+  disabled,
+  pending,
+  onPurchase,
+}: {
+  title: string;
+  description: string;
+  owned: number;
+  price: number;
+  disabled: boolean;
+  pending: boolean;
+  onPurchase: () => void;
+}) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A' }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-white">{title}</p>
+          <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+            {description}
+          </p>
+        </div>
+        <span
+          className="shrink-0 text-xs font-bold px-2 py-1 rounded-full"
+          style={{ background: '#00E67622', color: '#00E676' }}
+        >
+          {owned}개
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="text-base font-bold" style={{ color: '#FFD700' }}>
+            {formatPrice(price)}
+          </span>
+          <span className="text-xs ml-1" style={{ color: 'var(--text-dim)' }}>코인</span>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onPurchase}
+          className="px-3 py-2 rounded-lg text-xs font-bold transition-opacity disabled:opacity-50"
+          style={{ background: '#00E676', color: 'var(--accent-foreground)' }}
+        >
+          {pending ? '구매 중...' : '구매'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** 확성기 사용 모달의 props 타입 / Props for the megaphone use modal */
@@ -148,6 +206,8 @@ interface Props {
   user: User | null;
   /** 현재 현금 잔고 / Current cash balance */
   balance: number;
+  /** 현재 포트폴리오 데이터 / Current portfolio data */
+  portfolio: any;
 }
 
 /** 상점 화면 컴포넌트.
@@ -157,13 +217,15 @@ interface Props {
  *  Shop screen component.
  *  Displays the megaphone item for purchase/use and the recent megaphone post list.
  *  Receives new posts in real-time via STOMP */
-export const ShopView = ({ streamers, user, balance }: Props) => {
+export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
+  const queryClient = useQueryClient();
   const { data: posts = [], refetch } = useMegaphonePosts();
   const { data: usesToday = 0 } = useMegaphoneUsesToday(user?.uid);
   const mutation = useMegaphoneSubmit(user?.uid);
 
   /** 모달 표시 여부 / Whether the megaphone modal is visible */
   const [showModal, setShowModal] = useState(false);
+  const [purchasePending, setPurchasePending] = useState<string | null>(null);
   /** REST 초기 로드 + STOMP 실시간 갱신을 합산한 게시물 목록
    *  Post list combining initial REST load and real-time STOMP updates */
   const [realtimePosts, setRealtimePosts] = useState<MegaphonePost[]>([]);
@@ -191,6 +253,8 @@ export const ShopView = ({ streamers, user, balance }: Props) => {
   const hasUses = usesToday < DAILY_LIMIT;
   /** 게스트가 아닌 로그인 상태인지 여부 / Whether the user is logged in and not anonymous */
   const isLoggedIn = !!user && !user.isAnonymous;
+  const nicknameTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
+  const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
 
   /** 모달에서 확인 시 게시 제출 + 성공 후 목록 갱신
    *  Submits the megaphone post from modal and refetches list on success */
@@ -201,6 +265,30 @@ export const ShopView = ({ streamers, user, balance }: Props) => {
         refetch();
       },
     });
+  };
+
+  const purchaseItem = async (item: 'nickname-change-ticket' | 'stock-add-ticket') => {
+    if (!user || purchasePending) return;
+    setPurchasePending(item);
+    try {
+      const res = await apiFetch('/api/shop/items/purchase', {
+        method: 'POST',
+        body: JSON.stringify({ item }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || '구매에 실패했습니다.');
+        return;
+      }
+      queryClient.setQueryData(['portfolio', user.uid], (old: any) => (
+        old ? { ...old, ...json } : old
+      ));
+      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
+    } catch {
+      alert('구매에 실패했습니다.');
+    } finally {
+      setPurchasePending(null);
+    }
   };
 
   return (
@@ -215,6 +303,27 @@ export const ShopView = ({ streamers, user, balance }: Props) => {
       )}
 
       <h2 className="text-lg font-bold mb-6" style={{ color: 'var(--text-secondary)' }}>상점</h2>
+
+      <div className="grid gap-3 mb-4 sm:grid-cols-2">
+        <ShopItemCard
+          title="닉네임 변경권"
+          description="프로필 닉네임을 변경할 때 1개가 차감됩니다."
+          owned={nicknameTickets}
+          price={NICKNAME_TICKET_PRICE}
+          disabled={!isLoggedIn || balance < NICKNAME_TICKET_PRICE || purchasePending !== null}
+          pending={purchasePending === 'nickname-change-ticket'}
+          onPurchase={() => purchaseItem('nickname-change-ticket')}
+        />
+        <ShopItemCard
+          title="종목 추가 티켓"
+          description="새 치지직 채널을 종목으로 등록할 때 1개가 차감됩니다."
+          owned={stockAddTickets}
+          price={STOCK_ADD_TICKET_PRICE}
+          disabled={!isLoggedIn || balance < STOCK_ADD_TICKET_PRICE || purchasePending !== null}
+          pending={purchasePending === 'stock-add-ticket'}
+          onPurchase={() => purchaseItem('stock-add-ticket')}
+        />
+      </div>
 
       {/* 확성기 아이템 카드 / Megaphone item card */}
       <div className="rounded-xl p-5 mb-8" style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A' }}>

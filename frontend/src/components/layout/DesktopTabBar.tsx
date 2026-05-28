@@ -11,6 +11,7 @@ export const DesktopTabBar = ({
     { tab: 'home' as const, label: '홈' },
     { tab: 'prices' as const, label: '시세' },
     { tab: 'chart' as const, label: '차트' },
+    { tab: 'rankings' as const, label: '랭킹' },
     { tab: 'shop' as const, label: '상점' },
   ];
 

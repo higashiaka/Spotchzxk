@@ -48,6 +48,8 @@ public class AccountLinkService {
                 .displayName(guestUser.getDisplayName())
                 .realizedProfit(guestUser.getRealizedProfit())
                 .rankingNicknamePublic(guestUser.isRankingNicknamePublic())
+                .nicknameChangeTickets(guestUser.getNicknameChangeTickets())
+                .stockAddTickets(guestUser.getStockAddTickets())
                 .resetCount(guestUser.getResetCount())
                 .lastResetDate(guestUser.getLastResetDate())
                 .dividendTotal(guestUser.getDividendTotal())

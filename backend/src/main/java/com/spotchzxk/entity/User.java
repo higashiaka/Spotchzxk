@@ -33,6 +33,14 @@ public class User {
     @Builder.Default
     private boolean rankingNicknamePublic = false;
 
+    @Column(name = "nickname_change_tickets", nullable = false)
+    @Builder.Default
+    private int nicknameChangeTickets = 0;
+
+    @Column(name = "stock_add_tickets", nullable = false)
+    @Builder.Default
+    private int stockAddTickets = 0;
+
     @Column(nullable = false)
     @Builder.Default
     private int resetCount = 0;

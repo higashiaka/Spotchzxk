@@ -21,13 +21,14 @@ import { MobileNavBar } from './components/layout/MobileNavBar';
 import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
+import { UserRankingView } from './components/rankings/UserRankingView';
 import { OrderView } from './components/order/OrderView';
 import { ShopView } from './components/shop/ShopView';
 import { HoldingsView } from './components/holdings/HoldingsView';
 import { SettingsView } from './components/settings/SettingsView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
-const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'shop', 'profile'];
+const SWIPE_TABS: AppTab[] = ['home', 'prices', 'chart', 'rankings', 'shop', 'profile'];
 type ScreenSnapshot = { tab: AppTab; streamerId: string | null };
 const APP_HISTORY_KEY = 'spotchzxk-screen';
 
@@ -622,6 +623,10 @@ function App() {
       return <ChartView streamers={streamers} onSelect={handleSelectStreamer} />;
     }
 
+    if (tab === 'rankings') {
+      return <UserRankingView />;
+    }
+
     if (tab === 'order') {
       return (
         <OrderView
@@ -636,7 +641,7 @@ function App() {
     }
 
     if (tab === 'shop') {
-      return <ShopView streamers={streamers} user={user} balance={balance} />;
+      return <ShopView streamers={streamers} user={user} balance={balance} portfolio={portfolio} />;
     }
 
     if (tab === 'holdings') {
