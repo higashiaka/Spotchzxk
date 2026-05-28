@@ -316,10 +316,12 @@ export const ProfileView = ({
             </div>
           ) : (
             /* 이름 표시 + 호버 시 편집 버튼 / Name display with edit button on hover */
-            <div className="flex items-center gap-1.5 group">
-              <p className="text-white font-bold truncate">{currentName}</p>
+            <div className="flex items-start gap-1.5 group min-w-0">
+              <p className="text-white font-bold min-w-0 break-words leading-snug md:line-clamp-2 md:whitespace-normal truncate">
+                {currentName}
+              </p>
               <button type="button" onClick={startEditName}
-                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="shrink-0 mt-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
                 title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
                 <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
