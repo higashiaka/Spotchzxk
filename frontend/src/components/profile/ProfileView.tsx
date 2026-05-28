@@ -295,7 +295,7 @@ export const ProfileView = ({
             <p className="text-white font-bold truncate">게스트 투자자</p>
           ) : isEditingName ? (
             /* 닉네임 편집 인라인 폼 / Inline nickname edit form */
-            <div className="flex items-center gap-1.5 min-w-0 w-full">
+            <div>
               <input
                 autoFocus
                 value={nameInput}
@@ -304,16 +304,18 @@ export const ProfileView = ({
                 maxLength={20}
                 placeholder="닉네임 입력"
                 aria-label="닉네임 변경"
-                className="text-white font-bold bg-transparent border-b outline-none flex-1 min-w-0"
+                className="block w-full text-white font-bold bg-transparent border-b outline-none"
                 style={{ borderColor: '#00E676' }}
                 disabled={nameUpdating}
               />
-              <button type="button" onClick={saveEditName} disabled={nameUpdating}
-                className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded"
-                style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
-              <button type="button" onClick={cancelEditName} disabled={nameUpdating}
-                className="shrink-0 text-xs px-1.5 py-0.5 rounded"
-                style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+              <div className="flex gap-1.5 mt-1.5">
+                <button type="button" onClick={saveEditName} disabled={nameUpdating}
+                  className="text-xs font-bold px-2 py-0.5 rounded"
+                  style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
+                <button type="button" onClick={cancelEditName} disabled={nameUpdating}
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+              </div>
             </div>
           ) : (
             /* 이름 표시 + 호버 시 편집 버튼 / Name display with edit button on hover */
