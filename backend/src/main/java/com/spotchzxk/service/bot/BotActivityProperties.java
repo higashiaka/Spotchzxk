@@ -27,6 +27,7 @@ public class BotActivityProperties {
     private int lowBalanceQuantityPercent = 50;
     private int highHoldingQuantity = 30;
     private int highHoldingBuyChancePercent = 20;
+    private int assetResetThresholdPercent = 15;
 
     @PostConstruct
     public void validate() {
@@ -34,6 +35,9 @@ public class BotActivityProperties {
             throw new IllegalStateException(
                     "bot.activity.low-balance-threshold-percent (" + lowBalanceThresholdPercent +
                     ") must be >= critical-balance-threshold-percent (" + criticalBalanceThresholdPercent + ")");
+        }
+        if (assetResetThresholdPercent < 0) {
+            throw new IllegalStateException("bot.activity.asset-reset-threshold-percent must be >= 0");
         }
     }
 }

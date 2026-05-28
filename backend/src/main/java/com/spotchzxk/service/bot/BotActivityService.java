@@ -16,7 +16,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +40,7 @@ public class BotActivityService {
     private final TradeEngine tradeEngine;
 
     private final ConcurrentHashMap<String, Long> botNextRunAtMs = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Boolean> botLiquidating = new ConcurrentHashMap<>();
 
     @Scheduled(fixedDelay = 1_000)
     public void tick() {
@@ -71,29 +71,53 @@ public class BotActivityService {
             return;
         }
 
-        Map<String, Long> recentCounts = recentTradeCounts();
+        Map<String, Long> recentUserCounts = recentUserTradeCounts();
+        Map<String, Long> recentBotCounts = recentBotTradeCounts();
         for (int i = 0; i < orderLimit; i++) {
             String botUserId = dueBotUserIds.get(i);
             scheduleBotNextRun(botUserId, now);
             ensureBotUser(botUserId);
-            Stock stock = pickStockForBot(botUserId, stocks, recentCounts);
+            if (handleBotAssetRecovery(botUserId, stocks, recentUserCounts, recentBotCounts)) {
+                continue;
+            }
+            Stock stock = pickStockForBot(botUserId, stocks, recentUserCounts, recentBotCounts);
             submitBotOrder(botUserId, stock);
         }
     }
 
-    Stock pickStock(List<Stock> stocks, Map<String, Long> recentCounts) {
-        return stocks.stream()
-                .max(Comparator.comparingInt(stock -> scoreStock(stock, recentCounts)))
-                .orElseThrow();
+    Stock pickStock(List<Stock> stocks, Map<String, Long> recentUserCounts, Map<String, Long> recentBotCounts) {
+        if (stocks.isEmpty()) {
+            throw new IllegalArgumentException("stocks must not be empty");
+        }
+
+        List<Integer> weights = stocks.stream()
+                .map(stock -> scoreStock(stock, recentUserCounts, recentBotCounts))
+                .collect(Collectors.toList());
+        int totalWeight = weights.stream().mapToInt(Integer::intValue).sum();
+        int draw = randomInt(1, Math.max(1, totalWeight));
+
+        int cumulative = 0;
+        for (int i = 0; i < stocks.size(); i++) {
+            cumulative += weights.get(i);
+            if (draw <= cumulative) {
+                return stocks.get(i);
+            }
+        }
+        return stocks.get(stocks.size() - 1);
     }
 
-    Stock pickStockForBot(String botUserId, List<Stock> stocks, Map<String, Long> recentCounts) {
+    Stock pickStockForBot(
+            String botUserId,
+            List<Stock> stocks,
+            Map<String, Long> recentUserCounts,
+            Map<String, Long> recentBotCounts
+    ) {
         BigDecimal balance = findBotBalance(botUserId);
         List<Stock> heldStocks = findHeldStocks(botUserId, stocks);
         if (!heldStocks.isEmpty() && (isCriticalBalance(balance) || isLowBalance(balance))) {
-            return pickStock(heldStocks, recentCounts);
+            return pickStock(heldStocks, recentUserCounts, recentBotCounts);
         }
-        return pickStock(stocks, recentCounts);
+        return pickStock(stocks, recentUserCounts, recentBotCounts);
     }
 
     int pickQuantity(int maxAllowed) {
@@ -139,6 +163,10 @@ public class BotActivityService {
         BigDecimal balance = findBotBalance(botUserId);
         long heldQty = findHeldQuantity(botUserId, stock.getChannelId());
         String tradeType = pickTradeType(balance, heldQty);
+        submitBotOrder(botUserId, stock, tradeType, heldQty, balance);
+    }
+
+    private void submitBotOrder(String botUserId, Stock stock, String tradeType, long heldQty, BigDecimal balance) {
         int maxAllowed = "sell".equals(tradeType)
                 ? (int) Math.min(Integer.MAX_VALUE, heldQty)
                 : calculateBuyQuantityLimit(stock, balance);
@@ -165,6 +193,82 @@ public class BotActivityService {
         }
     }
 
+    boolean handleBotAssetRecovery(
+            String botUserId,
+            List<Stock> stocks,
+            Map<String, Long> recentUserCounts,
+            Map<String, Long> recentBotCounts
+    ) {
+        int thresholdPercent = Math.max(0, properties.getAssetResetThresholdPercent());
+        if (thresholdPercent <= 0) {
+            botLiquidating.remove(botUserId);
+            return false;
+        }
+
+        List<UserShare> heldShares = findHeldShares(botUserId);
+        BigDecimal totalAssets = calculateTotalAssets(botUserId, heldShares);
+        boolean shouldLiquidate = botLiquidating.containsKey(botUserId) || isAssetResetThresholdReached(totalAssets);
+        if (!shouldLiquidate) {
+            return false;
+        }
+
+        botLiquidating.put(botUserId, true);
+        if (heldShares.isEmpty()) {
+            resetBotAssets(botUserId);
+            botLiquidating.remove(botUserId);
+            return true;
+        }
+
+        Map<String, Stock> stockById = stocks.stream()
+                .collect(Collectors.toMap(Stock::getChannelId, stock -> stock, (left, right) -> left));
+        List<Stock> sellableHeldStocks = heldShares.stream()
+                .map(share -> stockById.getOrDefault(share.getStock().getChannelId(), share.getStock()))
+                .filter(stock -> stock != null)
+                .collect(Collectors.toList());
+        if (sellableHeldStocks.isEmpty()) {
+            return true;
+        }
+
+        Stock stock = pickStock(sellableHeldStocks, recentUserCounts, recentBotCounts);
+        long heldQty = heldShares.stream()
+                .filter(share -> stock.getChannelId().equals(share.getStock().getChannelId()))
+                .mapToLong(UserShare::getQuantity)
+                .findFirst()
+                .orElse(0L);
+        submitBotOrder(botUserId, stock, "sell", heldQty, findBotBalance(botUserId));
+        return true;
+    }
+
+    private boolean isAssetResetThresholdReached(BigDecimal totalAssets) {
+        BigDecimal threshold = BOT_INITIAL_BALANCE
+                .multiply(BigDecimal.valueOf(Math.max(0, properties.getAssetResetThresholdPercent())))
+                .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.DOWN);
+        return totalAssets.compareTo(threshold) <= 0;
+    }
+
+    private BigDecimal calculateTotalAssets(String botUserId, List<UserShare> heldShares) {
+        BigDecimal totalAssets = findBotBalance(botUserId);
+        for (UserShare share : heldShares) {
+            Stock stock = share.getStock();
+            if (stock == null) {
+                continue;
+            }
+            totalAssets = totalAssets.add(BigDecimal.valueOf(share.getQuantity())
+                    .multiply(BigDecimal.valueOf(Math.max(0, stock.getCurrentPrice()))));
+        }
+        return totalAssets;
+    }
+
+    private void resetBotAssets(String botUserId) {
+        userRepository.findById(botUserId).ifPresent(user -> {
+            user.setCoinBalance(BOT_INITIAL_BALANCE);
+            user.setRealizedProfit(BigDecimal.ZERO);
+            userRepository.save(user);
+        });
+        tradeEngine.evictUserCache(botUserId);
+        log.info("Bot assets reset after liquidation: userId={}", botUserId);
+    }
+
     private int calculateBuyQuantityLimit(Stock stock, BigDecimal balance) {
         if (isCriticalBalance(balance)) {
             return 0;
@@ -184,15 +288,26 @@ public class BotActivityService {
         return Math.max(0, limit);
     }
 
-    private int scoreStock(Stock stock, Map<String, Long> recentCounts) {
-        long recentCount = recentCounts.getOrDefault(stock.getChannelId(), 0L);
-        int inactivityScore = (int) Math.max(0, 10 - recentCount);
-        int liveScore = stock.isLive() ? 8 : 0;
-        return inactivityScore + liveScore + randomInt(0, 5);
+    int scoreStock(Stock stock, Map<String, Long> recentUserCounts, Map<String, Long> recentBotCounts) {
+        return Math.max(1, baseScoreStock(stock, recentUserCounts, recentBotCounts) + randomInt(0, 4));
     }
 
-    private Map<String, Long> recentTradeCounts() {
-        return orderRepository.findTop50ByOrderByCreatedAtDesc().stream()
+    int baseScoreStock(Stock stock, Map<String, Long> recentUserCounts, Map<String, Long> recentBotCounts) {
+        long recentUserCount = recentUserCounts.getOrDefault(stock.getChannelId(), 0L);
+        long recentBotCount = recentBotCounts.getOrDefault(stock.getChannelId(), 0L);
+        int userInactivityScore = (int) Math.max(0, 12 - recentUserCount);
+        int liveScore = stock.isLive() ? 4 : 0;
+        int botCooldownPenalty = (int) Math.min(10, recentBotCount * 3);
+        return Math.max(1, userInactivityScore + liveScore - botCooldownPenalty);
+    }
+
+    private Map<String, Long> recentUserTradeCounts() {
+        return orderRepository.findTop50NonBotCompletedByOrderByCreatedAtDesc().stream()
+                .collect(Collectors.groupingBy(Order::getStreamerId, Collectors.counting()));
+    }
+
+    private Map<String, Long> recentBotTradeCounts() {
+        return orderRepository.findTop50BotCompletedByOrderByCreatedAtDesc().stream()
                 .collect(Collectors.groupingBy(Order::getStreamerId, Collectors.counting()));
     }
 
@@ -222,11 +337,15 @@ public class BotActivityService {
     private List<Stock> findHeldStocks(String userId, List<Stock> stocks) {
         Map<String, Stock> stockById = stocks.stream()
                 .collect(Collectors.toMap(Stock::getChannelId, stock -> stock, (left, right) -> left));
-        return userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId).stream()
+        return findHeldShares(userId).stream()
                 .map(share -> share.getStock().getChannelId())
                 .map(stockById::get)
                 .filter(heldStock -> heldStock != null)
                 .collect(Collectors.toList());
+    }
+
+    private List<UserShare> findHeldShares(String userId) {
+        return userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId);
     }
 
     private BigDecimal findBotBalance(String userId) {
@@ -263,6 +382,7 @@ public class BotActivityService {
             botNextRunAtMs.computeIfAbsent(botUserId, ignored -> nowMs + randomDelayMs());
         }
         botNextRunAtMs.keySet().removeIf(botUserId -> botNumber(botUserId) > userCount);
+        botLiquidating.keySet().removeIf(botUserId -> botNumber(botUserId) > userCount);
     }
 
     private void scheduleBotNextRun(String botUserId, long nowMs) {

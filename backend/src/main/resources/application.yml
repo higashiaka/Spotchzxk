@@ -63,3 +63,4 @@ bot:
     low-balance-quantity-percent: ${BOT_ACTIVITY_LOW_BALANCE_QUANTITY_PERCENT:50}
     high-holding-quantity: ${BOT_ACTIVITY_HIGH_HOLDING_QUANTITY:30}
     high-holding-buy-chance-percent: ${BOT_ACTIVITY_HIGH_HOLDING_BUY_CHANCE_PERCENT:20}
+    asset-reset-threshold-percent: ${BOT_ACTIVITY_ASSET_RESET_THRESHOLD_PERCENT:15}

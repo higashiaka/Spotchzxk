@@ -1,5 +1,6 @@
 package com.spotchzxk.service.bot;
 
+import com.spotchzxk.dto.TradeRequest;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
@@ -9,6 +10,7 @@ import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import com.spotchzxk.service.TradeEngine;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -109,16 +111,28 @@ class BotActivityServiceTest {
     }
 
     @Test
-    void liveStocksReceiveSelectionPriority() {
+    void liveStocksReceiveSelectionBonus() {
         Stock inactive = stock("inactive", false);
         Stock live = stock("live", true);
 
-        Stock picked = service.pickStock(
-                List.of(inactive, live),
-                Map.of("inactive", 20L)
-        );
+        assertThat(service.baseScoreStock(live, Map.of(), Map.of()))
+                .isGreaterThan(service.baseScoreStock(inactive, Map.of(), Map.of()));
+    }
 
-        assertThat(picked.getChannelId()).isEqualTo("live");
+    @Test
+    void recentBotTradesReduceSelectionScore() {
+        Stock stock = stock("stock-1", false);
+
+        assertThat(service.baseScoreStock(stock, Map.of(), Map.of("stock-1", 3L)))
+                .isLessThan(service.baseScoreStock(stock, Map.of(), Map.of()));
+    }
+
+    @Test
+    void recentUserTradesReduceInactivityScore() {
+        Stock stock = stock("stock-1", false);
+
+        assertThat(service.baseScoreStock(stock, Map.of("stock-1", 8L), Map.of()))
+                .isLessThan(service.baseScoreStock(stock, Map.of(), Map.of()));
     }
 
     @Test
@@ -140,10 +154,71 @@ class BotActivityServiceTest {
         Stock picked = service.pickStockForBot(
                 "bot_activity_001",
                 List.of(unheldLive, held),
+                Map.of(),
                 Map.of()
         );
 
         assertThat(picked.getChannelId()).isEqualTo("held");
+    }
+
+    @Test
+    void botBelowAssetResetThresholdLiquidatesHoldingsBeforeReset() {
+        properties.setAssetResetThresholdPercent(50);
+        Stock held = stock("held", false);
+        User bot = User.builder()
+                .id("bot_activity_001")
+                .coinBalance(BigDecimal.valueOf(100_000))
+                .isBot(true)
+                .build();
+        when(userRepository.findById("bot_activity_001")).thenReturn(Optional.of(bot));
+        when(userShareRepository.findByUserIdWithPositiveQuantityAndStock("bot_activity_001"))
+                .thenReturn(List.of(UserShare.builder()
+                        .user(bot)
+                        .stock(held)
+                        .quantity(8)
+                        .build()));
+
+        boolean handled = service.handleBotAssetRecovery(
+                "bot_activity_001",
+                List.of(held),
+                Map.of(),
+                Map.of()
+        );
+
+        ArgumentCaptor<TradeRequest> request = ArgumentCaptor.forClass(TradeRequest.class);
+        verify(tradeEngine).submitTrade(request.capture());
+        assertThat(handled).isTrue();
+        assertThat(request.getValue().getType()).isEqualTo("sell");
+        assertThat(request.getValue().getStreamerId()).isEqualTo("held");
+        assertThat(request.getValue().getQuantity()).isBetween(1, 8);
+    }
+
+    @Test
+    void botBelowAssetResetThresholdResetsAfterAllHoldingsSold() {
+        properties.setAssetResetThresholdPercent(50);
+        User bot = User.builder()
+                .id("bot_activity_001")
+                .coinBalance(BigDecimal.valueOf(100_000))
+                .realizedProfit(BigDecimal.valueOf(-50_000))
+                .isBot(true)
+                .build();
+        when(userRepository.findById("bot_activity_001")).thenReturn(Optional.of(bot));
+        when(userShareRepository.findByUserIdWithPositiveQuantityAndStock("bot_activity_001"))
+                .thenReturn(List.of());
+
+        boolean handled = service.handleBotAssetRecovery(
+                "bot_activity_001",
+                List.of(stock("unused", false)),
+                Map.of(),
+                Map.of()
+        );
+
+        assertThat(handled).isTrue();
+        assertThat(bot.getCoinBalance()).isEqualByComparingTo(BigDecimal.valueOf(1_000_000));
+        assertThat(bot.getRealizedProfit()).isEqualByComparingTo(BigDecimal.ZERO);
+        verify(userRepository).save(bot);
+        verify(tradeEngine).evictUserCache("bot_activity_001");
+        verify(tradeEngine, never()).submitTrade(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
