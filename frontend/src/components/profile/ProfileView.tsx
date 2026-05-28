@@ -279,80 +279,85 @@ export const ProfileView = ({
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
       {/* 프로필 카드: 아바타, 이름 편집, 등급 배지, 로그아웃 버튼
           Profile card: avatar, name editing, grade badge, logout button */}
-      <div className="rounded-2xl border p-5 mb-4 flex items-center gap-4"
+      <div className="rounded-2xl border p-5 mb-4"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
-        <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
-          style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
-          {user.photoURL
-            ? <img src={user.photoURL} alt="profile" className="w-full h-full object-cover" />
-            : <svg className="w-7 h-7" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>}
-        </div>
-        <div className="flex-1 min-w-0">
-          {user.isAnonymous ? (
-            <p className="text-white font-bold truncate">게스트 투자자</p>
-          ) : isEditingName ? (
-            /* 닉네임 편집 인라인 폼 / Inline nickname edit form */
-            <div>
-              <input
-                autoFocus
-                value={nameInput}
-                onChange={e => setNameInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') cancelEditName(); }}
-                maxLength={20}
-                placeholder="닉네임 입력"
-                aria-label="닉네임 변경"
-                className="block w-full text-white font-bold bg-transparent border-b outline-none"
-                style={{ borderColor: '#00E676' }}
-                disabled={nameUpdating}
-              />
-              <div className="flex gap-1.5 mt-1.5">
-                <button type="button" onClick={saveEditName} disabled={nameUpdating}
-                  className="text-xs font-bold px-2 py-0.5 rounded"
-                  style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
-                <button type="button" onClick={cancelEditName} disabled={nameUpdating}
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+        {/* 상단 행: 아바타 + 이름 정보 + 로그아웃 */}
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
+            style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
+            {user.photoURL
+              ? <img src={user.photoURL} alt="profile" className="w-full h-full object-cover" />
+              : <svg className="w-7 h-7" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>}
+          </div>
+          <div className="flex-1 min-w-0">
+            {user.isAnonymous ? (
+              <p className="text-white font-bold truncate">게스트 투자자</p>
+            ) : (
+              <div className="flex items-center gap-1.5 group min-w-0">
+                <p className="text-white font-bold flex-1 min-w-0 truncate leading-snug">
+                  {currentName}
+                </p>
+                {!isEditingName && (
+                  <button type="button" onClick={startEditName}
+                    className="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                    title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
+                    <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            </div>
-          ) : (
-            /* 이름 표시 + 호버 시 편집 버튼 / Name display with edit button on hover */
-            <div className="flex items-center gap-1.5 group min-w-0">
-              <p className="text-white font-bold flex-1 min-w-0 truncate leading-snug">
-                {currentName}
+            )}
+            <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
+            {!user.isAnonymous && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                닉네임 변경권 {nicknameChangeTickets}개
               </p>
-              <button type="button" onClick={startEditName}
-                className="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
-                title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
-                <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-            </div>
-          )}
-          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
-          {!user.isAnonymous && (
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-              닉네임 변경권 {nicknameChangeTickets}개
-            </p>
-          )}
-          {userGrade && (
-            <div className="mt-2 flex gap-2">
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
-                {userGrade.label}
-              </span>
-            </div>
-          )}
+            )}
+            {userGrade && (
+              <div className="mt-2 flex gap-2">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: userGrade.color + '26', color: userGrade.color }}>
+                  {userGrade.label}
+                </span>
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onLogout}
+            className="text-xs px-3 py-1.5 rounded-lg border shrink-0"
+            style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)', color: 'var(--text-dim)' }}>
+            로그아웃
+          </button>
         </div>
-        <button type="button" onClick={onLogout}
-          className="text-xs px-3 py-1.5 rounded-lg border shrink-0"
-          style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)', color: 'var(--text-dim)' }}>
-          로그아웃
-        </button>
+        {/* 닉네임 편집 폼: 카드 전체 너비 사용 */}
+        {!user.isAnonymous && isEditingName && (
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') cancelEditName(); }}
+              maxLength={8}
+              placeholder="닉네임 입력 (최대 8자)"
+              aria-label="닉네임 변경"
+              className="block w-full text-white font-bold bg-transparent border-b outline-none pb-1"
+              style={{ borderColor: '#00E676' }}
+              disabled={nameUpdating}
+            />
+            <div className="flex gap-2 mt-2">
+              <button type="button" onClick={saveEditName} disabled={nameUpdating}
+                className="text-xs font-bold px-3 py-1 rounded"
+                style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
+              <button type="button" onClick={cancelEditName} disabled={nameUpdating}
+                className="text-xs px-3 py-1 rounded"
+                style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Google 계정 미연동 시 연동 유도 배너

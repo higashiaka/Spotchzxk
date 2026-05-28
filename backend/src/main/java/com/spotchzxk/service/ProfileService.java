@@ -18,8 +18,8 @@ public class ProfileService {
         if (trimmed.isBlank()) {
             throw new IllegalArgumentException("닉네임을 입력해 주세요.");
         }
-        if (trimmed.length() > 20) {
-            throw new IllegalArgumentException("닉네임은 최대 20자까지 가능합니다.");
+        if (trimmed.length() > 8) {
+            throw new IllegalArgumentException("닉네임은 최대 8자까지 가능합니다.");
         }
 
         var user = userRepository.findById(uid)
