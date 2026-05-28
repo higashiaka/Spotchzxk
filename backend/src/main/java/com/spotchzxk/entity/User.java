@@ -55,4 +55,8 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private boolean isBot = false;
+
+    @Column(name = "is_guest", nullable = false)
+    @Builder.Default
+    private boolean isGuest = false;
 }

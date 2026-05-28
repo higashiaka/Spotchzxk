@@ -50,6 +50,7 @@ public class AccountLinkService {
                 .rankingNicknamePublic(guestUser.isRankingNicknamePublic())
                 .nicknameChangeTickets(guestUser.getNicknameChangeTickets())
                 .stockAddTickets(guestUser.getStockAddTickets())
+                .isGuest(false)
                 .resetCount(guestUser.getResetCount())
                 .lastResetDate(guestUser.getLastResetDate())
                 .dividendTotal(guestUser.getDividendTotal())
