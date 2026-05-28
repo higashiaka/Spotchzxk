@@ -13,7 +13,7 @@ import {
 
 /** 확성기 아이템 1회 사용 비용 (원) / Cost per megaphone use in KRW */
 const MEGAPHONE_PRICE = 1_000_000_000;
-const NICKNAME_TICKET_PRICE = 30_000_000;
+const NICKNAME_TICKET_PRICE = 1_000_000;
 const STOCK_ADD_TICKET_PRICE = 30_000_000;
 /** 확성기 1일 최대 사용 횟수 / Max megaphone uses per day */
 const DAILY_LIMIT = 3;

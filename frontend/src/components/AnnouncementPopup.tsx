@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 /** localStorage 키: 사용자가 '다시 보지 않기'를 선택했는지 기록
  *  localStorage key used to track if the user has permanently dismissed the popup */
-const NOTICE_KEY = 'notice_update_v4';
+const NOTICE_KEY = 'notice_update_v5';
 
 /** 앱 최초 진입 시 업데이트 사항을 안내하는 팝업 컴포넌트.
  *  localStorage에 해제 기록이 없으면 표시되고,
@@ -72,7 +72,7 @@ export default function AnnouncementPopup() {
             <div className="rounded-xl p-3 text-sm modal-panel">
               <p>
                 <span className="text-accent">비용</span>
-                <span className="ml-2 text-white">30,000,000 코인</span>
+                <span className="ml-2 text-white">1,000,000 코인</span>
               </p>
               <p className="mt-1 text-xs text-dim-token">프로필 화면에서 이름 옆 편집 버튼으로 변경</p>
             </div>
