@@ -15,16 +15,6 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findTop50ByOrderByCreatedAtDesc();
     @Query(value = """
             SELECT o.* FROM orders o
-            LEFT JOIN users u ON u.id = o.user_id
-            WHERE (u.id IS NULL OR u.is_bot = 0)
-              AND o.status = 'completed'
-            ORDER BY o.created_at DESC
-            LIMIT 50
-            """, nativeQuery = true)
-    List<Order> findTop50NonBotCompletedByOrderByCreatedAtDesc();
-
-    @Query(value = """
-            SELECT o.* FROM orders o
             JOIN users u ON u.id = o.user_id
             WHERE u.is_bot = 1
               AND o.status = 'completed'
