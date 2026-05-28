@@ -66,7 +66,7 @@ public class PortfolioService {
         response.put("nicknameChangeTickets", p.getNicknameChangeTickets());
         response.put("stockAddTickets", p.getStockAddTickets());
         if (!p.isGuest()) {
-            long leagueRank = userRepository.countUsersWithHigherBalance(p.getCoinBalance()) + 1;
+            long leagueRank = userRepository.countUsersWithHigherTotalAssets(userId) + 1;
             long leagueTotal = userRepository.countActiveUsers();
             response.put("leagueRank", leagueRank);
             response.put("leagueTotal", leagueTotal);
