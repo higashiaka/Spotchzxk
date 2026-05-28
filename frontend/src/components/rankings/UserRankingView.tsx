@@ -25,6 +25,7 @@ export function UserRankingView() {
       if (!res.ok) throw new Error('랭킹 조회 실패');
       return res.json();
     },
+    refetchInterval: 60_000,
   });
 
   const valueLabel = rankingType === 'dividend' ? '배당수익' : '실현손익';
