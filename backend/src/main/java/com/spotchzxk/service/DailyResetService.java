@@ -2,6 +2,7 @@ package com.spotchzxk.service;
 
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -17,6 +18,7 @@ import java.util.List;
 public class DailyResetService {
 
     private final StockRepository stockRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     /**
@@ -35,7 +37,9 @@ public class DailyResetService {
             stock.setDailyVolume(0L);
         });
         stockRepository.saveAll(stocks);
-        
+
+        userRepository.resetAllRankingStats();
+
         // Broadcast the reset stocks list to all clients instantly
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
         log.info("Daily reset completed successfully. Updated {} stocks.", stocks.size());
