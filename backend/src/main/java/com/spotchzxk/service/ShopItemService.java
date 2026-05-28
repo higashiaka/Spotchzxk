@@ -13,7 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ShopItemService {
 
-    private static final BigDecimal NICKNAME_TICKET_PRICE = new BigDecimal("30000000");
+    private static final BigDecimal NICKNAME_TICKET_PRICE = new BigDecimal("1000000");
     private static final BigDecimal STOCK_ADD_TICKET_PRICE = new BigDecimal("30000000");
 
     private final UserRepository userRepository;
