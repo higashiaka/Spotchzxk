@@ -52,7 +52,7 @@ public class GuestService {
     private void markGuest(String uid) {
         User user = userRepository.findById(uid)
                 .orElse(User.builder().id(uid).coinBalance(INITIAL_BALANCE).build());
-        user.setGuest(true);
+        user.markAsGuest();
         userRepository.save(user);
     }
 }

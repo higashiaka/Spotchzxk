@@ -9,9 +9,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "user_dividend_logs")
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class UserDividendLog {
 

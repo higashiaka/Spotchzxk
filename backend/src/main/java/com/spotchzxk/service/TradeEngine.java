@@ -146,22 +146,15 @@ public class TradeEngine {
     }
 
     private void updateStock(Stock stock, boolean isBuy, int qty, BigDecimal executedPrice) {
-        stock.setCurrentPrice(executedPrice.intValue());
-        stock.setDailyVolume(stock.getDailyVolume() + qty);
-        if (isBuy) {
-            stock.setIssuedShares(stock.getIssuedShares() + qty);
-        } else {
-            stock.setIssuedShares(Math.max(0, stock.getIssuedShares() - qty));
-        }
+        stock.applyTrade(executedPrice.intValue(), isBuy, qty);
         stockRepository.save(stock);
     }
 
     private void updateUserBalance(User user, boolean isBuy, BigDecimal cost) {
-        if (isBuy) {
-            user.setCoinBalance(user.getCoinBalance().subtract(cost));
-        } else {
-            user.setCoinBalance(user.getCoinBalance().add(cost));
-        }
+        BigDecimal newBalance = isBuy
+                ? user.getCoinBalance().subtract(cost)
+                : user.getCoinBalance().add(cost);
+        user.updateBalance(newBalance);
         userRepository.save(user);
     }
 
@@ -190,8 +183,7 @@ public class TradeEngine {
         BigDecimal newAvg = prevAvg.multiply(BigDecimal.valueOf(prevQty))
                 .add(cost)
                 .divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP);
-        share.setAvgPrice(newAvg);
-        share.setQuantity(newQty);
+        share.updateOnBuy(newQty, newAvg);
         userShareRepository.save(share);
     }
 
@@ -201,7 +193,7 @@ public class TradeEngine {
             userShareRepository.delete(share);
             return;
         }
-        share.setQuantity(newQty);
+        share.updateOnSell(newQty);
         userShareRepository.save(share);
     }
 
@@ -210,7 +202,7 @@ public class TradeEngine {
         BigDecimal costBasis = avgBuyPrice.multiply(BigDecimal.valueOf(qty));
         BigDecimal profit = proceeds.subtract(costBasis).setScale(2, RoundingMode.HALF_UP);
         BigDecimal currentProfit = user.getRealizedProfit() != null ? user.getRealizedProfit() : BigDecimal.ZERO;
-        user.setRealizedProfit(currentProfit.add(profit));
+        user.updateRealizedProfit(currentProfit.add(profit));
         userRepository.save(user);
     }
 

@@ -7,9 +7,8 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "orders")
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class Order {
 

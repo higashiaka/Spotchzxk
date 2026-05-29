@@ -51,7 +51,7 @@ public class MegaphoneService {
             throw new IllegalStateException("현재 라이브 중인 스트리머만 확성기를 사용할 수 있습니다.");
         }
 
-        user.setCoinBalance(user.getCoinBalance().subtract(MEGAPHONE_PRICE));
+        user.deductBalance(MEGAPHONE_PRICE);
         userRepository.save(user);
 
         MegaphonePost post = MegaphonePost.builder()

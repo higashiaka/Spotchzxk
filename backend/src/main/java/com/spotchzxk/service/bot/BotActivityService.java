@@ -258,8 +258,7 @@ public class BotActivityService {
 
     private void resetBotAssets(String botUserId) {
         userRepository.findById(botUserId).ifPresent(user -> {
-            user.setCoinBalance(BOT_INITIAL_BALANCE);
-            user.setRealizedProfit(BigDecimal.ZERO);
+            user.resetFinancials(BOT_INITIAL_BALANCE);
             userRepository.save(user);
         });
         tradeEngine.evictUserCache(botUserId);
@@ -314,8 +313,8 @@ public class BotActivityService {
         }
         // 이미 존재하는 경우: 실제 변경이 있을 때만 저장 / Only save if something needs fixing
         boolean modified = false;
-        if (!existing.isBot()) { existing.setBot(true); modified = true; }
-        if (existing.getCoinBalance() == null) { existing.setCoinBalance(BOT_INITIAL_BALANCE); modified = true; }
+        if (!existing.isBot()) { existing.markAsBot(); modified = true; }
+        if (existing.getCoinBalance() == null) { existing.updateBalance(BOT_INITIAL_BALANCE); modified = true; }
         if (modified) userRepository.save(existing);
     }
 

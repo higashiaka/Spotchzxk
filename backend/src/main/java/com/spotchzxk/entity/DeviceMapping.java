@@ -7,10 +7,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "device_mappings")
-@Getter @Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class DeviceMapping {
 
     @Id

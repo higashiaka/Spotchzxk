@@ -9,9 +9,8 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "users")
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class User {
 
@@ -59,4 +58,64 @@ public class User {
     @Column(name = "is_guest", nullable = false)
     @Builder.Default
     private boolean isGuest = false;
+
+    public void updateBalance(BigDecimal newBalance) {
+        this.coinBalance = newBalance;
+    }
+
+    public void deductBalance(BigDecimal amount) {
+        this.coinBalance = this.coinBalance.subtract(amount);
+    }
+
+    public void updateRealizedProfit(BigDecimal newProfit) {
+        this.realizedProfit = newProfit;
+    }
+
+    public void resetFinancials(BigDecimal initialBalance) {
+        this.coinBalance = initialBalance;
+        this.realizedProfit = BigDecimal.ZERO;
+    }
+
+    public void applyDailyResetTracking(LocalDate today) {
+        if (!today.equals(this.lastResetDate)) {
+            this.resetCount = 0;
+            this.lastResetDate = today;
+        }
+    }
+
+    public void incrementResetCount() {
+        this.resetCount++;
+    }
+
+    public void changeDisplayName(String name) {
+        this.displayName = name;
+    }
+
+    public void useNicknameTicket() {
+        this.nicknameChangeTickets--;
+    }
+
+    public void addNicknameTicket() {
+        this.nicknameChangeTickets++;
+    }
+
+    public void addStockAddTicket() {
+        this.stockAddTickets++;
+    }
+
+    public void useStockAddTicket() {
+        this.stockAddTickets--;
+    }
+
+    public void updateRankingVisibility(boolean isPublic) {
+        this.rankingNicknamePublic = isPublic;
+    }
+
+    public void markAsGuest() {
+        this.isGuest = true;
+    }
+
+    public void markAsBot() {
+        this.isBot = true;
+    }
 }

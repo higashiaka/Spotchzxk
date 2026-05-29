@@ -70,12 +70,10 @@ public class ChzzkLivePollingService {
     }
 
     private void markStreamStarted(Stock stock) {
-        stock.setLive(true);
-        stock.setLiveStartedAt(LocalDateTime.now());
-        stock.setDividendAccumulationCount(0);
+        stock.startLive(LocalDateTime.now());
         userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
         long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
-        stock.setPreStreamFloat(preStreamFloat);
+        stock.updatePreStreamFloat(preStreamFloat);
         stockRepository.save(stock);
         log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
                 stock.getChannelId(), preStreamFloat);
@@ -85,9 +83,7 @@ public class ChzzkLivePollingService {
         if (isBlocked) {
             log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
         }
-        stock.setLive(false);
-        stock.setLiveStartedAt(null);
-        stock.setDividendAccumulationCount(0);
+        stock.endLive();
         stockRepository.save(stock);
         log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
     }
@@ -109,7 +105,7 @@ public class ChzzkLivePollingService {
         for (long i = 0; i < newIntervals; i++) {
             dividendService.payIntervalDividend(stock);
         }
-        stock.setDividendAccumulationCount(completedIntervals);
+        stock.updateDividendAccumulation(completedIntervals);
         log.info("Interval dividend paid for channel {}: intervals {} -> {}",
                 stock.getChannelId(), alreadyPaid, completedIntervals);
     }

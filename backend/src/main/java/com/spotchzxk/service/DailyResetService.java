@@ -32,10 +32,7 @@ public class DailyResetService {
         log.info("Starting daily reset at midnight...");
         List<Stock> stocks = stockRepository.findAll();
         
-        stocks.forEach(stock -> {
-            stock.setBasePrice(stock.getCurrentPrice());
-            stock.setDailyVolume(0L);
-        });
+        stocks.forEach(Stock::applyDailyReset);
         stockRepository.saveAll(stocks);
 
         int resetUsers = userRepository.resetAllRankingStats();
