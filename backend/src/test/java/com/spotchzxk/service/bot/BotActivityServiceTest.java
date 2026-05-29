@@ -121,7 +121,7 @@ class BotActivityServiceTest {
 
     @Test
     void recentBotTradesReduceSelectionScore() {
-        Stock stock = stock("stock-1", false);
+        Stock stock = stock("stock-1", true);  // non-live base score is already at minimum (1), so penalty has no effect
 
         assertThat(service.baseScoreStock(stock, Map.of("stock-1", 3L)))
                 .isLessThan(service.baseScoreStock(stock, Map.of()));
