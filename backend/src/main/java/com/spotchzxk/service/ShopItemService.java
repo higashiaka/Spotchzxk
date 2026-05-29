@@ -34,11 +34,11 @@ public class ShopItemService {
             throw new IllegalStateException("잔액이 부족합니다.");
         }
 
-        user.setCoinBalance(user.getCoinBalance().subtract(price));
+        user.deductBalance(price);
         if ("nickname-change-ticket".equals(item)) {
-            user.setNicknameChangeTickets(user.getNicknameChangeTickets() + 1);
+            user.addNicknameTicket();
         } else {
-            user.setStockAddTickets(user.getStockAddTickets() + 1);
+            user.addStockAddTicket();
         }
         userRepository.save(user);
         tradeEngine.evictUserCache(uid);

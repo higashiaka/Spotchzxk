@@ -28,8 +28,8 @@ public class ProfileService {
             throw new IllegalStateException("닉네임 변경권이 없습니다.");
         }
 
-        user.setDisplayName(trimmed);
-        user.setNicknameChangeTickets(user.getNicknameChangeTickets() - 1);
+        user.changeDisplayName(trimmed);
+        user.useNicknameTicket();
         userRepository.save(user);
         tradeEngine.evictUserCache(uid);
     }
@@ -38,7 +38,7 @@ public class ProfileService {
     public void updateRankingNicknamePublic(String uid, boolean isPublic) {
         var user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        user.setRankingNicknamePublic(isPublic);
+        user.updateRankingVisibility(isPublic);
         userRepository.save(user);
     }
 }

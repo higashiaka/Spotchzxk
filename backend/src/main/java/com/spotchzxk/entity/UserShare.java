@@ -3,14 +3,14 @@ package com.spotchzxk.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_shares")
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class UserShare {
 
@@ -33,7 +33,7 @@ public class UserShare {
     private long preStreamQuantity;
 
     @Column(precision = 12, scale = 2)
-    private java.math.BigDecimal avgPrice;
+    private BigDecimal avgPrice;
 
     @Column
     private LocalDateTime updatedAt;
@@ -42,5 +42,14 @@ public class UserShare {
     @PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public void updateOnBuy(long newQuantity, BigDecimal newAvgPrice) {
+        this.quantity = newQuantity;
+        this.avgPrice = newAvgPrice;
+    }
+
+    public void updateOnSell(long newQuantity) {
+        this.quantity = newQuantity;
     }
 }

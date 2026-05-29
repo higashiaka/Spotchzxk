@@ -61,15 +61,12 @@ public class StockService {
         if (user.getStockAddTickets() <= 0) {
             throw new IllegalStateException("종목 추가 티켓이 없습니다.");
         }
-        user.setStockAddTickets(user.getStockAddTickets() - 1);
+        user.useStockAddTicket();
         userRepository.save(user);
         tradeEngine.evictUserCache(userId);
 
         int listingPrice = calcListingPrice(stock.getFollowerCount());
-        stock.setCurrentPrice(listingPrice);
-        stock.setBasePrice(listingPrice);
-        stock.setTotalSupply(100_000L);
-        stock.setIssuedShares(0L);
+        stock.finalizeListing(listingPrice, 100_000L);
         stockRepository.save(stock);
 
         messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());

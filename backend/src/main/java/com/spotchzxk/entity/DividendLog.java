@@ -8,9 +8,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "dividend_logs")
 @Getter
-@Setter
 @Builder
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class DividendLog {
 

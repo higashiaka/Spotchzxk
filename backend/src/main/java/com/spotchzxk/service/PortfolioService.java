@@ -89,18 +89,14 @@ public class PortfolioService {
         }
 
         LocalDate todayKst = LocalDate.now(KST);
-        if (!todayKst.equals(p.getLastResetDate())) {
-            p.setResetCount(0);
-            p.setLastResetDate(todayKst);
-        }
+        p.applyDailyResetTracking(todayKst);
 
         if (p.getResetCount() >= MAX_DAILY_RESETS) {
             throw new ResetLimitExceededException();
         }
 
-        p.setResetCount(p.getResetCount() + 1);
-        p.setCoinBalance(INITIAL_BALANCE);
-        p.setRealizedProfit(BigDecimal.ZERO);
+        p.incrementResetCount();
+        p.resetFinancials(INITIAL_BALANCE);
         userRepository.save(p);
 
         userShareRepository.deleteAll(shares);

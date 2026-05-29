@@ -64,13 +64,13 @@ public class ChzzkApiClient {
 
             JsonNode data = dataArray.get(0);
             if (data.has("channelName")) {
-                stock.setStreamerName(data.get("channelName").asText());
+                stock.updateStreamerName(data.get("channelName").asText());
             }
             if (data.has("channelImageUrl")) {
-                stock.setProfileImageUrl(data.get("channelImageUrl").asText());
+                stock.updateProfileImageUrl(data.get("channelImageUrl").asText());
             }
             if (data.has("followerCount")) {
-                stock.setFollowerCount(data.get("followerCount").asInt());
+                stock.updateFollowerCount(data.get("followerCount").asInt());
             }
             return true;
         } catch (Exception e) {
