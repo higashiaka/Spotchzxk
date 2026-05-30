@@ -44,7 +44,7 @@ public class ChzzkLivePollingService {
         }
 
         if (anyChanged) {
-            messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+            messagingTemplate.convertAndSend("/topic/streamers", stocks);
         }
     }
 
