@@ -37,6 +37,7 @@ public class CandleService {
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final Map<Long, Set<String>> tradedStockIdsByMinute = new ConcurrentHashMap<>();
+    private final Map<String, OhlcCandle> currentBucketCandles = new ConcurrentHashMap<>();
 
     // ── REST: DB 주문 기록 → 캔들 목록 반환 ──────────────────────────────────────
 
@@ -67,16 +68,13 @@ public class CandleService {
 
     // ── 거래 발생 시: 현재 각 봉 재계산 → STOMP 브로드캐스트 ─────────────────────
 
-    public void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
+    public synchronized void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
         long minuteStart = (timestamp / MS_1M) * MS_1M;
         tradedStockIdsByMinute
                 .computeIfAbsent(minuteStart, ignored -> ConcurrentHashMap.newKeySet())
                 .add(stockId);
-        long weekBucketStart = (timestamp / MS_1W) * MS_1W;
-        List<Order> orders = orderRepository
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, weekBucketStart);
 
-        Map<String, OhlcCandle> update = computeCurrentBuckets(orders, timestamp);
+        Map<String, OhlcCandle> update = computeCurrentBuckets(stockId, executedPrice, timestamp);
         messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
     }
 
@@ -180,28 +178,64 @@ public class CandleService {
     }
 
     /** 거래 발생 시점 기준으로 각 interval의 현재 봉 계산 */
-    private Map<String, OhlcCandle> computeCurrentBuckets(List<Order> orders, long timestamp) {
+    private Map<String, OhlcCandle> computeCurrentBuckets(String stockId, BigDecimal executedPrice, long timestamp) {
         Map<String, OhlcCandle> result = new HashMap<>();
         for (String interval : ALL_INTERVALS) {
             long bucketMs = INTERVAL_MS.get(interval);
             long bucketStart = (timestamp / bucketMs) * bucketMs;
-
-            List<Order> inBucket = orders.stream()
-                    .filter(o -> o.getCreatedAt() >= bucketStart && o.getExecutedPrice() != null)
-                    .collect(Collectors.toList());
-
-            if (inBucket.isEmpty()) continue;
-
-            double open  = inBucket.get(0).getExecutedPrice().doubleValue();
-            double close = inBucket.get(inBucket.size() - 1).getExecutedPrice().doubleValue();
-            double high  = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).max().orElse(open);
-            double low   = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).min().orElse(open);
-
-            result.put(interval, OhlcCandle.builder()
-                    .bucketStart(bucketStart)
-                    .open(open).high(high).low(low).close(close).build());
+            result.put(interval, currentBucketCandle(stockId, interval, bucketStart, executedPrice));
         }
         return result;
+    }
+
+    private OhlcCandle currentBucketCandle(
+            String stockId,
+            String interval,
+            long bucketStart,
+            BigDecimal executedPrice
+    ) {
+        String key = stockId + ":" + interval;
+        OhlcCandle current = currentBucketCandles.get(key);
+        if (current != null && current.getBucketStart() == bucketStart) {
+            applyPrice(current, executedPrice.doubleValue());
+            return current;
+        }
+
+        List<Order> orders = orderRepository
+                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, bucketStart);
+        long bucketEnd = bucketStart + INTERVAL_MS.get(interval);
+        OhlcCandle restored = restoreCurrentBucket(orders, bucketStart, bucketEnd, executedPrice.doubleValue());
+        currentBucketCandles.put(key, restored);
+        return restored;
+    }
+
+    private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, double fallbackPrice) {
+        List<Order> inBucket = orders.stream()
+                .filter(o -> o.getCreatedAt() >= bucketStart
+                        && o.getCreatedAt() < bucketEnd
+                        && o.getExecutedPrice() != null)
+                .collect(Collectors.toList());
+
+        if (inBucket.isEmpty()) {
+            return flat(bucketStart, fallbackPrice);
+        }
+
+        double open = inBucket.get(0).getExecutedPrice().doubleValue();
+        double close = inBucket.get(inBucket.size() - 1).getExecutedPrice().doubleValue();
+        double high = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).max().orElse(open);
+        double low = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).min().orElse(open);
+
+        OhlcCandle candle = OhlcCandle.builder()
+                .bucketStart(bucketStart)
+                .open(open).high(high).low(low).close(close).build();
+        applyPrice(candle, fallbackPrice);
+        return candle;
+    }
+
+    private void applyPrice(OhlcCandle candle, double price) {
+        if (price > candle.getHigh()) candle.setHigh(price);
+        if (price < candle.getLow()) candle.setLow(price);
+        candle.setClose(price);
     }
 
     private OhlcCandle flat(long bucketStart, double price) {

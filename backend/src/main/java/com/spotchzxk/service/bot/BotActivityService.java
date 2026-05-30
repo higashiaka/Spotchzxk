@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -64,6 +65,9 @@ public class BotActivityService {
 
         Collections.shuffle(dueBotUserIds);
         int orderLimit = Math.min(dueBotUserIds.size(), Math.max(1, properties.getMaxOrdersPerTick()));
+        List<String> runnableBotUserIds = dueBotUserIds.subList(0, orderLimit);
+        Map<String, User> botUsersById = userRepository.findAllById(runnableBotUserIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity(), (left, right) -> left));
 
         List<Stock> stocks = stockRepository.findAll();
         if (stocks.isEmpty()) {
@@ -73,14 +77,15 @@ public class BotActivityService {
 
         Map<String, Long> recentBotCounts = recentBotTradeCounts();
         for (int i = 0; i < orderLimit; i++) {
-            String botUserId = dueBotUserIds.get(i);
+            String botUserId = runnableBotUserIds.get(i);
             scheduleBotNextRun(botUserId, now);
-            ensureBotUser(botUserId);
-            if (handleBotAssetRecovery(botUserId, stocks, recentBotCounts)) {
+            User botUser = ensureBotUser(botUserId, botUsersById.get(botUserId));
+            List<UserShare> heldShares = findHeldShares(botUserId);
+            if (handleBotAssetRecovery(botUser, heldShares, stocks, recentBotCounts)) {
                 continue;
             }
-            Stock stock = pickStockForBot(botUserId, stocks, recentBotCounts);
-            submitBotOrder(botUserId, stock);
+            Stock stock = pickStockForBot(botUser, heldShares, stocks, recentBotCounts);
+            submitBotOrder(botUser, heldShares, stock);
         }
     }
 
@@ -111,7 +116,27 @@ public class BotActivityService {
             Map<String, Long> recentBotCounts
     ) {
         BigDecimal balance = findBotBalance(botUserId);
-        List<Stock> heldStocks = findHeldStocks(botUserId, stocks);
+        List<Stock> heldStocks = findHeldStocks(findHeldShares(botUserId), stocks);
+        return pickStockForBot(balance, heldStocks, stocks, recentBotCounts);
+    }
+
+    private Stock pickStockForBot(
+            User botUser,
+            List<UserShare> heldShares,
+            List<Stock> stocks,
+            Map<String, Long> recentBotCounts
+    ) {
+        BigDecimal balance = findBotBalance(botUser);
+        List<Stock> heldStocks = findHeldStocks(heldShares, stocks);
+        return pickStockForBot(balance, heldStocks, stocks, recentBotCounts);
+    }
+
+    private Stock pickStockForBot(
+            BigDecimal balance,
+            List<Stock> heldStocks,
+            List<Stock> stocks,
+            Map<String, Long> recentBotCounts
+    ) {
         if (!heldStocks.isEmpty() && (isCriticalBalance(balance) || isLowBalance(balance))) {
             return pickStock(heldStocks, recentBotCounts);
         }
@@ -157,11 +182,11 @@ public class BotActivityService {
         return randomInt(1, 100) <= buyChance ? "buy" : "sell";
     }
 
-    private void submitBotOrder(String botUserId, Stock stock) {
-        BigDecimal balance = findBotBalance(botUserId);
-        long heldQty = findHeldQuantity(botUserId, stock.getChannelId());
+    private void submitBotOrder(User botUser, List<UserShare> heldShares, Stock stock) {
+        BigDecimal balance = findBotBalance(botUser);
+        long heldQty = findHeldQuantity(heldShares, stock.getChannelId());
         String tradeType = pickTradeType(balance, heldQty);
-        submitBotOrder(botUserId, stock, tradeType, heldQty, balance);
+        submitBotOrder(botUser.getId(), stock, tradeType, heldQty, balance);
     }
 
     private void submitBotOrder(String botUserId, Stock stock, String tradeType, long heldQty, BigDecimal balance) {
@@ -196,14 +221,24 @@ public class BotActivityService {
             List<Stock> stocks,
             Map<String, Long> recentBotCounts
     ) {
+        User botUser = ensureBotUser(botUserId);
+        return handleBotAssetRecovery(botUser, findHeldShares(botUserId), stocks, recentBotCounts);
+    }
+
+    private boolean handleBotAssetRecovery(
+            User botUser,
+            List<UserShare> heldShares,
+            List<Stock> stocks,
+            Map<String, Long> recentBotCounts
+    ) {
+        String botUserId = botUser.getId();
         int thresholdPercent = Math.max(0, properties.getAssetResetThresholdPercent());
         if (thresholdPercent <= 0) {
             botLiquidating.remove(botUserId);
             return false;
         }
 
-        List<UserShare> heldShares = findHeldShares(botUserId);
-        BigDecimal totalAssets = calculateTotalAssets(botUserId, heldShares);
+        BigDecimal totalAssets = calculateTotalAssets(botUser, heldShares);
         boolean shouldLiquidate = botLiquidating.containsKey(botUserId) || isAssetResetThresholdReached(totalAssets);
         if (!shouldLiquidate) {
             return false;
@@ -211,7 +246,7 @@ public class BotActivityService {
 
         botLiquidating.put(botUserId, true);
         if (heldShares.isEmpty()) {
-            resetBotAssets(botUserId);
+            resetBotAssets(botUser);
             botLiquidating.remove(botUserId);
             return true;
         }
@@ -232,7 +267,7 @@ public class BotActivityService {
                 .mapToLong(UserShare::getQuantity)
                 .findFirst()
                 .orElse(0L);
-        submitBotOrder(botUserId, stock, "sell", heldQty, findBotBalance(botUserId));
+        submitBotOrder(botUserId, stock, "sell", heldQty, findBotBalance(botUser));
         return true;
     }
 
@@ -243,8 +278,8 @@ public class BotActivityService {
         return totalAssets.compareTo(threshold) <= 0;
     }
 
-    private BigDecimal calculateTotalAssets(String botUserId, List<UserShare> heldShares) {
-        BigDecimal totalAssets = findBotBalance(botUserId);
+    private BigDecimal calculateTotalAssets(User botUser, List<UserShare> heldShares) {
+        BigDecimal totalAssets = findBotBalance(botUser);
         for (UserShare share : heldShares) {
             Stock stock = share.getStock();
             if (stock == null) {
@@ -256,13 +291,11 @@ public class BotActivityService {
         return totalAssets;
     }
 
-    private void resetBotAssets(String botUserId) {
-        userRepository.findById(botUserId).ifPresent(user -> {
-            user.resetFinancials(BOT_INITIAL_BALANCE);
-            userRepository.save(user);
-        });
-        tradeEngine.evictUserCache(botUserId);
-        log.info("Bot assets reset after liquidation: userId={}", botUserId);
+    private void resetBotAssets(User botUser) {
+        botUser.resetFinancials(BOT_INITIAL_BALANCE);
+        userRepository.save(botUser);
+        tradeEngine.evictUserCache(botUser.getId());
+        log.info("Bot assets reset after liquidation: userId={}", botUser.getId());
     }
 
     private int calculateBuyQuantityLimit(Stock stock, BigDecimal balance) {
@@ -300,22 +333,27 @@ public class BotActivityService {
                 .collect(Collectors.groupingBy(Order::getStreamerId, Collectors.counting()));
     }
 
-    private void ensureBotUser(String userId) {
-        User existing = userRepository.findById(userId).orElse(null);
+    private User ensureBotUser(String userId) {
+        return ensureBotUser(userId, userRepository.findById(userId).orElse(null));
+    }
+
+    private User ensureBotUser(String userId, User existing) {
         if (existing == null) {
             // 최초 생성 / First-time creation
-            userRepository.save(User.builder()
+            User created = User.builder()
                     .id(userId)
                     .coinBalance(BOT_INITIAL_BALANCE)
                     .isBot(true)
-                    .build());
-            return;
+                    .build();
+            User saved = userRepository.save(created);
+            return saved == null ? created : saved;
         }
         // 이미 존재하는 경우: 실제 변경이 있을 때만 저장 / Only save if something needs fixing
         boolean modified = false;
         if (!existing.isBot()) { existing.markAsBot(); modified = true; }
         if (existing.getCoinBalance() == null) { existing.updateBalance(BOT_INITIAL_BALANCE); modified = true; }
         if (modified) userRepository.save(existing);
+        return existing;
     }
 
     private long findHeldQuantity(String userId, String channelId) {
@@ -323,10 +361,18 @@ public class BotActivityService {
         return share.map(UserShare::getQuantity).orElse(0L);
     }
 
-    private List<Stock> findHeldStocks(String userId, List<Stock> stocks) {
+    private long findHeldQuantity(List<UserShare> heldShares, String channelId) {
+        return heldShares.stream()
+                .filter(share -> share.getStock() != null && channelId.equals(share.getStock().getChannelId()))
+                .mapToLong(UserShare::getQuantity)
+                .findFirst()
+                .orElse(0L);
+    }
+
+    private List<Stock> findHeldStocks(List<UserShare> heldShares, List<Stock> stocks) {
         Map<String, Stock> stockById = stocks.stream()
                 .collect(Collectors.toMap(Stock::getChannelId, stock -> stock, (left, right) -> left));
-        return findHeldShares(userId).stream()
+        return heldShares.stream()
                 .map(share -> share.getStock().getChannelId())
                 .map(stockById::get)
                 .filter(heldStock -> heldStock != null)
@@ -343,6 +389,13 @@ public class BotActivityService {
             return BOT_INITIAL_BALANCE;
         }
         return user.get().getCoinBalance();
+    }
+
+    private BigDecimal findBotBalance(User user) {
+        if (user == null || user.getCoinBalance() == null) {
+            return BOT_INITIAL_BALANCE;
+        }
+        return user.getCoinBalance();
     }
 
     private boolean isLowBalance(BigDecimal balance) {
