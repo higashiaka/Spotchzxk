@@ -3,7 +3,6 @@ package com.spotchzxk.service;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserShareRepository;
-import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -17,17 +16,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ChzzkLivePollingService {
-
-    private static final int STATUS_FETCH_THREADS = 20;
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
@@ -36,14 +30,6 @@ public class ChzzkLivePollingService {
     private final ChzzkApiClient chzzkApiClient;
     private final TransactionTemplate transactionTemplate;
 
-    private final ExecutorService statusFetchExecutor =
-            Executors.newFixedThreadPool(STATUS_FETCH_THREADS);
-
-    @PreDestroy
-    public void shutdown() {
-        statusFetchExecutor.shutdownNow();
-    }
-
     @Scheduled(fixedDelay = 60_000)
     public void pollLiveStatus() {
         List<Stock> stocks = stockRepository.findAll();
@@ -51,7 +37,7 @@ public class ChzzkLivePollingService {
             return;
         }
 
-        Map<String, String> statusMap = fetchAllStatusesConcurrently(stocks);
+        Map<String, String> statusMap = fetchAllStatuses(stocks);
 
         List<Stock> pollingOrder = stocks.stream()
                 .sorted(Comparator.comparing(Stock::isLive).reversed())
@@ -75,23 +61,11 @@ public class ChzzkLivePollingService {
         }
     }
 
-    private Map<String, String> fetchAllStatusesConcurrently(List<Stock> stocks) {
-        List<CompletableFuture<Map.Entry<String, String>>> futures = stocks.stream()
-                .map(stock -> CompletableFuture.supplyAsync(
-                        () -> {
-                            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                            return status != null ? Map.entry(stock.getChannelId(), status) : null;
-                        },
-                        statusFetchExecutor))
-                .toList();
-
-        return futures.stream()
-                .map(f -> {
-                    try {
-                        return f.get();
-                    } catch (Exception e) {
-                        return null;
-                    }
+    private Map<String, String> fetchAllStatuses(List<Stock> stocks) {
+        return stocks.stream()
+                .map(stock -> {
+                    String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                    return status != null ? Map.entry(stock.getChannelId(), status) : null;
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
