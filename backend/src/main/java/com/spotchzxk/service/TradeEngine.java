@@ -81,16 +81,17 @@ public class TradeEngine {
         BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
         BigDecimal executedPrice = calculateExecutedPrice(currentPrice, isBuy, qty);
         BigDecimal cost = executedPrice.multiply(BigDecimal.valueOf(qty));
+        long executedAt = System.currentTimeMillis();
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
         Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
         long heldQty = shares.getOrDefault(channelId, 0L);
 
         validateTrade(channelId, isBuy, qty, cost, currentBalance, heldQty);
-        String streamerName = persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost);
+        String streamerName = persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost, executedAt);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, executedPrice,
                 currentBalance, shares, heldQty, cost);
-        broadcastTrade(channelId, streamerName, isBuy, qty, executedPrice);
+        broadcastTrade(channelId, streamerName, isBuy, qty, executedPrice, executedAt);
 
         return new TradeResponse("executed", executedPrice, newBalance,
                 BigDecimal.ZERO, UUID.randomUUID().toString(), "market");
@@ -131,7 +132,7 @@ public class TradeEngine {
     }
 
     private String persistTrade(String userId, String channelId, boolean isBuy, int qty,
-                                BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost) {
+                                BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost, long executedAt) {
         return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
             User user = userRepository.findById(userId)
@@ -140,7 +141,7 @@ public class TradeEngine {
             updateStock(stock, isBuy, qty, executedPrice);
             updateUserBalance(user, isBuy, cost);
             updateUserShare(user, stock, channelId, isBuy, qty, cost);
-            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice);
+            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, executedAt);
             return stock.getStreamerName();
         });
     }
@@ -207,7 +208,7 @@ public class TradeEngine {
     }
 
     private void saveOrder(String userId, String channelId, boolean isBuy, int qty,
-                           BigDecimal fallbackPrice, BigDecimal executedPrice) {
+                           BigDecimal fallbackPrice, BigDecimal executedPrice, long executedAt) {
         orderRepository.save(Order.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
@@ -218,7 +219,7 @@ public class TradeEngine {
                 .executedPrice(executedPrice)
                 .orderMode("market")
                 .status("completed")
-                .createdAt(System.currentTimeMillis())
+                .createdAt(executedAt)
                 .build());
     }
 
@@ -237,8 +238,9 @@ public class TradeEngine {
         return newBalance;
     }
 
-    private void broadcastTrade(String channelId, String streamerName, boolean isBuy, int qty, BigDecimal executedPrice) {
-        candleService.onTrade(channelId, executedPrice, System.currentTimeMillis());
+    private void broadcastTrade(String channelId, String streamerName, boolean isBuy, int qty,
+                                BigDecimal executedPrice, long executedAt) {
+        candleService.onTrade(channelId, executedPrice, executedAt);
         messagingTemplate.convertAndSend("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
         messagingTemplate.convertAndSend("/topic/trades", Map.of(
@@ -247,7 +249,7 @@ public class TradeEngine {
                 "type", isBuy ? "buy" : "sell",
                 "quantity", qty,
                 "price", executedPrice,
-                "timestamp", System.currentTimeMillis()
+                "timestamp", executedAt
         ));
     }
 

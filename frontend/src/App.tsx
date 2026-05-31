@@ -48,6 +48,9 @@ const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapsho
   );
 };
 
+const liveTradeKey = (trade: LiveTrade) =>
+  `${trade.streamerId}-${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
+
 /** 앱 최상위 컴포넌트.
  *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
  *
@@ -79,6 +82,10 @@ function App() {
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
   /** 실시간 체결 피드 / Real-time trade feed */
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
+  const streamerNameById = useMemo(
+    () => new Map(streamers.map(streamer => [streamer.id, streamer.name])),
+    [streamers]
+  );
   const [onlineCount, setOnlineCount] = useState<number | null>(null);
   const currentScreenRef = useRef<ScreenSnapshot>({ tab: 'home', streamerId: null });
   const restoreFromBrowserRef = useRef(false);
@@ -155,21 +162,39 @@ function App() {
       .then(res => res.ok ? res.json() : null)
       .then((rawOrders: any[] | null) => {
         if (!rawOrders) return;
-        const initialTrades: LiveTrade[] = rawOrders.map(item => {
-          const streamer = streamers.find(s => s.id === item.streamerId);
-          return {
-            streamerId: item.streamerId,
-            streamerName: streamer ? streamer.name : item.streamerId,
-            type: item.type as 'buy' | 'sell',
-            quantity: item.quantity,
-            price: item.executedPrice ?? item.estimatedPrice,
-            timestamp: item.createdAt,
-          };
+        const initialTrades: LiveTrade[] = rawOrders.map(item => ({
+          streamerId: item.streamerId,
+          streamerName: item.streamerName ?? item.streamerId,
+          type: item.type as 'buy' | 'sell',
+          quantity: item.quantity,
+          price: item.executedPrice ?? item.estimatedPrice,
+          timestamp: item.createdAt,
+        }));
+        setLiveTrades(prev => {
+          const merged = new Map<string, LiveTrade>();
+          [...initialTrades, ...prev].forEach(trade => {
+            merged.set(liveTradeKey(trade), trade);
+          });
+          return [...merged.values()]
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 50);
         });
-        setLiveTrades(initialTrades);
       })
       .catch(err => console.error('Failed to load recent orders', err));
-  }, [streamers]);
+  }, []);
+
+  useEffect(() => {
+    setLiveTrades(prev => {
+      let changed = false;
+      const renamed = prev.map(trade => {
+        const streamerName = streamerNameById.get(trade.streamerId);
+        if (!streamerName || trade.streamerName === streamerName) return trade;
+        changed = true;
+        return { ...trade, streamerName };
+      });
+      return changed ? renamed : prev;
+    });
+  }, [streamerNameById]);
 
   // STOMP /topic/trades 구독: 신규 체결을 목록 맨 앞에 추가
   // Subscribe to STOMP /topic/trades: prepend new trades
@@ -177,7 +202,11 @@ function App() {
     const subscription = subscribeStomp('/topic/trades', (message) => {
       try {
         const trade = JSON.parse(message.body) as LiveTrade;
-        setLiveTrades(prev => [trade, ...prev]);
+        setLiveTrades(prev => {
+          const key = liveTradeKey(trade);
+          if (prev.some(item => liveTradeKey(item) === key)) return prev;
+          return [trade, ...prev].slice(0, 50);
+        });
       } catch (e) {
         console.error('Failed to parse trade message', e);
       }
