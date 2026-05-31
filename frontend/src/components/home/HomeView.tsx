@@ -74,6 +74,8 @@ export const HomeView = ({
   const top5 = useMemo(() =>
     [...streamers].sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 5),
     [streamers]);
+  const sectionBorder = '1px solid var(--border-primary)';
+  const rowBorder = '1px solid var(--border-card)';
 
   return (
     <div className="h-full flex flex-col overflow-hidden relative">
@@ -83,7 +85,7 @@ export const HomeView = ({
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
 
         {/* 최근 확성기 목록 / Recent megaphone posts */}
-        <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
+        <div className="px-4 pt-4 pb-3" style={{ borderBottom: sectionBorder }}>
           <div className="flex items-center justify-between gap-3 mb-3">
             <p className="text-sm font-bold text-white">최근 확성기</p>
             <button
@@ -99,7 +101,7 @@ export const HomeView = ({
         </div>
 
         {/* 내 투자 요약 / My investment summary */}
-        <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>
+        <div className="px-4 pt-5 pb-4" style={{ borderBottom: sectionBorder }}>
           <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>내 투자</p>
           {user ? (
             <>
@@ -130,7 +132,7 @@ export const HomeView = ({
         </div>
 
         {/* 나의 종목 / My stocks */}
-        <div className="px-4 pt-4 pb-2" style={{ borderBottom: '1px solid #222A3A' }}>
+        <div className="px-4 pt-4 pb-2" style={{ borderBottom: sectionBorder }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-white">나의 종목</p>
             {user && <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{holdingCount}개 보유</span>}
@@ -174,14 +176,14 @@ export const HomeView = ({
         </div>
 
         {/* 거래 현황 요약 rows / Trading summary stat rows */}
-        <div style={{ borderBottom: '1px solid #222A3A' }}>
+        <div style={{ borderBottom: sectionBorder }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
             { label: '포트폴리오수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
             { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
-              style={{ borderBottom: '1px solid #1A2232' }}
+              style={{ borderBottom: rowBorder }}
               onClick={row.action}>
               <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
               <span className="text-sm font-bold font-mono text-white mr-1">{row.value}</span>
@@ -193,7 +195,7 @@ export const HomeView = ({
 
         {/* 최근 본 종목 (가로 스크롤 칩) / Recently viewed stocks (horizontal scroll chips) */}
         {recentlyViewed.length > 0 && (
-          <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
+          <div className="px-4 pt-4 pb-3" style={{ borderBottom: sectionBorder }}>
             <p className="text-sm font-bold text-white mb-3">최근 본 종목</p>
             <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
               {recentlyViewed.map(s => {
@@ -219,13 +221,13 @@ export const HomeView = ({
         )}
 
         {/* 실시간 거래 피드 (최근 10건, 스크롤 가능) / Live trade feed (most recent 10, scrollable) */}
-        <div className="px-4 pt-4 pb-3 min-w-0 overflow-hidden" style={{ borderBottom: '1px solid #222A3A' }}>
+        <div className="px-4 pt-4 pb-3 min-w-0 overflow-hidden" style={{ borderBottom: sectionBorder }}>
           <div className="flex items-center justify-between gap-3 mb-3 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <p className="text-sm font-bold text-white">실시간 거래 피드</p>
               <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
-                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: 'var(--accent)' }}></span>
                 LIVE
               </span>
             </div>
@@ -285,7 +287,7 @@ export const HomeView = ({
               const pct = changePct(s.price, s.basePrice);
               return (
                 <div key={s.id} className="flex items-center gap-3 py-3 cursor-pointer"
-                  style={{ borderBottom: i < top5.length - 1 ? '1px solid #1A2232' : 'none' }}
+                  style={{ borderBottom: i < top5.length - 1 ? rowBorder : 'none' }}
                   onClick={() => onSelect(s)}>
                   {/* 순위 번호 / Rank number */}
                   <span className="w-5 text-sm font-bold shrink-0 text-center"
@@ -320,12 +322,12 @@ export const HomeView = ({
       {showTradeFeed && (
         <div className="absolute inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
           <div className="flex items-center justify-between px-4 py-4 shrink-0"
-            style={{ borderBottom: '1px solid #222A3A' }}>
+            style={{ borderBottom: sectionBorder }}>
             <div className="flex items-center gap-2">
               <h2 className="text-white font-bold text-base">실시간 거래 피드</h2>
               <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
-                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                <span className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: 'var(--accent)' }}></span>
                 LIVE
               </span>
             </div>
@@ -349,7 +351,7 @@ export const HomeView = ({
                 return (
                   <div key={idx}
                     className={`flex items-center px-4 py-3.5${stock ? ' cursor-pointer hover:bg-white/5' : ''}`}
-                    style={{ borderBottom: '1px solid #1A2232' }}
+                    style={{ borderBottom: rowBorder }}
                     onClick={() => { if (stock) { setShowTradeFeed(false); onSelect(stock); } }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
@@ -382,7 +384,7 @@ export const HomeView = ({
       {showOrderHistory && (
         <div className="absolute inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-app)' }}>
           <div className="flex items-center justify-between px-4 py-4 shrink-0"
-            style={{ borderBottom: '1px solid #222A3A' }}>
+            style={{ borderBottom: sectionBorder }}>
             <h2 className="text-white font-bold text-base">주문내역 ({history.length}건)</h2>
             <button type="button" onClick={() => setShowOrderHistory(false)}
               className="text-sm px-3 py-1.5 rounded-lg"
@@ -403,7 +405,7 @@ export const HomeView = ({
                 const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
                 return (
                   <div key={item.id} className="flex items-center px-4 py-3.5"
-                    style={{ borderBottom: '1px solid #1A2232' }}>
+                    style={{ borderBottom: rowBorder }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         {/* 매수/매도 뱃지 / Buy/sell badge */}

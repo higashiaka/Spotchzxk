@@ -157,9 +157,9 @@ export const HoldingsView = ({
             onClick={() => setSortKey(key)}
             className="px-2.5 py-1 rounded-full text-xs font-bold transition-colors"
             style={{
-              background:   sortKey === key ? '#00E67622' : 'var(--bg-card)',
-              color:        sortKey === key ? '#00E676'   : 'var(--text-dim)',
-              border:       sortKey === key ? '1px solid #00E67644' : '1px solid transparent',
+              background:   sortKey === key ? 'var(--accent-soft)' : 'var(--bg-card)',
+              color:        sortKey === key ? 'var(--accent)'   : 'var(--text-dim)',
+              border:       sortKey === key ? '1px solid var(--accent-border)' : '1px solid transparent',
             }}
           >
             {label}

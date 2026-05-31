@@ -9,8 +9,8 @@
   font-weight: 400;
 
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #080A0F;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #101624;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -18,28 +18,33 @@
   -moz-osx-font-smoothing: grayscale;
 
   /* 배경색 / Background colors */
-  --bg-app:            #080A0F;
-  --bg-sidebar:        #0E121A;
-  --bg-card:           #1A2232;
-  --bg-card-secondary: #131924;
+  --bg-app:            #101624;
+  --bg-sidebar:        #151D2C;
+  --bg-card:           #202B3E;
+  --bg-card-secondary: #192235;
 
   /* 테두리 / Border colors */
-  --border-primary:    #222A3A;
-  --border-card:       #1A2232;
-  --border-secondary:  #26334D;
+  --border-primary:    #2D3A52;
+  --border-card:       #27344A;
+  --border-secondary:  #3A4B68;
 
   /* 텍스트 / Text colors */
   --text-primary:      #FFFFFF;
-  --text-secondary:    #BAC4D1;
-  --text-muted:        #8491A5;
-  --text-dim:          #626B7A;
+  --text-secondary:    #C5D1E1;
+  --text-muted:        #94A3B8;
+  --text-dim:          #718096;
+
+  --accent:            #2F80ED;
+  --accent-hover:      #4C94F2;
+  --accent-soft:       #2F80ED24;
+  --accent-border:     #2F80ED55;
 
   /* 모바일 내비게이션 배경 */
-  --nav-bg:            rgba(19, 25, 36, 0.8);
+  --nav-bg:            rgba(21, 29, 44, 0.82);
 
   /* 액센트 색상 위 전경(글자)색 — 테마 불문 항상 어두운 색으로 고정
-     Foreground color on accent (#00E676) backgrounds — always dark regardless of theme */
-  --accent-foreground: #080A0F;
+     Foreground color on accent backgrounds */
+  --accent-foreground: #FFFFFF;
 }
 
 /* ── 라이트 테마 CSS 변수 ────────────────────────────────────────── */
@@ -47,25 +52,30 @@
   color-scheme: light;
   background-color: #F0F4F8;
 
-  --bg-app:            #F0F4F8;
+  --bg-app:            #F4F7FB;
   --bg-sidebar:        #FFFFFF;
   --bg-card:           #FFFFFF;
-  --bg-card-secondary: #F1F5F9;
+  --bg-card-secondary: #EEF4FB;
 
-  --border-primary:    #E2E8F0;
-  --border-card:       #E9EEF4;
-  --border-secondary:  #CBD5E1;
+  --border-primary:    #DDE7F3;
+  --border-card:       #E6EDF6;
+  --border-secondary:  #C8D6E8;
 
   --text-primary:      #0F172A;
   --text-secondary:    #334155;
   --text-muted:        #64748B;
   --text-dim:          #94A3B8;
 
-  --nav-bg:            rgba(255, 255, 255, 0.9);
+  --accent:            #2563EB;
+  --accent-hover:      #1D4ED8;
+  --accent-soft:       #2563EB16;
+  --accent-border:     #2563EB40;
+
+  --nav-bg:            rgba(255, 255, 255, 0.92);
 
   /* 라이트 모드에서도 동일하게 유지 (명시적 override)
      Same value in light mode — explicit so the intent is clear */
-  --accent-foreground: #080A0F;
+  --accent-foreground: #FFFFFF;
 }
 
 /* ── 라이트 모드에서 text-white 재정의 ──────────────────────────── */
@@ -161,15 +171,15 @@ body {
 }
 
 .text-accent {
-  color: #00E676;
+  color: var(--accent);
 }
 
 .bg-accent {
-  background: #00E676;
+  background: var(--accent);
 }
 
 .bg-accent-soft {
-  background: #00E67626;
+  background: var(--accent-soft);
 }
 
 .text-danger {
@@ -221,7 +231,7 @@ body {
 }
 
 .border-bottom-panel {
-  border-bottom: 1px solid #222A3A;
+  border-bottom: 1px solid var(--border-primary);
 }
 
 .border-bottom-row {
@@ -233,7 +243,7 @@ body {
 }
 
 .accent-button {
-  background: #00E676;
+  background: var(--accent);
   color: var(--accent-foreground);
 }
 
@@ -298,11 +308,11 @@ body {
 
 .nav-tab-active,
 .mobile-nav-active {
-  color: #00E676;
+  color: var(--accent);
 }
 
 .nav-tab-active {
-  border-bottom-color: #00E676;
+  border-bottom-color: var(--accent);
 }
 
 .nav-tab-inactive {
@@ -346,7 +356,7 @@ body {
 
 .avatar-color-0 { background-color: #FF5252; }
 .avatar-color-1 { background-color: #3D8BFF; }
-.avatar-color-2 { background-color: #00E676; }
+.avatar-color-2 { background-color: var(--accent); }
 .avatar-color-3 { background-color: #FFD700; }
 .avatar-color-4 { background-color: #FF9800; }
 .avatar-color-5 { background-color: #AB47BC; }

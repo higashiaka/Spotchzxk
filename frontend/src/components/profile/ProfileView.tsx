@@ -345,13 +345,13 @@ export const ProfileView = ({
               placeholder="닉네임 입력 (최대 8자)"
               aria-label="닉네임 변경"
               className="block w-full text-white font-bold bg-transparent border-b outline-none pb-1"
-              style={{ borderColor: '#00E676' }}
+              style={{ borderColor: 'var(--accent)' }}
               disabled={nameUpdating}
             />
             <div className="flex gap-2 mt-2">
               <button type="button" onClick={saveEditName} disabled={nameUpdating}
                 className="text-xs font-bold px-3 py-1 rounded"
-                style={{ background: '#00E67622', color: '#00E676' }}>확인</button>
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>확인</button>
               <button type="button" onClick={cancelEditName} disabled={nameUpdating}
                 className="text-xs px-3 py-1 rounded"
                 style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
@@ -392,9 +392,9 @@ export const ProfileView = ({
       >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: '#00E67622' }}
+          style={{ background: 'var(--accent-soft)' }}
         >
-          <svg className="w-5 h-5" style={{ color: '#00E676' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
@@ -453,7 +453,7 @@ export const ProfileView = ({
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{d.quantity}주 · {dateStr}</p>
                     </div>
-                    <p className="text-sm font-bold font-mono shrink-0" style={{ color: '#00E676' }}>
+                    <p className="text-sm font-bold font-mono shrink-0" style={{ color: 'var(--accent)' }}>
                       +{Math.abs(Number(d.amount)).toFixed(2)}
                     </p>
                   </div>
@@ -490,7 +490,7 @@ export const ProfileView = ({
               {addStatus === 'loading' ? '추가 중...' : '+ 종목 추가'}
             </button>
             {addStatus !== 'idle' && addMsg && (
-              <p className="text-xs text-center" style={{ color: addStatus === 'ok' ? '#00E676' : '#FF5252' }}>
+              <p className="text-xs text-center" style={{ color: addStatus === 'ok' ? 'var(--accent)' : '#FF5252' }}>
                 {addMsg}
               </p>
             )}

@@ -69,11 +69,11 @@ export const Sidebar = ({
           <button
             type="button"
             onClick={() => onNavigate('settings')}
-            className="w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 transition-colors hover:opacity-80 active:opacity-60"
+            className="w-9 h-9 md:w-10 md:h-10 rounded-xl border flex items-center justify-center shrink-0 transition-colors hover:opacity-80 active:opacity-60"
             style={{
-              background: activeTab === 'settings' ? '#00E67622' : 'var(--bg-card)',
-              borderColor: activeTab === 'settings' ? '#00E67666' : 'var(--border-primary)',
-              color: activeTab === 'settings' ? '#00E676' : 'var(--text-dim)',
+              background: activeTab === 'settings' ? 'var(--accent-soft)' : 'var(--bg-card)',
+              borderColor: activeTab === 'settings' ? 'var(--accent-border)' : 'var(--border-primary)',
+              color: activeTab === 'settings' ? 'var(--accent)' : 'var(--text-dim)',
             }}
             aria-label="설정"
             title="설정"

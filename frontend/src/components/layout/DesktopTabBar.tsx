@@ -16,7 +16,7 @@ export const DesktopTabBar = ({
   ];
 
   return (
-    <div className="hidden md:flex items-center px-5 shrink-0 surface-sidebar border-bottom-primary">
+    <div className="hidden md:flex items-center px-6 shrink-0 surface-sidebar border-bottom-primary">
       <div className="flex items-center">
         {tabs.map(({ tab, label }) => {
           const active = activeTab === tab;
@@ -25,7 +25,7 @@ export const DesktopTabBar = ({
               key={tab}
               type="button"
               onClick={() => onNavigate(tab)}
-              className={`py-4 px-5 text-sm font-bold border-b-2 transition-colors ${active ? 'nav-tab-active' : 'nav-tab-inactive'}`}
+              className={`py-5 px-6 text-base font-bold border-b-2 transition-colors ${active ? 'nav-tab-active' : 'nav-tab-inactive'}`}
             >
               {label}
             </button>

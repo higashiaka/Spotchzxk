@@ -152,23 +152,23 @@ export const ChartView = ({
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden w-full max-w-6xl mx-auto">
       {/* 카테고리 선택 버튼 바 / Category selector button bar */}
       <div
-        className="flex gap-2 px-4 py-3 shrink-0 overflow-x-auto hide-scrollbar"
-        style={{ borderBottom: '1px solid #222A3A' }}
+        className="flex gap-2 md:gap-3 px-4 py-3 md:px-8 md:py-5 shrink-0 overflow-x-auto hide-scrollbar"
+        style={{ borderBottom: '1px solid var(--border-primary)' }}
       >
         {CATEGORIES.map(({ key, label }) => (
           <button
             key={key}
             type="button"
             onClick={() => handleCategoryClick(key)}
-            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors"
+            className="shrink-0 px-3 py-1.5 md:px-5 md:py-3 rounded-full text-xs md:text-sm font-bold transition-colors"
             style={{
-              background: category === key ? '#00E676' : 'var(--bg-card-secondary)',
+              background: category === key ? 'var(--accent)' : 'var(--bg-card-secondary)',
               color: category === key ? 'var(--accent-foreground)' : 'var(--text-muted)',
               border: '1px solid',
-              borderColor: category === key ? '#00E676' : 'var(--border-primary)',
+              borderColor: category === key ? 'var(--accent)' : 'var(--border-primary)',
             }}
           >
             {label}
@@ -178,14 +178,14 @@ export const ChartView = ({
 
       {/* 컬럼 헤더 / Column headers */}
       <div
-        className="flex items-center px-4 py-2 shrink-0 text-xs font-bold uppercase tracking-wider"
-        style={{ color: 'var(--text-dim)', borderBottom: '1px solid #1A2232', background: 'var(--bg-sidebar)' }}
+        className="flex items-center px-4 py-2 md:px-8 md:py-3 shrink-0 text-xs md:text-sm font-bold uppercase tracking-wider"
+        style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border-card)', background: 'var(--bg-sidebar)' }}
       >
-        <span className="w-6 mr-3 text-center">#</span>
+        <span className="w-6 md:w-10 mr-3 md:mr-5 text-center">#</span>
         <span className="flex-1">스트리머</span>
-        <span className="w-24 text-right">현재가</span>
-        {category !== 'dividend' && <span className="w-16 text-right">등락률</span>}
-        <span className={`${category === 'dividend' ? 'w-28' : 'w-24'} text-right`}>{colLabel}</span>
+        <span className="w-24 md:w-36 text-right">현재가</span>
+        {category !== 'dividend' && <span className="w-16 md:w-24 text-right">등락률</span>}
+        <span className={`${category === 'dividend' ? 'w-28 md:w-40' : 'w-24 md:w-36'} text-right`}>{colLabel}</span>
       </div>
 
       {/* 종목 랭킹 행 목록 / Stock ranking row list */}
@@ -201,20 +201,20 @@ export const ChartView = ({
               <div
                 key={s.id}
                 onClick={() => onSelect(s)}
-                className="flex items-center px-4 py-3 cursor-pointer"
-                style={{ borderBottom: '1px solid #1A2232' }}
+                className="flex items-center px-4 py-3 md:px-8 md:py-5 cursor-pointer"
+                style={{ borderBottom: '1px solid var(--border-card)' }}
               >
                 {/* 순위 번호 (상위 3위는 밝은 색) / Rank number (brighter for top 3) */}
                 <span
-                  className="w-6 mr-3 text-sm font-bold text-center shrink-0"
+                  className="w-6 md:w-10 mr-3 md:mr-5 text-sm md:text-lg font-bold text-center shrink-0"
                   style={{ color: i < 3 ? 'var(--text-secondary)' : 'var(--text-dim)' }}
                 >
                   {i + 1}
                 </span>
                 {/* 프로필 이미지 또는 이니셜 + 종목명 / Profile image or initials + stock name */}
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
+                    className="w-8 h-8 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 text-white text-xs md:text-base font-black overflow-hidden"
                     style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}
                   >
                     {s.profileImageUrl ? (
@@ -223,33 +223,33 @@ export const ChartView = ({
                       s.name.slice(0, 2)
                     )}
                   </div>
-                  <p className="text-white text-sm font-bold truncate">{s.name}</p>
+                  <p className="text-white text-sm md:text-lg font-bold truncate">{s.name}</p>
                 </div>
                 {/* 현재가 / Current price */}
-                <div className="w-24 text-right shrink-0">
-                  <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+                <div className="w-24 md:w-36 text-right shrink-0">
+                  <p className="font-mono text-sm md:text-lg font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
                 </div>
                 {/* 등락률 (배당 카테고리 제외) / Change rate (hidden for dividend category) */}
                 {category !== 'dividend' && (
-                  <div className="w-16 text-right shrink-0">
-                    <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
+                  <div className="w-16 md:w-24 text-right shrink-0">
+                    <p className="text-xs md:text-base font-bold" style={{ color: priceColor(pct) }}>
                       {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                     </p>
                   </div>
                 )}
                 {/* 카테고리별 우측 컬럼 값 / Right column value based on category */}
                 {category === 'dividend' ? (
-                  <div className="w-28 text-right shrink-0">
-                    <p className="text-xs font-bold font-mono" style={{ color: '#00E676' }}>
+                  <div className="w-28 md:w-40 text-right shrink-0">
+                    <p className="text-xs md:text-base font-bold font-mono" style={{ color: 'var(--accent)' }}>
                       {fmtRemaining(dividendRemainingMs(s))}
                     </p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-xs md:text-sm font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       {expectedPerShare(s)}/주
                     </p>
                   </div>
                 ) : (
-                  <div className="w-24 text-right shrink-0">
-                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                  <div className="w-24 md:w-36 text-right shrink-0">
+                    <p className="text-xs md:text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
                       {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>

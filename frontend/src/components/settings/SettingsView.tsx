@@ -119,8 +119,8 @@ function ThemeToggleRow({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle
           width: 44,
           height: 26,
           borderRadius: 13,
-          background: isDark ? '#1A2232' : '#00E676',
-          border: `2px solid ${isDark ? '#222A3A' : '#00C864'}`,
+          background: isDark ? '#1A2232' : 'var(--accent)',
+          border: `2px solid ${isDark ? 'var(--border-primary)' : 'var(--accent)'}`,
         }}
         aria-label="테마 변경"
       >
@@ -143,7 +143,7 @@ function PrivacyToggleRow({ isPublic, disabled, onToggle }: { isPublic: boolean;
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex items-center gap-2.5 min-w-0">
-        <svg className="w-4 h-4 shrink-0" style={{ color: isPublic ? '#00E676' : '#BAC4D1' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 shrink-0" style={{ color: isPublic ? 'var(--accent)' : '#BAC4D1' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           {isPublic ? (
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -169,8 +169,8 @@ function PrivacyToggleRow({ isPublic, disabled, onToggle }: { isPublic: boolean;
           width: 44,
           height: 26,
           borderRadius: 13,
-          background: isPublic ? '#00E676' : '#1A2232',
-          border: `2px solid ${isPublic ? '#00C864' : '#222A3A'}`,
+          background: isPublic ? 'var(--accent)' : '#1A2232',
+          border: `2px solid ${isPublic ? 'var(--accent)' : 'var(--border-primary)'}`,
         }}
         aria-label="랭킹 닉네임 공개 설정"
         aria-pressed={isPublic}

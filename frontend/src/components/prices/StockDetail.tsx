@@ -179,7 +179,7 @@ export const StockDetail = ({
                 className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
                 style={{
                   background: interval === i ? 'var(--bg-card)' : 'transparent',
-                  color: interval === i ? '#00E676' : 'var(--text-dim)',
+                  color: interval === i ? 'var(--accent)' : 'var(--text-dim)',
                 }}>
                 {i === '1m' ? '1분' : i === '5m' ? '5분' : i === '1h' ? '1시' : i === '1d' ? '일봉' : '주봉'}
               </button>
@@ -193,7 +193,7 @@ export const StockDetail = ({
                 className="px-2.5 py-1 rounded text-[10px] font-extrabold transition-all"
                 style={{
                   background: chartType === type ? 'var(--bg-card)' : 'transparent',
-                  color: chartType === type ? '#00E676' : 'var(--text-dim)',
+                  color: chartType === type ? 'var(--accent)' : 'var(--text-dim)',
                 }}>
                 {type === 'candle' ? '봉차트 🕯️' : '선차트 📈'}
               </button>
@@ -228,8 +228,8 @@ export const StockDetail = ({
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white text-sm font-bold">실시간 체결 내역</h3>
           <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: '#00E67626', color: '#00E676' }}>
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#00E676' }}></span>
+            style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}>
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--accent)' }}></span>
             LIVE
           </span>
         </div>

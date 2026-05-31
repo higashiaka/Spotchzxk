@@ -248,7 +248,7 @@ export const InteractiveChart = ({
               📊
             </div>
             <div>
-              <div className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-[#00E6761A] text-[#00E676] mb-1">
+              <div className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-accent-soft text-accent mb-1">
                 신규 상장 종목
               </div>
               <h4 className="text-white text-xs font-bold mb-1">거래 내역이 존재하지 않습니다</h4>

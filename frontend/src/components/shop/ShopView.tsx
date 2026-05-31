@@ -41,34 +41,34 @@ function ShopItemCard({
   onPurchase: () => void;
 }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A' }}>
-      <div className="flex items-start justify-between gap-3 mb-3">
+    <div className="rounded-xl p-4 md:p-6" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
+      <div className="flex items-start justify-between gap-3 mb-3 md:mb-5">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-white">{title}</p>
-          <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+          <p className="text-sm md:text-lg font-bold text-white">{title}</p>
+          <p className="text-xs md:text-sm mt-1 md:mt-2 leading-relaxed" style={{ color: 'var(--text-dim)' }}>
             {description}
           </p>
         </div>
         <span
-          className="shrink-0 text-xs font-bold px-2 py-1 rounded-full"
-          style={{ background: '#00E67622', color: '#00E676' }}
+          className="shrink-0 text-xs md:text-sm font-bold px-2 md:px-3 py-1 rounded-full"
+          style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
         >
           {owned}개
         </span>
       </div>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <span className="text-base font-bold" style={{ color: '#FFD700' }}>
+          <span className="text-base md:text-xl font-bold" style={{ color: '#D4A017' }}>
             {formatPrice(price)}
           </span>
-          <span className="text-xs ml-1" style={{ color: 'var(--text-dim)' }}>코인</span>
+          <span className="text-xs md:text-sm ml-1" style={{ color: 'var(--text-dim)' }}>코인</span>
         </div>
         <button
           type="button"
           disabled={disabled}
           onClick={onPurchase}
-          className="px-3 py-2 rounded-lg text-xs font-bold transition-opacity disabled:opacity-50"
-          style={{ background: '#00E676', color: 'var(--accent-foreground)' }}
+          className="px-3 py-2 md:px-5 md:py-3 rounded-lg text-xs md:text-sm font-bold transition-opacity disabled:opacity-50"
+          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
         >
           {pending ? '구매 중...' : '구매'}
         </button>
@@ -110,7 +110,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
     >
       <div
         className="rounded-xl p-6 w-full max-w-sm mx-4"
-        style={{ background: 'var(--bg-card-secondary)', border: '1px solid #222A3A' }}
+        style={{ background: 'var(--bg-card-secondary)', border: '1px solid var(--border-primary)' }}
         onClick={e => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>확성기 사용</h3>
@@ -136,14 +136,14 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
                   onClick={() => setSelected(s.id)}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all"
                   style={{
-                    background: selected === s.id ? '#1A2A3A' : 'var(--bg-sidebar)',
-                    border: `1px solid ${selected === s.id ? '#00E676' : 'var(--border-primary)'}`,
+                    background: selected === s.id ? 'var(--accent-soft)' : 'var(--bg-sidebar)',
+                    border: `1px solid ${selected === s.id ? 'var(--accent)' : 'var(--border-primary)'}`,
                   }}
                 >
                   {s.profileImageUrl && (
                     <img src={s.profileImageUrl} alt="" className="w-6 h-6 rounded-full shrink-0" />
                   )}
-                  <span className="text-xs font-bold truncate" style={{ color: selected === s.id ? '#00E676' : 'var(--text-secondary)' }}>
+                  <span className="text-xs font-bold truncate" style={{ color: selected === s.id ? 'var(--accent)' : 'var(--text-secondary)' }}>
                     {s.name}
                   </span>
                   <span className="ml-auto shrink-0 text-[9px] font-bold px-1 py-0.5 rounded"
@@ -165,7 +165,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
               onChange={e => setMessage(e.target.value)}
               placeholder="ex) 지금 완전 재밌어요!"
               className="w-full px-3 py-2 rounded-lg text-sm outline-none mb-5"
-              style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A', color: 'var(--text-secondary)' }}
+              style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)' }}
             />
 
             <div className="flex gap-2">
@@ -179,7 +179,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
                 disabled={!selected || isPending}
                 onClick={() => selected && onSubmit(selected, message)}
                 className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-opacity"
-                style={{ background: '#00E676', color: 'var(--accent-foreground)', opacity: !selected || isPending ? 0.5 : 1 }}>
+                style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: !selected || isPending ? 0.5 : 1 }}>
                 {isPending ? '처리 중...' : '사용하기 (10억)'}
               </button>
             </div>
@@ -267,7 +267,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   };
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 max-w-2xl mx-auto touch-pan-y">
+    <div className="h-full overflow-y-auto px-4 py-6 md:px-8 md:py-8 max-w-6xl mx-auto touch-pan-y">
       {showModal && (
         <MegaphoneModal
           streamers={streamers}
@@ -277,9 +277,9 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
         />
       )}
 
-      <h2 className="text-lg font-bold mb-6" style={{ color: 'var(--text-secondary)' }}>상점</h2>
+      <h2 className="text-lg md:text-3xl font-black mb-6 md:mb-8" style={{ color: 'var(--text-secondary)' }}>상점</h2>
 
-      <div className="grid gap-3 mb-4 sm:grid-cols-2">
+      <div className="grid gap-3 md:gap-5 mb-4 md:mb-6 sm:grid-cols-2">
         <ShopItemCard
           title="닉네임 변경권"
           description="프로필 닉네임을 변경할 때 1개가 차감됩니다."
@@ -301,22 +301,22 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
       </div>
 
       {/* 확성기 아이템 카드 / Megaphone item card */}
-      <div className="rounded-xl p-5 mb-8" style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A' }}>
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-xl flex items-center justify-center text-3xl shrink-0"
+      <div className="rounded-xl p-5 md:p-7 mb-8 md:mb-10" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
+        <div className="flex items-start gap-4 md:gap-6">
+          <div className="w-14 h-14 md:w-20 md:h-20 rounded-xl flex items-center justify-center text-3xl md:text-5xl shrink-0"
             style={{ background: 'var(--bg-card)' }}>
             📣
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base font-bold" style={{ color: 'var(--text-secondary)' }}>확성기</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                style={{ background: 'var(--bg-card)', color: '#00E676', border: '1px solid #00E67633' }}>
+            <div className="flex items-center gap-2 md:gap-3 mb-1">
+              <span className="text-base md:text-2xl font-bold" style={{ color: 'var(--text-secondary)' }}>확성기</span>
+              <span className="text-[10px] md:text-xs font-bold px-2 md:px-3 py-0.5 md:py-1 rounded-full"
+                style={{ background: 'var(--bg-card)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
                 1일 {DAILY_LIMIT}회 제한
               </span>
             </div>
-            <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
+            <p className="text-xs md:text-sm mb-3 md:mb-5" style={{ color: 'var(--text-dim)' }}>
               현재 상장된 라이브 스트리머의 치지직 링크를 전체에 공지합니다.
               오늘 {usesToday}/{DAILY_LIMIT}회 사용
             </p>
@@ -324,10 +324,10 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
             <div className="flex items-center justify-between">
               {/* 가격 표시 / Price display */}
               <div>
-                <span className="text-lg font-bold" style={{ color: '#FFD700' }}>
+                <span className="text-lg md:text-2xl font-bold" style={{ color: '#D4A017' }}>
                   {formatPrice(MEGAPHONE_PRICE)}
                 </span>
-                <span className="text-xs ml-1" style={{ color: 'var(--text-dim)' }}>원</span>
+                <span className="text-xs md:text-sm ml-1" style={{ color: 'var(--text-dim)' }}>원</span>
               </div>
 
               {/* 구매 가능 여부에 따른 버튼/안내 / Button or info text based on purchase eligibility */}
@@ -339,8 +339,8 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
                 <span className="text-xs" style={{ color: '#FF5252' }}>잔액 부족</span>
               ) : (
                 <button type="button" onClick={() => setShowModal(true)}
-                  className="px-4 py-2 rounded-lg text-sm font-bold transition-opacity"
-                  style={{ background: '#00E676', color: 'var(--accent-foreground)' }}>
+                  className="px-4 py-2 md:px-6 md:py-3 rounded-lg text-sm md:text-base font-bold transition-opacity"
+                  style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}>
                   사용하기
                 </button>
               )}
@@ -349,10 +349,10 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
         </div>
 
         {/* 일일 사용 횟수 인디케이터 바 / Daily usage indicator bar */}
-        <div className="flex gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #1A2030' }}>
+        <div className="flex gap-2 mt-4 md:mt-6 pt-4 md:pt-5" style={{ borderTop: '1px solid var(--border-card)' }}>
           {Array.from({ length: DAILY_LIMIT }).map((_, i) => (
             <div key={i} className="flex-1 h-1.5 rounded-full"
-              style={{ background: i < (DAILY_LIMIT - usesToday) ? '#00E676' : 'var(--bg-card)' }} />
+              style={{ background: i < (DAILY_LIMIT - usesToday) ? 'var(--accent)' : 'var(--bg-card)' }} />
           ))}
           <span className="text-xs ml-1 shrink-0" style={{ color: 'var(--text-dim)' }}>
             {DAILY_LIMIT - usesToday}회 남음
@@ -361,7 +361,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
       </div>
 
       {/* 최근 확성기 게시 목록 / Recent megaphone post list */}
-      <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-muted)' }}>최근 확성기</h3>
+      <h3 className="text-sm md:text-lg font-bold mb-3 md:mb-4" style={{ color: 'var(--text-muted)' }}>최근 확성기</h3>
       <MegaphonePostList posts={realtimePosts} />
     </div>
   );

@@ -33,7 +33,7 @@ export const grade = (rank: number, total: number): { label: string; color: stri
   if (pct >= 97)   return { label: '그랜드마스터', color: '#F44336' };
   if (pct >= 94)   return { label: '마스터', color: '#9C27B0' };
   if (pct >= 88)   return { label: '다이아몬드', color: '#00BCD4' };
-  if (pct >= 75)   return { label: '에메랄드', color: '#00E676' };
+  if (pct >= 75)   return { label: '에메랄드', color: '#2F80ED' };
   if (pct >= 55)   return { label: '플래티넘', color: '#00BFA5' };
   if (pct >= 35)   return { label: '골드', color: '#FFD700' };
   if (pct >= 18)   return { label: '실버', color: '#C0C0C0' };
@@ -49,7 +49,7 @@ export const priceColor = (pct: number) =>
 /** 아바타 배경에 사용되는 고정 색상 팔레트
  *  Fixed color palette used for avatar backgrounds */
 export const AVATAR_COLORS = [
-  '#FF5252', '#3D8BFF', '#00E676', '#FFD700',
+  '#FF5252', '#3D8BFF', '#2F80ED', '#D4A017',
   '#FF9800', '#AB47BC', '#00BCD4', '#F06292',
 ];
 
