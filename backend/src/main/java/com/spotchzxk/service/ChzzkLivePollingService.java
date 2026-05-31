@@ -3,6 +3,7 @@ package com.spotchzxk.service;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserShareRepository;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -14,11 +15,19 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ChzzkLivePollingService {
+
+    private static final int STATUS_FETCH_THREADS = 20;
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
@@ -27,6 +36,14 @@ public class ChzzkLivePollingService {
     private final ChzzkApiClient chzzkApiClient;
     private final TransactionTemplate transactionTemplate;
 
+    private final ExecutorService statusFetchExecutor =
+            Executors.newFixedThreadPool(STATUS_FETCH_THREADS);
+
+    @PreDestroy
+    public void shutdown() {
+        statusFetchExecutor.shutdownNow();
+    }
+
     @Scheduled(fixedDelay = 60_000)
     public void pollLiveStatus() {
         List<Stock> stocks = stockRepository.findAll();
@@ -34,28 +51,50 @@ public class ChzzkLivePollingService {
             return;
         }
 
-        boolean anyChanged = false;
+        Map<String, String> statusMap = fetchAllStatusesConcurrently(stocks);
+
         List<Stock> pollingOrder = stocks.stream()
                 .sorted(Comparator.comparing(Stock::isLive).reversed())
                 .toList();
         for (Stock stock : pollingOrder) {
-            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+            String status = statusMap.get(stock.getChannelId());
             if (status == null) {
                 continue;
             }
 
             try {
-                anyChanged |= Boolean.TRUE.equals(transactionTemplate.execute(tx ->
+                boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
                         handleLiveTransition(stock, status)));
+                if (changed) {
+                    messagingTemplate.convertAndSend("/topic/streamers", stocks);
+                }
             } catch (Exception e) {
                 log.error("Failed to handle live transition for channel {}: {}",
                         stock.getChannelId(), e.getMessage(), e);
             }
         }
+    }
 
-        if (anyChanged) {
-            messagingTemplate.convertAndSend("/topic/streamers", stocks);
-        }
+    private Map<String, String> fetchAllStatusesConcurrently(List<Stock> stocks) {
+        List<CompletableFuture<Map.Entry<String, String>>> futures = stocks.stream()
+                .map(stock -> CompletableFuture.supplyAsync(
+                        () -> {
+                            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                            return status != null ? Map.entry(stock.getChannelId(), status) : null;
+                        },
+                        statusFetchExecutor))
+                .toList();
+
+        return futures.stream()
+                .map(f -> {
+                    try {
+                        return f.get();
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private boolean handleLiveTransition(Stock stock, String status) {
