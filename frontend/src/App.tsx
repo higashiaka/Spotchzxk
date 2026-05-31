@@ -611,6 +611,7 @@ function App() {
         <PricesView
           streamers={streamers}
           selectedStreamer={selectedStreamer}
+          user={user}
           onSelectStreamer={handleSelectStreamerForPrices}
           onBack={handleBackFromPrices}
           onOrder={handleOrderFromDetail}

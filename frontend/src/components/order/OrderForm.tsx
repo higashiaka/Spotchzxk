@@ -13,7 +13,7 @@ import { fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
  *  Computes order feasibility from real-time price, held quantity,
  *  and balance, then submits a market order to the server */
 export const OrderForm = ({
-  streamer, user, qtyStr, setQtyStr, orderType, setOrderType,
+  streamer, user, qtyStr, setQtyStr, orderType, setOrderType, embedded = false,
 }: {
   /** 주문 대상 종목 / Target stock for the order */
   streamer: Stock;
@@ -28,6 +28,8 @@ export const OrderForm = ({
   orderType: 'buy' | 'sell';
   /** 주문 방향 변경 핸들러 / Order direction change handler */
   setOrderType: (v: 'buy' | 'sell') => void;
+  /** 다른 화면 내부에 배치할 때 외부 패딩/배경을 줄임 / Reduces outer chrome when embedded */
+  embedded?: boolean;
 }) => {
   const { currentPrice } = useStockPrice(streamer.id, streamer.price);
   const tradeMutation = useTrade(user?.uid || 'spectator');
@@ -85,7 +87,7 @@ export const OrderForm = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar text-white surface-sidebar">
+    <div className={`${embedded ? 'h-auto p-0' : 'h-full overflow-y-auto p-4 pb-24 surface-sidebar'} hide-scrollbar text-white`}>
       {/* 매수/매도 탭 전환 / Buy/sell tab toggle */}
       <div className="rounded-xl p-1 flex mb-4 surface-card-secondary">
         <button type="button" onClick={() => setOrderType('buy')}
