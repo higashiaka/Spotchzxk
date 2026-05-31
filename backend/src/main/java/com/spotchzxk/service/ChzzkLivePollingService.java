@@ -14,11 +14,14 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ChzzkLivePollingService {
+
+    private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
@@ -26,6 +29,7 @@ public class ChzzkLivePollingService {
     private final UserShareRepository userShareRepository;
     private final ChzzkApiClient chzzkApiClient;
     private final TransactionTemplate transactionTemplate;
+    private final AtomicInteger dividendScanCursor = new AtomicInteger();
 
     @Scheduled(fixedDelay = 60_000)
     public void pollLiveStatus() {
@@ -66,13 +70,61 @@ public class ChzzkLivePollingService {
             return true;
         }
         if (wasLive && isLiveNow) {
-            return payIntervalIfDue(stock);
+            return false;
         }
         if (wasLive) {
             markStreamEnded(stock, status, isBlocked);
             return true;
         }
         return false;
+    }
+
+    @Scheduled(fixedDelay = 1_000)
+    public void payDueIntervalDividends() {
+        int paidCount = 0;
+        List<Stock> liveStocks = stockRepository.findByIsLiveTrue();
+        if (liveStocks.isEmpty()) {
+            return;
+        }
+
+        int start = Math.floorMod(dividendScanCursor.getAndIncrement(), liveStocks.size());
+        for (int offset = 0; offset < liveStocks.size(); offset++) {
+            if (paidCount >= MAX_DIVIDEND_PAYOUTS_PER_TICK) {
+                return;
+            }
+            Stock stock = liveStocks.get((start + offset) % liveStocks.size());
+            if (!isIntervalDue(stock)) {
+                continue;
+            }
+
+            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+            if (!"OPEN".equals(status)) {
+                continue;
+            }
+
+            try {
+                Stock paidStock = transactionTemplate.execute(tx ->
+                        stockRepository.findById(stock.getChannelId())
+                                .filter(Stock::isLive)
+                                .map(freshStock -> payIntervalIfDue(freshStock) ? freshStock : null)
+                                .orElse(null));
+                if (paidStock != null) {
+                    paidCount++;
+                    messagingTemplate.convertAndSend("/topic/streamers", List.of(paidStock));
+                }
+            } catch (Exception e) {
+                log.error("Failed to pay interval dividend for channel {}: {}",
+                        stock.getChannelId(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private boolean isIntervalDue(Stock stock) {
+        if (stock.getLiveStartedAt() == null) {
+            return false;
+        }
+        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
+        return elapsedMinutes / 10 > stock.getDividendAccumulationCount();
     }
 
     private void markStreamStarted(Stock stock) {

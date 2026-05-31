@@ -2,6 +2,11 @@ spring:
   application:
     name: spotchzxk
 
+  task:
+    scheduling:
+      pool:
+        size: 4
+
   security:
     user:
       name: disabled
