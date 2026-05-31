@@ -265,7 +265,6 @@ export const StockDetail = ({
         </div>
 
         <aside className="hidden md:flex flex-col gap-5 sticky top-0">
-          {tradeHistoryPanel}
           <div className="rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
             <h3 className="text-white text-base font-bold mb-4">빠른 주문</h3>
             <OrderForm
@@ -278,6 +277,7 @@ export const StockDetail = ({
               embedded
             />
           </div>
+          {tradeHistoryPanel}
         </aside>
       </div>
     </div>
