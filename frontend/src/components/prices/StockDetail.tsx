@@ -202,45 +202,62 @@ export const StockDetail = ({
         </div>
       </div>
 
-      <div className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:items-start md:gap-5">
-        <div className="min-w-0">
-          <div className="rounded-xl border p-4 mb-4 md:mb-5 flex flex-col gap-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
-            <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid var(--border-card)' }}>
-              <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
-                {(['1m', '5m', '1h', '1d', '1w'] as const).map(i => (
-                  <button key={i} type="button" onClick={() => setInterval(i)}
-                    className="px-2.5 md:px-3 py-1 md:py-1.5 rounded text-[10px] md:text-xs font-extrabold transition-all"
-                    style={{
-                      background: interval === i ? 'var(--bg-card)' : 'transparent',
-                      color: interval === i ? 'var(--accent)' : 'var(--text-dim)',
-                    }}>
-                    {i === '1m' ? '1분' : i === '5m' ? '5분' : i === '1h' ? '1시' : i === '1d' ? '일봉' : '주봉'}
-                  </button>
-                ))}
-              </div>
+      {/* PC: 2열×2행 flat grid — row1 높이가 양쪽 stretch로 자동 맞춰짐 */}
+      <div className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-5">
 
-              <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
-                {(['candle', 'line'] as const).map(type => (
-                  <button key={type} type="button" onClick={() => setChartType(type)}
-                    className="px-2.5 md:px-3 py-1 md:py-1.5 rounded text-[10px] md:text-xs font-extrabold transition-all"
-                    style={{
-                      background: chartType === type ? 'var(--bg-card)' : 'transparent',
-                      color: chartType === type ? 'var(--accent)' : 'var(--text-dim)',
-                    }}>
-                    {type === 'candle' ? '봉차트' : '선차트'}
-                  </button>
-                ))}
-              </div>
+        {/* [row1 col1] 차트 카드 */}
+        <div className="rounded-xl border p-4 mb-4 md:mb-0 flex flex-col gap-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid var(--border-card)' }}>
+            <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
+              {(['1m', '5m', '1h', '1d', '1w'] as const).map(i => (
+                <button key={i} type="button" onClick={() => setInterval(i)}
+                  className="px-2.5 md:px-3 py-1 md:py-1.5 rounded text-[10px] md:text-xs font-extrabold transition-all"
+                  style={{
+                    background: interval === i ? 'var(--bg-card)' : 'transparent',
+                    color: interval === i ? 'var(--accent)' : 'var(--text-dim)',
+                  }}>
+                  {i === '1m' ? '1분' : i === '5m' ? '5분' : i === '1h' ? '1시' : i === '1d' ? '일봉' : '주봉'}
+                </button>
+              ))}
             </div>
-
-            <InteractiveChart
-              candles={candles}
-              chartType={chartType}
-              color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
-              interval={interval}
-            />
+            <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
+              {(['candle', 'line'] as const).map(type => (
+                <button key={type} type="button" onClick={() => setChartType(type)}
+                  className="px-2.5 md:px-3 py-1 md:py-1.5 rounded text-[10px] md:text-xs font-extrabold transition-all"
+                  style={{
+                    background: chartType === type ? 'var(--bg-card)' : 'transparent',
+                    color: chartType === type ? 'var(--accent)' : 'var(--text-dim)',
+                  }}>
+                  {type === 'candle' ? '봉차트' : '선차트'}
+                </button>
+              ))}
+            </div>
           </div>
+          <InteractiveChart
+            candles={candles}
+            chartType={chartType}
+            color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
+            interval={interval}
+            className="md:flex-1 md:min-h-0"
+          />
+        </div>
 
+        {/* [row1 col2] 빠른 주문 (PC only) */}
+        <div className="hidden md:flex flex-col rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+          <h3 className="text-white text-base font-bold mb-4">빠른 주문</h3>
+          <OrderForm
+            streamer={streamer}
+            user={user}
+            qtyStr={qtyStr}
+            setQtyStr={setQtyStr}
+            orderType={orderType}
+            setOrderType={setOrderType}
+            embedded
+          />
+        </div>
+
+        {/* [row2 col1] 모바일 버튼 + 모바일 체결내역 + 보유 현황 + 통계 */}
+        <div className="min-w-0">
           <div className="grid grid-cols-2 gap-2 mb-4 md:hidden">
             <button type="button" onClick={() => onOrder('buy')}
               className="rounded-xl py-4 text-white font-bold text-base transition-all hover:brightness-110 active:scale-[0.99]"
@@ -265,7 +282,6 @@ export const StockDetail = ({
                 {heldQty > 0 ? `${heldQty.toLocaleString('ko-KR')}주 보유` : '미보유'}
               </span>
             </div>
-
             {!user ? (
               <p className="text-sm py-3" style={{ color: 'var(--text-dim)' }}>
                 로그인하면 이 종목의 보유 수량과 손익을 확인할 수 있습니다.
@@ -315,21 +331,11 @@ export const StockDetail = ({
           </div>
         </div>
 
-        <aside className="hidden md:flex flex-col gap-5 sticky top-0">
-          <div className="rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
-            <h3 className="text-white text-base font-bold mb-4">빠른 주문</h3>
-            <OrderForm
-              streamer={streamer}
-              user={user}
-              qtyStr={qtyStr}
-              setQtyStr={setQtyStr}
-              orderType={orderType}
-              setOrderType={setOrderType}
-              embedded
-            />
-          </div>
+        {/* [row2 col2] 체결내역 (PC only) */}
+        <div className="hidden md:block">
           {tradeHistoryPanel}
-        </aside>
+        </div>
+
       </div>
     </div>
   );

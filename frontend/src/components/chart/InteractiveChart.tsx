@@ -36,15 +36,13 @@ export const InteractiveChart = ({
   chartType,
   color,
   interval,
+  className = '',
 }: {
-  /** 렌더링할 캔들 데이터 배열 / Candlestick data array to render */
   candles: Candle[];
-  /** 차트 타입 (봉차트 또는 선차트) / Chart type (candlestick or line) */
   chartType: 'candle' | 'line';
-  /** 선차트 및 가격 방향 색상 / Color used for line chart and price direction */
   color: string;
-  /** 현재 선택된 인터벌 (시간 포맷에 사용) / Currently selected interval (used for time formatting) */
   interval: string;
+  className?: string;
 }) => {
   /** 현재 테마 / Current theme */
   const { theme } = useTheme();
@@ -201,7 +199,7 @@ export const InteractiveChart = ({
   const activeColor = isUp ? '#FF3B30' : '#007AFF';
 
   return (
-    <div className="w-full flex flex-col gap-2 relative select-none">
+    <div className={`w-full flex flex-col gap-2 relative select-none ${className}`}>
       {/* OHLC 정보 헤더 (크로스헤어 위치 기준) / OHLC info header based on crosshair position */}
       <div className="flex items-center gap-3 text-[11px] font-mono select-none px-1" style={{ color: 'var(--text-secondary)' }}>
         {displayActive ? (
@@ -236,7 +234,7 @@ export const InteractiveChart = ({
       </div>
 
       {/* 차트 렌더링 영역 / Chart rendering area */}
-      <div className="h-56 md:h-[470px] relative w-full">
+      <div className="h-56 md:flex-1 md:min-h-0 relative w-full">
         <div ref={containerRef} className="w-full h-full rounded-xl border overflow-hidden"
           style={{ borderColor: 'var(--border-card)' }} />
         {/* 데이터 없음 플레이스홀더 (신규 상장 종목) / Empty state placeholder for newly listed stocks */}
