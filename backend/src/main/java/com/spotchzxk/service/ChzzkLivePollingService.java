@@ -52,7 +52,7 @@ public class ChzzkLivePollingService {
                 boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
                         handleLiveTransition(stock, status)));
                 if (changed) {
-                    messagingTemplate.convertAndSend("/topic/streamers", stocks);
+                    messagingTemplate.convertAndSend("/topic/streamers", List.of(stock));
                 }
             } catch (Exception e) {
                 log.error("Failed to handle live transition for channel {}: {}",
