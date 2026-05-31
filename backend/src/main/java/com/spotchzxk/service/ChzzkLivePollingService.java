@@ -14,9 +14,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,13 +34,11 @@ public class ChzzkLivePollingService {
             return;
         }
 
-        Map<String, String> statusMap = fetchAllStatuses(stocks);
-
         List<Stock> pollingOrder = stocks.stream()
                 .sorted(Comparator.comparing(Stock::isLive).reversed())
                 .toList();
         for (Stock stock : pollingOrder) {
-            String status = statusMap.get(stock.getChannelId());
+            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
             if (status == null) {
                 continue;
             }
@@ -61,16 +56,6 @@ public class ChzzkLivePollingService {
         }
     }
 
-    private Map<String, String> fetchAllStatuses(List<Stock> stocks) {
-        return stocks.stream()
-                .map(stock -> {
-                    String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                    return status != null ? Map.entry(stock.getChannelId(), status) : null;
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
     private boolean handleLiveTransition(Stock stock, String status) {
         boolean isLiveNow = "OPEN".equals(status);
         boolean isBlocked = "BLOCK".equals(status);
@@ -81,9 +66,7 @@ public class ChzzkLivePollingService {
             return true;
         }
         if (wasLive && isLiveNow) {
-            payIntervalIfDue(stock);
-            stockRepository.save(stock);
-            return true;
+            return payIntervalIfDue(stock);
         }
         if (wasLive) {
             markStreamEnded(stock, status, isBlocked);
@@ -111,9 +94,9 @@ public class ChzzkLivePollingService {
         log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
     }
 
-    private void payIntervalIfDue(Stock stock) {
+    private boolean payIntervalIfDue(Stock stock) {
         if (stock.getLiveStartedAt() == null) {
-            return;
+            return false;
         }
 
         long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
@@ -121,7 +104,7 @@ public class ChzzkLivePollingService {
         long alreadyPaid = stock.getDividendAccumulationCount();
 
         if (completedIntervals <= alreadyPaid) {
-            return;
+            return false;
         }
 
         long newIntervals = completedIntervals - alreadyPaid;
@@ -129,7 +112,9 @@ public class ChzzkLivePollingService {
             dividendService.payIntervalDividend(stock);
         }
         stock.updateDividendAccumulation(completedIntervals);
+        stockRepository.save(stock);
         log.info("Interval dividend paid for channel {}: intervals {} -> {}",
                 stock.getChannelId(), alreadyPaid, completedIntervals);
+        return true;
     }
 }
