@@ -32,6 +32,7 @@ public class BotActivityService {
 
     private static final BigDecimal BOT_INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
     private static final String BOT_ID_PREFIX = "bot_activity_";
+    private static final long BOT_COUNTS_CACHE_TTL_MS = 60_000L;
 
     private final BotActivityProperties properties;
     private final StockRepository stockRepository;
@@ -42,6 +43,9 @@ public class BotActivityService {
 
     private final ConcurrentHashMap<String, Long> botNextRunAtMs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> botLiquidating = new ConcurrentHashMap<>();
+
+    private volatile Map<String, Long> botTradeCountsCache;
+    private volatile long botTradeCountsCacheExpiry;
 
     @Scheduled(fixedDelay = 1_000)
     public void tick() {
@@ -329,8 +333,14 @@ public class BotActivityService {
     }
 
     private Map<String, Long> recentBotTradeCounts() {
-        return orderRepository.findTop50BotCompletedByOrderByCreatedAtDesc().stream()
+        if (botTradeCountsCache != null && System.currentTimeMillis() < botTradeCountsCacheExpiry) {
+            return botTradeCountsCache;
+        }
+        Map<String, Long> counts = orderRepository.findTop50BotCompletedByOrderByCreatedAtDesc().stream()
                 .collect(Collectors.groupingBy(Order::getStreamerId, Collectors.counting()));
+        botTradeCountsCache = counts;
+        botTradeCountsCacheExpiry = System.currentTimeMillis() + BOT_COUNTS_CACHE_TTL_MS;
+        return counts;
     }
 
     private User ensureBotUser(String userId) {
