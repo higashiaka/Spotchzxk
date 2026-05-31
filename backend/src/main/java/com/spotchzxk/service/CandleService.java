@@ -75,7 +75,7 @@ public class CandleService {
         messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
     }
 
-    // ── 1분마다: 거래 없는 종목도 flat 캔들 브로드캐스트 ──────────────────────────
+    // ── 1분마다: 라이브 종목 중 거래 없는 종목만 flat 캔들 브로드캐스트 ──────────
 
     @Scheduled(cron = "0 * * * * *")
     public void tick() {
@@ -84,7 +84,7 @@ public class CandleService {
         tradedStockIdsByMinute.keySet().removeIf(bucket -> bucket < bucketStart1m);
         Set<String> tradedStockIds = tradedStockIdsByMinute.getOrDefault(bucketStart1m, Set.of());
 
-        for (Stock stock : stockRepository.findAll()) {
+        for (Stock stock : stockRepository.findByIsLiveTrue()) {
             String stockId = stock.getChannelId();
 
             // 이번 분에 거래가 있었으면 onTrade 에서 이미 브로드캐스트됨 → 스킵
