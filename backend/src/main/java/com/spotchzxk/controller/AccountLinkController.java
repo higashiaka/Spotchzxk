@@ -26,4 +26,10 @@ public class AccountLinkController {
         accountLinkService.mergeGuestIntoGoogle(req.guestUid(), googleUid);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/upgrade-guest")
+    public ResponseEntity<Void> upgradeGuest(@AuthenticationPrincipal String uid) {
+        accountLinkService.upgradeGuest(uid);
+        return ResponseEntity.ok().build();
+    }
 }

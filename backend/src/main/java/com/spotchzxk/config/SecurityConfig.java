@@ -1,5 +1,6 @@
 package com.spotchzxk.config;
 
+import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.security.FirebaseTokenFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +25,12 @@ public class SecurityConfig {
     private String corsOrigin;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository) {
+        return new FirebaseTokenFilter(userRepository);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, FirebaseTokenFilter firebaseTokenFilter) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -35,7 +41,7 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(new FirebaseTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

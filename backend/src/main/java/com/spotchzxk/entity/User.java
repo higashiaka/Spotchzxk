@@ -115,6 +115,10 @@ public class User {
         this.isGuest = true;
     }
 
+    public void markAsRegistered() {
+        this.isGuest = false;
+    }
+
     public void markAsBot() {
         this.isBot = true;
     }

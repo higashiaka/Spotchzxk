@@ -18,7 +18,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<User> findTop50ByIsBotFalseOrderByDividendTotalDesc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(value = "UPDATE users SET realized_profit = 0, dividend_total = 0 WHERE is_bot = 0", nativeQuery = true)
+    @Query(value = "UPDATE users SET realized_profit = 0, dividend_total = 0 WHERE is_bot = 0 AND is_guest = 0", nativeQuery = true)
     int resetAllRankingStats();
 
     @Query(value = """

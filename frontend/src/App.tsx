@@ -260,6 +260,14 @@ function App() {
     try {
       await linkWithPopup(user, googleProvider);
       await user.getIdToken(true);
+      try {
+        const res = await apiFetch('/api/auth/upgrade-guest', { method: 'POST' });
+        if (!res.ok) {
+          console.error('Failed to upgrade guest after Google linking', res.status);
+        }
+      } catch (upgradeErr) {
+        console.error('Failed to upgrade guest after Google linking', upgradeErr);
+      }
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') return;
 

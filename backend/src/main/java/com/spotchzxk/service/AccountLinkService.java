@@ -68,4 +68,12 @@ public class AccountLinkService {
         tradeEngine.evictUserCache(guestUid);
         tradeEngine.evictUserCache(googleUid);
     }
+
+    @Transactional
+    public void upgradeGuest(String uid) {
+        User user = userRepository.findById(uid)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found."));
+        user.markAsRegistered();
+        tradeEngine.evictUserCache(uid);
+    }
 }
