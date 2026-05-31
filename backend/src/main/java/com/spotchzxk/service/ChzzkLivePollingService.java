@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -29,8 +28,6 @@ public class ChzzkLivePollingService {
     private final UserShareRepository userShareRepository;
     private final ChzzkApiClient chzzkApiClient;
     private final TransactionTemplate transactionTemplate;
-    private final AtomicInteger dividendScanCursor = new AtomicInteger();
-
     @Scheduled(fixedDelay = 60_000)
     public void pollLiveStatus() {
         List<Stock> stocks = stockRepository.findAll();
@@ -82,19 +79,15 @@ public class ChzzkLivePollingService {
     @Scheduled(fixedDelay = 1_000)
     public void payDueIntervalDividends() {
         int paidCount = 0;
-        List<Stock> liveStocks = stockRepository.findByIsLiveTrue();
-        if (liveStocks.isEmpty()) {
-            return;
-        }
+        List<Stock> dueStocks = stockRepository.findByIsLiveTrue().stream()
+                .filter(this::isIntervalDue)
+                .sorted(Comparator.comparing(s ->
+                        s.getLiveStartedAt().plusMinutes(s.getDividendAccumulationCount() * 10L)))
+                .toList();
 
-        int start = Math.floorMod(dividendScanCursor.getAndIncrement(), liveStocks.size());
-        for (int offset = 0; offset < liveStocks.size(); offset++) {
+        for (Stock stock : dueStocks) {
             if (paidCount >= MAX_DIVIDEND_PAYOUTS_PER_TICK) {
                 return;
-            }
-            Stock stock = liveStocks.get((start + offset) % liveStocks.size());
-            if (!isIntervalDue(stock)) {
-                continue;
             }
 
             String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
