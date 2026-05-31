@@ -1,19 +1,19 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
 import { fmt, fmtCompact, changePct, priceColor, avatarColor, INITIAL_BALANCE, grade } from '../../utils';
 import { Ticker } from '../Ticker';
-import { MegaphonePost, useMegaphonePosts } from '../../hooks/useMegaphone';
-import { subscribeStomp } from '../../lib/stompClient';
+import { useMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
+import { MegaphonePostList, useRealtimeMegaphonePosts } from '../common/MegaphonePostList';
 
 /** 홈 화면 컴포넌트.
- *  티커, 최신 확성기 배너, 투자 요약, 보유 종목(최대 3개),
+ *  티커, 최근 확성기 목록, 투자 요약, 보유 종목(최대 3개),
  *  거래 현황 rows, 최근 본 종목, 실시간 거래 피드, 거래량 차트를 렌더링
  *
  *  Home screen component.
- *  Renders the ticker, latest megaphone banner, investment summary,
+ *  Renders the ticker, recent megaphone posts, investment summary,
  *  holdings (up to 3), stat rows, recently viewed, live trade feed,
  *  and volume chart */
 export const HomeView = ({
@@ -49,23 +49,7 @@ export const HomeView = ({
   const [showTradeFeed, setShowTradeFeed] = useState(false);
 
   const { data: initialPosts = [] } = useMegaphonePosts();
-  /** 배너에 표시할 최신 확성기 게시물 / Latest megaphone post shown in the banner */
-  const [latestMegaphone, setLatestMegaphone] = useState<MegaphonePost | null>(null);
-
-  // REST 초기 로드 후 가장 최신 게시물을 배너에 표시
-  // Display the most recent post in the banner after initial REST load
-  useEffect(() => {
-    if (initialPosts.length > 0) setLatestMegaphone(initialPosts[0]);
-  }, [initialPosts]);
-
-  // STOMP 실시간 확성기 이벤트 수신 / Receive real-time megaphone events via STOMP
-  useEffect(() => {
-    const sub = subscribeStomp('/topic/megaphone', msg => {
-      try { setLatestMegaphone(JSON.parse(msg.body) as MegaphonePost); } catch { /* ignore */ }
-    });
-    return () => sub.unsubscribe();
-  }, []);
-
+  const realtimeMegaphonePosts = useRealtimeMegaphonePosts(initialPosts);
   /** 총 수익 (총 자산 - 초기 투자금) / Total return (total assets - initial balance) */
   const totalReturn = totalAssets - INITIAL_BALANCE;
   /** 총 수익률 (%) / Total return rate in % */
@@ -96,33 +80,23 @@ export const HomeView = ({
       {/* 상단 티커 / Top ticker */}
       <Ticker streamers={streamers} liveTrades={liveTrades} />
 
-      {/* 최신 확성기 배너 (게시물이 있을 때만 표시) / Latest megaphone banner (shown only when available) */}
-      {latestMegaphone && (
-        <a
-          href={latestMegaphone.liveUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-4 py-2 shrink-0 transition-opacity hover:opacity-80"
-          style={{ background: '#0D1A10', borderBottom: '1px solid #00E67633', textDecoration: 'none' }}
-        >
-          <span className="text-sm shrink-0">📣</span>
-          <span className="text-xs font-bold shrink-0" style={{ color: '#00E676' }}>
-            {latestMegaphone.streamerName}
-          </span>
-          <span className="text-[10px] font-bold px-1 py-0.5 rounded shrink-0"
-            style={{ background: '#FF4444', color: '#FFF' }}>LIVE</span>
-          {latestMegaphone.message && (
-            <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-              {latestMegaphone.message}
-            </span>
-          )}
-          <span className="ml-auto text-[10px] shrink-0" style={{ color: 'var(--text-dim)' }}>
-            라이브 보기 →
-          </span>
-        </a>
-      )}
-
       <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
+
+        {/* 최근 확성기 목록 / Recent megaphone posts */}
+        <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #222A3A' }}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <p className="text-sm font-bold text-white">최근 확성기</p>
+            <button
+              type="button"
+              onClick={() => onNavigate('shop')}
+              className="text-xs shrink-0"
+              style={{ color: 'var(--text-dim)' }}
+            >
+              상점 보기 →
+            </button>
+          </div>
+          <MegaphonePostList posts={realtimeMegaphonePosts} compact limit={3} />
+        </div>
 
         {/* 내 투자 요약 / My investment summary */}
         <div className="px-4 pt-5 pb-4" style={{ borderBottom: '1px solid #222A3A' }}>

@@ -41,9 +41,8 @@ public class CandleService {
 
     // ── REST: DB 주문 기록 → 캔들 목록 반환 ──────────────────────────────────────
 
-    public List<OhlcCandle> getCandles(String stockId, String interval, int count, long listedAtMs) {
+    public List<OhlcCandle> getCandles(String stockId, String interval, int count, long listedAtMs, double fallback) {
         long bucketMs = INTERVAL_MS.getOrDefault(interval, MS_1M);
-        // 요청한 interval 기준으로 필요한 최소 기간만 조회
         long from = Math.max(listedAtMs, System.currentTimeMillis() - bucketMs * count * 3);
 
         List<Order> orders = orderRepository
@@ -52,8 +51,6 @@ public class CandleService {
         List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs);
         List<OhlcCandle> result = "1m".equals(interval) ? oneMin : aggregate(oneMin, bucketMs);
 
-        double fallback = stockRepository.findById(stockId)
-                .map(s -> (double) s.getCurrentPrice()).orElse(1000.0);
         result = fillGaps(result, bucketMs, fallback);
 
         result.removeIf(c -> c.getBucketStart() < listedAtMs);
@@ -179,34 +176,39 @@ public class CandleService {
 
     /** 거래 발생 시점 기준으로 각 interval의 현재 봉 계산 */
     private Map<String, OhlcCandle> computeCurrentBuckets(String stockId, BigDecimal executedPrice, long timestamp) {
+        double price = executedPrice.doubleValue();
         Map<String, OhlcCandle> result = new HashMap<>();
+        Map<String, Long> cacheMisses = new LinkedHashMap<>();
+        long minBucketStart = Long.MAX_VALUE;
+
         for (String interval : ALL_INTERVALS) {
             long bucketMs = INTERVAL_MS.get(interval);
             long bucketStart = (timestamp / bucketMs) * bucketMs;
-            result.put(interval, currentBucketCandle(stockId, interval, bucketStart, executedPrice));
+            OhlcCandle cached = currentBucketCandles.get(stockId + ":" + interval);
+            if (cached != null && cached.getBucketStart() == bucketStart) {
+                applyPrice(cached, price);
+                result.put(interval, cached);
+            } else {
+                cacheMisses.put(interval, bucketStart);
+                if (bucketStart < minBucketStart) minBucketStart = bucketStart;
+            }
         }
+
+        if (!cacheMisses.isEmpty()) {
+            // 캐시 미스 interval 전체를 단일 쿼리로 커버
+            List<Order> orders = orderRepository
+                    .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, minBucketStart);
+            for (Map.Entry<String, Long> entry : cacheMisses.entrySet()) {
+                String interval = entry.getKey();
+                long bucketStart = entry.getValue();
+                long bucketEnd = bucketStart + INTERVAL_MS.get(interval);
+                OhlcCandle candle = restoreCurrentBucket(orders, bucketStart, bucketEnd, price);
+                currentBucketCandles.put(stockId + ":" + interval, candle);
+                result.put(interval, candle);
+            }
+        }
+
         return result;
-    }
-
-    private OhlcCandle currentBucketCandle(
-            String stockId,
-            String interval,
-            long bucketStart,
-            BigDecimal executedPrice
-    ) {
-        String key = stockId + ":" + interval;
-        OhlcCandle current = currentBucketCandles.get(key);
-        if (current != null && current.getBucketStart() == bucketStart) {
-            applyPrice(current, executedPrice.doubleValue());
-            return current;
-        }
-
-        List<Order> orders = orderRepository
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, bucketStart);
-        long bucketEnd = bucketStart + INTERVAL_MS.get(interval);
-        OhlcCandle restored = restoreCurrentBucket(orders, bucketStart, bucketEnd, executedPrice.doubleValue());
-        currentBucketCandles.put(key, restored);
-        return restored;
     }
 
     private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, double fallbackPrice) {

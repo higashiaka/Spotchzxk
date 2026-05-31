@@ -37,7 +37,7 @@ public class OrderController {
         if (streamerId == null || streamerId.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        List<Order> orders = orderRepository.findByStreamerIdOrderByCreatedAtAsc(streamerId);
+        List<Order> orders = orderRepository.findTop200ByStreamerIdOrderByCreatedAtAsc(streamerId);
         return ResponseEntity.ok(orders);
     }
 }

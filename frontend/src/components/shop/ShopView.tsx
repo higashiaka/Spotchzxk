@@ -1,15 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
 import { apiFetch } from '../../lib/api';
-import { subscribeStomp } from '../../lib/stompClient';
 import {
-  MegaphonePost,
   useMegaphonePosts,
   useMegaphoneUsesToday,
   useMegaphoneSubmit,
 } from '../../hooks/useMegaphone';
+import { MegaphonePostList, useRealtimeMegaphonePosts } from '../common/MegaphonePostList';
 
 /** 확성기 아이템 1회 사용 비용 (원) / Cost per megaphone use in KRW */
 const MEGAPHONE_PRICE = 1_000_000_000;
@@ -17,13 +16,6 @@ const NICKNAME_TICKET_PRICE = 1_000_000;
 const STOCK_ADD_TICKET_PRICE = 30_000_000;
 /** 확성기 1일 최대 사용 횟수 / Max megaphone uses per day */
 const DAILY_LIMIT = 3;
-
-/** ISO 8601 시각 문자열을 HH:MM 형식으로 변환
- *  Converts an ISO 8601 time string to HH:MM format */
-function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-}
 
 /** 숫자를 한국 로케일 쉼표 형식으로 변환
  *  Formats a number with Korean locale comma separators */
@@ -228,24 +220,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   const [purchasePending, setPurchasePending] = useState<string | null>(null);
   /** REST 초기 로드 + STOMP 실시간 갱신을 합산한 게시물 목록
    *  Post list combining initial REST load and real-time STOMP updates */
-  const [realtimePosts, setRealtimePosts] = useState<MegaphonePost[]>([]);
-
-  // REST 초기 로드 결과를 실시간 목록에 동기화 / Sync initial REST data to realtime list
-  useEffect(() => {
-    setRealtimePosts(posts);
-  }, [posts]);
-
-  // STOMP /topic/megaphone 구독: 신규 게시물을 목록 맨 앞에 추가 (최대 20개)
-  // Subscribe to STOMP /topic/megaphone: prepend new posts (max 20)
-  useEffect(() => {
-    const sub = subscribeStomp('/topic/megaphone', msg => {
-      try {
-        const post = JSON.parse(msg.body) as MegaphonePost;
-        setRealtimePosts(prev => [post, ...prev].slice(0, 20));
-      } catch { /* ignore parse errors */ }
-    });
-    return () => sub.unsubscribe();
-  }, []);
+  const realtimePosts = useRealtimeMegaphonePosts(posts);
 
   /** 잔고가 확성기 가격 이상인지 여부 / Whether balance covers the megaphone price */
   const canAfford = balance >= MEGAPHONE_PRICE;
@@ -387,39 +362,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
 
       {/* 최근 확성기 게시 목록 / Recent megaphone post list */}
       <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-muted)' }}>최근 확성기</h3>
-      {realtimePosts.length === 0 ? (
-        <p className="text-sm text-center py-10" style={{ color: 'var(--text-dim)' }}>
-          아직 확성기 사용 기록이 없습니다.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {realtimePosts.map(post => (
-            <a key={post.id} href={post.liveUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:brightness-110"
-              style={{ background: 'var(--bg-sidebar)', border: '1px solid #222A3A', textDecoration: 'none' }}>
-              <span className="text-xl shrink-0">📣</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-sm font-bold truncate" style={{ color: 'var(--text-secondary)' }}>
-                    {post.streamerName}
-                  </span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0"
-                    style={{ background: '#FF4444', color: '#FFF' }}>
-                    LIVE
-                  </span>
-                </div>
-                {post.message && (
-                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{post.message}</p>
-                )}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{formatTime(post.createdAt)}</p>
-                <p className="text-[10px]" style={{ color: '#00AAFF' }}>링크 보기 →</p>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
+      <MegaphonePostList posts={realtimePosts} />
     </div>
   );
 };

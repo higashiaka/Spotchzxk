@@ -25,11 +25,12 @@ public class CandleController {
             @RequestParam(defaultValue = "5m") String interval,
             @RequestParam(defaultValue = "50") int count) {
 
-        long listedAtMs = stockRepository.findById(stockId)
-                .map(Stock::getListedAt)
-                .map(dt -> dt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-                .orElse(0L);
+        Stock stock = stockRepository.findById(stockId).orElse(null);
+        long listedAtMs = stock != null
+                ? stock.getListedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                : 0L;
+        double fallbackPrice = stock != null ? (double) stock.getCurrentPrice() : 1000.0;
 
-        return ResponseEntity.ok(candleService.getCandles(stockId, interval, count, listedAtMs));
+        return ResponseEntity.ok(candleService.getCandles(stockId, interval, count, listedAtMs, fallbackPrice));
     }
 }

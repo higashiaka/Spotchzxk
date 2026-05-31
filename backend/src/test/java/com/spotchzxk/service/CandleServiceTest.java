@@ -36,14 +36,18 @@ class CandleServiceTest {
     void onTradeReusesCachedBucketsWithinSameBucket() {
         String stockId = "stock-1";
         long timestamp = 1_771_000_000_000L;
+        long oneWeekMs = 604_800_000L;
+        long expectedFrom = (timestamp / oneWeekMs) * oneWeekMs;
         when(orderRepository.findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong()))
                 .thenReturn(List.of());
 
         service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
         service.onTrade(stockId, BigDecimal.valueOf(1_100), timestamp + 1_000);
 
-        verify(orderRepository, times(5))
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong());
+        ArgumentCaptor<Long> fromMs = ArgumentCaptor.forClass(Long.class);
+        verify(orderRepository, times(1))
+                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), fromMs.capture());
+        assertThat(fromMs.getValue()).isEqualTo(expectedFrom);
     }
 
     @Test
