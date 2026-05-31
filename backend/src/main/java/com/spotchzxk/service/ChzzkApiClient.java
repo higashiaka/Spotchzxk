@@ -45,6 +45,7 @@ public class ChzzkApiClient {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(String.format(CHANNEL_API, stock.getChannelId())))
+                    .timeout(Duration.ofSeconds(5))
                     .header("Client-Id", clientId)
                     .header("Client-Secret", clientSecret)
                     .header("User-Agent", "Mozilla/5.0")
@@ -93,6 +94,7 @@ public class ChzzkApiClient {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(String.format(LIVE_DETAIL_API, channelId)))
+                    .timeout(Duration.ofSeconds(5))
                     .header("User-Agent", "Mozilla/5.0 (X11; Unix x86_64)")
                     .header("Cookie", cookie)
                     .header("Origin", "https://chzzk.naver.com")

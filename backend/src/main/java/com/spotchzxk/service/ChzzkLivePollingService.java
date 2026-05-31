@@ -8,10 +8,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -24,9 +25,9 @@ public class ChzzkLivePollingService {
     private final SimpMessagingTemplate messagingTemplate;
     private final UserShareRepository userShareRepository;
     private final ChzzkApiClient chzzkApiClient;
+    private final TransactionTemplate transactionTemplate;
 
     @Scheduled(fixedDelay = 60_000)
-    @Transactional
     public void pollLiveStatus() {
         List<Stock> stocks = stockRepository.findAll();
         if (stocks.isEmpty()) {
@@ -34,13 +35,22 @@ public class ChzzkLivePollingService {
         }
 
         boolean anyChanged = false;
-        for (Stock stock : stocks) {
+        List<Stock> pollingOrder = stocks.stream()
+                .sorted(Comparator.comparing(Stock::isLive).reversed())
+                .toList();
+        for (Stock stock : pollingOrder) {
             String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
             if (status == null) {
                 continue;
             }
 
-            anyChanged |= handleLiveTransition(stock, status);
+            try {
+                anyChanged |= Boolean.TRUE.equals(transactionTemplate.execute(tx ->
+                        handleLiveTransition(stock, status)));
+            } catch (Exception e) {
+                log.error("Failed to handle live transition for channel {}: {}",
+                        stock.getChannelId(), e.getMessage(), e);
+            }
         }
 
         if (anyChanged) {
