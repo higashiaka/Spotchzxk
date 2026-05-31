@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { UTCTimestamp } from 'lightweight-charts';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
+import { usePortfolio } from '../../hooks/usePortfolio';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { apiFetch } from '../../lib/api';
 import { LiveTrade } from '../../types';
@@ -30,6 +31,7 @@ export const StockDetail = ({
   liveTrades: LiveTrade[];
 }) => {
   const { currentPrice, direction } = useStockPrice(streamer.id, streamer.price);
+  const { data: portfolio } = usePortfolio(user?.uid);
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -122,6 +124,12 @@ export const StockDetail = ({
   }, [streamer.id, interval]);
 
   const pct = changePct(currentPrice, streamer.basePrice);
+  const heldQty = Number(portfolio?.shares?.[streamer.id] ?? 0);
+  const avgPrice = Number(portfolio?.avgPrices?.[streamer.id] ?? 0);
+  const holdingValue = heldQty * currentPrice;
+  const holdingCost = heldQty * avgPrice;
+  const holdingPnL = holdingValue - holdingCost;
+  const holdingPnLPct = holdingCost > 0 ? (holdingPnL / holdingCost) * 100 : 0;
 
   const streamerTrades = useMemo(() => {
     const merged = new Map<string, LiveTrade>();
@@ -248,6 +256,49 @@ export const StockDetail = ({
 
           <div className="md:hidden mb-4">
             {tradeHistoryPanel}
+          </div>
+
+          <div className="rounded-xl border p-4 md:p-5 mb-4 md:mb-5" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-white text-sm md:text-base font-bold">내 보유 현황</h3>
+              <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                {heldQty > 0 ? `${heldQty.toLocaleString('ko-KR')}주 보유` : '미보유'}
+              </span>
+            </div>
+
+            {!user ? (
+              <p className="text-sm py-3" style={{ color: 'var(--text-dim)' }}>
+                로그인하면 이 종목의 보유 수량과 손익을 확인할 수 있습니다.
+              </p>
+            ) : heldQty <= 0 ? (
+              <p className="text-sm py-3" style={{ color: 'var(--text-dim)' }}>
+                아직 보유 중인 수량이 없습니다.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>보유 수량</p>
+                  <p className="text-white font-bold font-mono">{heldQty.toLocaleString('ko-KR')}주</p>
+                </div>
+                <div>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평균 단가</p>
+                  <p className="text-white font-bold font-mono">{fmt(avgPrice)}</p>
+                </div>
+                <div>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평가 금액</p>
+                  <p className="text-white font-bold font-mono">{fmt(holdingValue)}</p>
+                </div>
+                <div>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평가 손익</p>
+                  <p className="font-bold font-mono" style={{ color: priceColor(holdingPnLPct) }}>
+                    {holdingPnL >= 0 ? '+' : ''}{fmt(holdingPnL)}
+                  </p>
+                  <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(holdingPnLPct) }}>
+                    {holdingPnLPct >= 0 ? '+' : ''}{holdingPnLPct.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-6">

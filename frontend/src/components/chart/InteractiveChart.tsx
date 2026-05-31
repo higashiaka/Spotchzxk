@@ -236,7 +236,7 @@ export const InteractiveChart = ({
       </div>
 
       {/* 차트 렌더링 영역 / Chart rendering area */}
-      <div className="h-56 relative w-full">
+      <div className="h-56 md:h-[520px] relative w-full">
         <div ref={containerRef} className="w-full h-full rounded-xl border overflow-hidden"
           style={{ borderColor: 'var(--border-card)' }} />
         {/* 데이터 없음 플레이스홀더 (신규 상장 종목) / Empty state placeholder for newly listed stocks */}
