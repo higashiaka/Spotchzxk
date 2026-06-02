@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { UTCTimestamp } from 'lightweight-charts';
 import { Stock } from '../../hooks/useStocks';
@@ -23,6 +23,19 @@ interface StockOrderHistoryItem {
   createdAt: number;
 }
 
+const CANDLE_PAGE_SIZE = 100;
+const KST_OFFSET_SECONDS = 9 * 3600;
+
+const toChartCandle = (c: { bucketStart: number; open: number; high: number; low: number; close: number }): Candle => ({
+  time: (Math.floor(c.bucketStart / 1000) + KST_OFFSET_SECONDS) as UTCTimestamp,
+  open: c.open,
+  high: c.high,
+  low: c.low,
+  close: c.close,
+});
+
+const toBucketStartMs = (time: UTCTimestamp) => (Number(time) - KST_OFFSET_SECONDS) * 1000;
+
 export const StockDetail = ({
   streamer, user, onOrder, liveTrades,
 }: {
@@ -36,32 +49,75 @@ export const StockDetail = ({
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [hasMoreCandles, setHasMoreCandles] = useState(true);
+  const [isLoadingMoreCandles, setIsLoadingMoreCandles] = useState(false);
   const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
   const [qtyStr, setQtyStr] = useState('1');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
   fetchParamsRef.current = { stockId: streamer.id, interval };
+  const candlesRef = useRef<Candle[]>([]);
+  const hasMoreCandlesRef = useRef(true);
+  const isLoadingMoreCandlesRef = useRef(false);
 
-  const fetchCandles = (stockId: string, iv: string, clearFirst: boolean) => {
-    if (clearFirst) setCandles([]);
-    apiFetch(`/api/stocks/${stockId}/candles?interval=${iv}&count=50`)
+  useEffect(() => { candlesRef.current = candles; }, [candles]);
+  useEffect(() => { hasMoreCandlesRef.current = hasMoreCandles; }, [hasMoreCandles]);
+  useEffect(() => { isLoadingMoreCandlesRef.current = isLoadingMoreCandles; }, [isLoadingMoreCandles]);
+
+  const fetchCandles = useCallback((
+    stockId: string,
+    iv: string,
+    options: { before?: number; prepend?: boolean; reset?: boolean } = {},
+  ) => {
+    if (options.reset) {
+      setCandles([]);
+      setHasMoreCandles(true);
+      hasMoreCandlesRef.current = true;
+    }
+
+    const params = new URLSearchParams({
+      interval: iv,
+      count: String(CANDLE_PAGE_SIZE),
+    });
+    if (options.before) params.set('before', String(options.before));
+
+    return apiFetch(`/api/stocks/${stockId}/candles?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
       .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[] | null) => {
         if (!data) return;
-        setCandles(data.map(c => ({
-          time: (Math.floor(c.bucketStart / 1000) + 9 * 3600) as UTCTimestamp,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
-        })));
+        const next = data.map(toChartCandle);
+        setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
+        if (options.prepend) {
+          setCandles(prev => {
+            const existing = new Set(prev.map(c => c.time));
+            return [...next.filter(c => !existing.has(c.time)), ...prev];
+          });
+        } else {
+          setCandles(next);
+        }
       })
       .catch(() => {});
-  };
+  }, []);
+
+  const loadMoreCandles = useCallback(() => {
+    const { stockId, interval: iv } = fetchParamsRef.current;
+    const oldest = candlesRef.current[0];
+    if (!oldest || !hasMoreCandlesRef.current || isLoadingMoreCandlesRef.current) return;
+
+    isLoadingMoreCandlesRef.current = true;
+    setIsLoadingMoreCandles(true);
+    fetchCandles(stockId, iv, {
+      before: toBucketStartMs(oldest.time),
+      prepend: true,
+    }).finally(() => {
+      isLoadingMoreCandlesRef.current = false;
+      setIsLoadingMoreCandles(false);
+    });
+  }, [fetchCandles]);
 
   useEffect(() => {
-    fetchCandles(streamer.id, interval, true);
-  }, [streamer.id, interval]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchCandles(streamer.id, interval, { reset: true });
+  }, [streamer.id, interval, fetchCandles]);
 
   useEffect(() => {
     setQtyStr('1');
@@ -93,10 +149,10 @@ export const StockDetail = ({
   useEffect(() => {
     const unsub = registerOnConnect(() => {
       const { stockId, interval: iv } = fetchParamsRef.current;
-      fetchCandles(stockId, iv, false);
+      fetchCandles(stockId, iv);
     });
     return () => unsub();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchCandles]);
 
   useEffect(() => {
     const subscription = subscribeStomp(`/topic/candles/${streamer.id}`, (message) => {
@@ -239,6 +295,9 @@ export const StockDetail = ({
             chartType={chartType}
             color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
             interval={interval}
+            hasMore={hasMoreCandles}
+            isLoadingMore={isLoadingMoreCandles}
+            onLoadMore={loadMoreCandles}
             className="md:flex-1 md:min-h-0"
           />
         </div>

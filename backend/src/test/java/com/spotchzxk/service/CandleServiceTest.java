@@ -74,6 +74,27 @@ class CandleServiceTest {
         assertThat(oneMinute.getClose()).isEqualTo(1_000);
     }
 
+    @Test
+    void getCandlesReturnsOnlyBucketsBeforeCursor() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of(order(stockId, base + 60_000L, 1_100)));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
+
+        ArgumentCaptor<Long> fromMs = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<Long> toMs = ArgumentCaptor.forClass(Long.class);
+        verify(orderRepository)
+                .findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), fromMs.capture(), toMs.capture());
+
+        assertThat(fromMs.getValue()).isEqualTo(base + 60_000L);
+        assertThat(toMs.getValue()).isEqualTo(before - 1);
+        assertThat(candles).extracting(OhlcCandle::getBucketStart)
+                .containsExactly(base + 60_000L, base + 120_000L);
+    }
+
     private Order order(String stockId, long createdAt, int executedPrice) {
         return Order.builder()
                 .id(stockId + "-" + createdAt)

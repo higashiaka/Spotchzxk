@@ -36,12 +36,18 @@ export const InteractiveChart = ({
   chartType,
   color,
   interval,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
   className = '',
 }: {
   candles: Candle[];
   chartType: 'candle' | 'line';
   color: string;
   interval: string;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
   className?: string;
 }) => {
   /** 현재 테마 / Current theme */
@@ -63,11 +69,17 @@ export const InteractiveChart = ({
   /** 이전 렌더링 시점의 캔들 배열 (증분 업데이트 판별용)
    *  Previous candles array used to determine if an update is incremental */
   const prevCandlesRef = useRef<Candle[]>([]);
+  const onLoadMoreRef = useRef(onLoadMore);
+  const hasMoreRef = useRef(hasMore);
+  const isLoadingMoreRef = useRef(isLoadingMore);
   /** 차트 생성 시 초기 테마를 참조하기 위한 ref / Ref for initial theme at chart creation */
   const themeRef = useRef(theme);
   useEffect(() => { themeRef.current = theme; }, [theme]);
 
   useEffect(() => { candlesRef.current = candles; }, [candles]);
+  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+  useEffect(() => { isLoadingMoreRef.current = isLoadingMore; }, [isLoadingMore]);
 
   // 테마 변경 시 차트 색상 업데이트 / Update chart colors when theme changes
   useEffect(() => {
@@ -124,6 +136,11 @@ export const InteractiveChart = ({
       setIsHovering(true);
       const found = cs.find(c => c.time === (param.time as UTCTimestamp));
       setActive(found ?? cs[cs.length - 1] ?? null);
+    });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (!range || !hasMoreRef.current || isLoadingMoreRef.current) return;
+      if (range.from <= 5) onLoadMoreRef.current?.();
     });
 
     return () => {

@@ -23,7 +23,8 @@ public class CandleController {
     public ResponseEntity<List<OhlcCandle>> getCandles(
             @PathVariable String stockId,
             @RequestParam(defaultValue = "5m") String interval,
-            @RequestParam(defaultValue = "50") int count) {
+            @RequestParam(defaultValue = "100") int count,
+            @RequestParam(required = false) Long before) {
 
         Stock stock = stockRepository.findById(stockId).orElse(null);
         long listedAtMs = stock != null
@@ -31,6 +32,7 @@ public class CandleController {
                 : 0L;
         double fallbackPrice = stock != null ? (double) stock.getCurrentPrice() : 1000.0;
 
-        return ResponseEntity.ok(candleService.getCandles(stockId, interval, count, listedAtMs, fallbackPrice));
+        long beforeMs = before != null ? before : System.currentTimeMillis();
+        return ResponseEntity.ok(candleService.getCandles(stockId, interval, count, beforeMs, listedAtMs, fallbackPrice));
     }
 }

@@ -26,7 +26,7 @@ public class CandleService {
     private static final long MS_1H  =     3_600_000L;
     private static final long MS_1D  =    86_400_000L;
     private static final long MS_1W  =   604_800_000L;
-    private static final int  MAX_CANDLES = 50;
+    private static final int  MAX_CANDLES = 300;
 
     private static final Map<String, Long> INTERVAL_MS = Map.of(
             "1m", MS_1M, "5m", MS_5M, "1h", MS_1H, "1d", MS_1D, "1w", MS_1W
@@ -41,25 +41,31 @@ public class CandleService {
 
     // ── REST: DB 주문 기록 → 캔들 목록 반환 ──────────────────────────────────────
 
-    public List<OhlcCandle> getCandles(String stockId, String interval, int count, long listedAtMs, double fallback) {
+    public List<OhlcCandle> getCandles(String stockId, String interval, int count, long beforeMs, long listedAtMs, double fallback) {
         long bucketMs = INTERVAL_MS.getOrDefault(interval, MS_1M);
-        long from = Math.max(listedAtMs, System.currentTimeMillis() - bucketMs * count * 3);
+        int limit = Math.max(1, Math.min(count, MAX_CANDLES));
+        long safeBeforeMs = beforeMs > 0 ? beforeMs : System.currentTimeMillis();
+        long from = Math.max(listedAtMs, safeBeforeMs - bucketMs * limit);
 
-        List<Order> orders = orderRepository
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, from);
+        List<Order> orders = from < safeBeforeMs
+                ? orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(stockId, from, safeBeforeMs - 1)
+                : List.of();
 
         List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs);
         List<OhlcCandle> result = "1m".equals(interval) ? oneMin : aggregate(oneMin, bucketMs);
 
-        result = fillGaps(result, bucketMs, fallback);
+        result = fillGaps(result, bucketMs, safeBeforeMs);
 
         result.removeIf(c -> c.getBucketStart() < listedAtMs);
+        result.removeIf(c -> c.getBucketStart() >= safeBeforeMs);
         // 상장 시각이 현재 버킷 중간이면 removeIf가 flat 캔들까지 제거할 수 있음 → 최소 1개 보장
         if (result.isEmpty()) {
             long currentBucket = (System.currentTimeMillis() / bucketMs) * bucketMs;
-            result = new ArrayList<>(List.of(flat(currentBucket, fallback)));
+            if (safeBeforeMs > currentBucket && currentBucket >= listedAtMs) {
+                result = new ArrayList<>(List.of(flat(currentBucket, fallback)));
+            }
         }
-        int from2 = Math.max(0, result.size() - count);
+        int from2 = Math.max(0, result.size() - limit);
         return new ArrayList<>(result.subList(from2, result.size()));
     }
 
@@ -146,12 +152,11 @@ public class CandleService {
      * 봉 사이 갭과 현재 봉까지 flat 캔들로 채움.
      * 거래가 전혀 없으면 현재 봉 하나만 반환.
      */
-    private List<OhlcCandle> fillGaps(List<OhlcCandle> candles, long bucketMs, double fallback) {
-        long now = System.currentTimeMillis();
-        long currentBucket = (now / bucketMs) * bucketMs;
+    private List<OhlcCandle> fillGaps(List<OhlcCandle> candles, long bucketMs, long beforeMs) {
+        long lastAllowedBucket = ((beforeMs - 1) / bucketMs) * bucketMs;
 
         if (candles.isEmpty()) {
-            return new ArrayList<>(List.of(flat(currentBucket, fallback)));
+            return new ArrayList<>();
         }
 
         List<OhlcCandle> filled = new ArrayList<>();
@@ -165,9 +170,9 @@ public class CandleService {
             filled.add(c);
         }
 
-        // 마지막 봉부터 현재 봉까지 채움
+        // 마지막 봉부터 요청한 before 이전 봉까지 채움
         OhlcCandle last = filled.get(filled.size() - 1);
-        for (long b = last.getBucketStart() + bucketMs; b <= currentBucket; b += bucketMs) {
+        for (long b = last.getBucketStart() + bucketMs; b <= lastAllowedBucket; b += bucketMs) {
             filled.add(flat(b, last.getClose()));
         }
 
