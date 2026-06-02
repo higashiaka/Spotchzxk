@@ -95,6 +95,47 @@ class CandleServiceTest {
                 .containsExactly(base + 60_000L, base + 120_000L);
     }
 
+    @Test
+    void getCandlesFillsEmptyShortIntervalWindowWithFallbackCandles() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of());
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
+
+        assertThat(candles).extracting(OhlcCandle::getBucketStart)
+                .containsExactly(base + 60_000L, base + 120_000L);
+        assertThat(candles).allSatisfy(candle -> {
+            assertThat(candle.getOpen()).isEqualTo(1_000);
+            assertThat(candle.getHigh()).isEqualTo(1_000);
+            assertThat(candle.getLow()).isEqualTo(1_000);
+            assertThat(candle.getClose()).isEqualTo(1_000);
+        });
+    }
+
+    @Test
+    void getCandlesUsesPreviousExecutedPriceForEmptyWindowGaps() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of());
+        when(orderRepository.findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(eq(stockId), anyLong()))
+                .thenReturn(order(stockId, base - 60_000L, 900));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
+
+        assertThat(candles).hasSize(2);
+        assertThat(candles).allSatisfy(candle -> {
+            assertThat(candle.getOpen()).isEqualTo(900);
+            assertThat(candle.getHigh()).isEqualTo(900);
+            assertThat(candle.getLow()).isEqualTo(900);
+            assertThat(candle.getClose()).isEqualTo(900);
+        });
+    }
+
     private Order order(String stockId, long createdAt, int executedPrice) {
         return Order.builder()
                 .id(stockId + "-" + createdAt)

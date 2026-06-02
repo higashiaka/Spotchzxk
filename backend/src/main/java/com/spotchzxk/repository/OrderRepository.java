@@ -27,6 +27,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findTop200ByStreamerIdAndStatusOrderByCreatedAtDesc(String streamerId, String status);
     List<Order> findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(String streamerId, long fromMs);
     List<Order> findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(String streamerId, long fromMs, long toMs);
+    Order findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(String streamerId, long beforeMs);
 
     // 지정가 주문 조회
     List<Order> findByStreamerIdAndStatusOrderByCreatedAtAsc(String streamerId, String status);

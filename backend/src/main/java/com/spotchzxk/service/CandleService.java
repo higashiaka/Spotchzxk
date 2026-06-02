@@ -50,11 +50,16 @@ public class CandleService {
         List<Order> orders = from < safeBeforeMs
                 ? orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(stockId, from, safeBeforeMs - 1)
                 : List.of();
+        Order previousOrder = orderRepository
+                .findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(stockId, from);
+        double gapFallback = previousOrder != null
+                ? previousOrder.getExecutedPrice().doubleValue()
+                : fallback;
 
         List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs);
         List<OhlcCandle> result = "1m".equals(interval) ? oneMin : aggregate(oneMin, bucketMs);
 
-        result = fillGaps(result, bucketMs, safeBeforeMs);
+        result = fillGaps(result, bucketMs, from, safeBeforeMs, gapFallback);
 
         result.removeIf(c -> c.getBucketStart() < listedAtMs);
         result.removeIf(c -> c.getBucketStart() >= safeBeforeMs);
@@ -152,14 +157,23 @@ public class CandleService {
      * 봉 사이 갭과 현재 봉까지 flat 캔들로 채움.
      * 거래가 전혀 없으면 현재 봉 하나만 반환.
      */
-    private List<OhlcCandle> fillGaps(List<OhlcCandle> candles, long bucketMs, long beforeMs) {
+    private List<OhlcCandle> fillGaps(List<OhlcCandle> candles, long bucketMs, long fromMs, long beforeMs, double fallback) {
+        long firstAllowedBucket = (fromMs / bucketMs) * bucketMs;
         long lastAllowedBucket = ((beforeMs - 1) / bucketMs) * bucketMs;
 
         if (candles.isEmpty()) {
-            return new ArrayList<>();
+            List<OhlcCandle> filled = new ArrayList<>();
+            for (long b = firstAllowedBucket; b <= lastAllowedBucket; b += bucketMs) {
+                filled.add(flat(b, fallback));
+            }
+            return filled;
         }
 
         List<OhlcCandle> filled = new ArrayList<>();
+        OhlcCandle first = candles.get(0);
+        for (long b = firstAllowedBucket; b < first.getBucketStart(); b += bucketMs) {
+            filled.add(flat(b, fallback));
+        }
         for (OhlcCandle c : candles) {
             if (!filled.isEmpty()) {
                 OhlcCandle prev = filled.get(filled.size() - 1);
