@@ -484,7 +484,9 @@ function App() {
     if (!isSwipeTab || event.pointerType === 'mouse') return;
     if (swipeStartRef.current.pointerId !== -1) return;
     if (event.nativeEvent.composedPath().some(
-      el => el instanceof HTMLElement && el.dataset.swipeIgnore === 'true'
+      el => el instanceof HTMLElement &&
+        el.classList.contains('tv-lightweight-charts') &&
+        el.dataset.swipeIgnore === 'true'
     )) return;
     swipeStartRef.current = {
       x: event.clientX,
