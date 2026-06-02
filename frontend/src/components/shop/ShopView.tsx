@@ -4,16 +4,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
 import { apiFetch } from '../../lib/api';
 import {
-  useMegaphonePosts,
   useMegaphoneUsesToday,
   useMegaphoneSubmit,
 } from '../../hooks/useMegaphone';
-import { MegaphonePostList, useRealtimeMegaphonePosts } from '../common/MegaphonePostList';
 
 /** 확성기 아이템 1회 사용 비용 (원) / Cost per megaphone use in KRW */
-const MEGAPHONE_PRICE = 1_000_000_000;
+const MEGAPHONE_PRICE = 30_000_000;
 const NICKNAME_TICKET_PRICE = 1_000_000;
-const STOCK_ADD_TICKET_PRICE = 30_000_000;
+const STOCK_ADD_TICKET_PRICE = 10_000_000;
 /** 확성기 1일 최대 사용 횟수 / Max megaphone uses per day */
 const DAILY_LIMIT = 3;
 
@@ -180,7 +178,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
                 onClick={() => selected && onSubmit(selected, message)}
                 className="flex-1 py-2.5 rounded-lg text-sm font-bold transition-opacity"
                 style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', opacity: !selected || isPending ? 0.5 : 1 }}>
-                {isPending ? '처리 중...' : '사용하기 (10억)'}
+                {isPending ? '처리 중...' : `사용하기 (${formatPrice(MEGAPHONE_PRICE)})`}
               </button>
             </div>
           </>
@@ -203,24 +201,18 @@ interface Props {
 }
 
 /** 상점 화면 컴포넌트.
- *  확성기 아이템 구매·사용 및 최근 확성기 게시 목록을 표시.
- *  STOMP로 신규 게시물을 실시간 수신
+ *  확성기 아이템 구매·사용을 표시.
  *
  *  Shop screen component.
- *  Displays the megaphone item for purchase/use and the recent megaphone post list.
- *  Receives new posts in real-time via STOMP */
+ *  Displays the megaphone item for purchase/use. */
 export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   const queryClient = useQueryClient();
-  const { data: posts = [], refetch } = useMegaphonePosts();
   const { data: usesToday = 0 } = useMegaphoneUsesToday(user?.uid);
   const mutation = useMegaphoneSubmit(user?.uid);
 
   /** 모달 표시 여부 / Whether the megaphone modal is visible */
   const [showModal, setShowModal] = useState(false);
   const [purchasePending, setPurchasePending] = useState<string | null>(null);
-  /** REST 초기 로드 + STOMP 실시간 갱신을 합산한 게시물 목록
-   *  Post list combining initial REST load and real-time STOMP updates */
-  const realtimePosts = useRealtimeMegaphonePosts(posts);
 
   /** 잔고가 확성기 가격 이상인지 여부 / Whether balance covers the megaphone price */
   const canAfford = balance >= MEGAPHONE_PRICE;
@@ -232,12 +224,11 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
 
   /** 모달에서 확인 시 게시 제출 + 성공 후 목록 갱신
-   *  Submits the megaphone post from modal and refetches list on success */
+   *  Submits the megaphone post from modal and closes it on success */
   const handleSubmit = (channelId: string, message: string) => {
     mutation.mutate({ channelId, message }, {
       onSuccess: () => {
         setShowModal(false);
-        refetch();
       },
     });
   };
@@ -359,10 +350,6 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
           </span>
         </div>
       </div>
-
-      {/* 최근 확성기 게시 목록 / Recent megaphone post list */}
-      <h3 className="text-sm md:text-lg font-bold mb-3 md:mb-4" style={{ color: 'var(--text-muted)' }}>최근 확성기</h3>
-      <MegaphonePostList posts={realtimePosts} />
     </div>
   );
 };

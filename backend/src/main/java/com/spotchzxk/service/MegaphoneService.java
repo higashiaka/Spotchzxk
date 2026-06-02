@@ -7,6 +7,7 @@ import com.spotchzxk.repository.MegaphonePostRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,7 @@ import java.util.UUID;
 public class MegaphoneService {
 
     private static final int DAILY_LIMIT = 3;
-    private static final BigDecimal MEGAPHONE_PRICE = new BigDecimal("1000000000");
+    private static final BigDecimal MEGAPHONE_PRICE = new BigDecimal("30000000");
 
     private final MegaphonePostRepository megaphonePostRepository;
     private final UserRepository userRepository;
@@ -35,7 +36,7 @@ public class MegaphoneService {
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
         if (user.getCoinBalance().compareTo(MEGAPHONE_PRICE) < 0) {
-            throw new IllegalStateException("잔액이 부족합니다. 확성기 사용에는 10억 코인이 필요합니다.");
+            throw new IllegalStateException("잔액이 부족합니다. 확성기 사용에는 3천만 코인이 필요합니다.");
         }
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
@@ -72,7 +73,7 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public List<MegaphonePost> getRecentPosts() {
-        return megaphonePostRepository.findTop20ByOrderByCreatedAtDesc();
+        return megaphonePostRepository.findLivePosts(PageRequest.of(0, 20));
     }
 
     @Transactional(readOnly = true)

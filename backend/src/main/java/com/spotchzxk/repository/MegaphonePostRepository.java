@@ -1,7 +1,9 @@
 package com.spotchzxk.repository;
 
 import com.spotchzxk.entity.MegaphonePost;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -12,5 +14,12 @@ public interface MegaphonePostRepository extends JpaRepository<MegaphonePost, St
 
     long countByUserIdAndCreatedAtBetween(String userId, LocalDateTime start, LocalDateTime end);
 
-    List<MegaphonePost> findTop20ByOrderByCreatedAtDesc();
+    @Query("""
+            SELECT p
+            FROM MegaphonePost p
+            JOIN Stock s ON s.channelId = p.channelId
+            WHERE s.isLive = true
+            ORDER BY p.createdAt DESC
+            """)
+    List<MegaphonePost> findLivePosts(Pageable pageable);
 }

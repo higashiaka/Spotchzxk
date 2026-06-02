@@ -12,6 +12,35 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_update_v6',
+    title: '상점 가격 조정 & 확성기 변경',
+    date: '최근 업데이트',
+    summary: '확성기와 종목 추가 티켓 가격이 내려갔고, 확성기는 라이브 중인 방송에서만 표시됩니다.',
+    sections: [
+      {
+        title: '확성기 가격 인하',
+        rows: [
+          { label: '변경 후', value: '3,000만 코인', tone: 'accent' },
+          { label: '기존', value: '10억 코인', tone: 'danger' },
+        ],
+      },
+      {
+        title: '종목 추가 티켓 가격 인하',
+        rows: [
+          { label: '변경 후', value: '1,000만 코인', tone: 'accent' },
+          { label: '기존', value: '3,000만 코인', tone: 'danger' },
+        ],
+      },
+      {
+        title: '확성기 자동 만료',
+        rows: [
+          { label: '적용', value: '라이브 중인 방송의 확성기만 표시', tone: 'accent' },
+        ],
+        note: '방송이 종료되면 다음 목록 갱신 때 해당 확성기는 자동으로 사라집니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_update_v5',
     title: '업데이트 안내',
     date: '최근 업데이트',
