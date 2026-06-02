@@ -22,5 +22,5 @@ public interface MegaphonePostRepository extends JpaRepository<MegaphonePost, St
               AND (s.liveStartedAt IS NULL OR p.createdAt >= s.liveStartedAt)
             ORDER BY p.createdAt DESC
             """)
-    List<MegaphonePost> findLivePosts(Pageable pageable);
+    List<MegaphonePost> findVisiblePosts(Pageable pageable);
 }

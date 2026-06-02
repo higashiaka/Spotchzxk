@@ -1,5 +1,8 @@
+import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
+import { subscribeStomp } from '../lib/stompClient';
+import type { Stock } from './useStocks';
 
 /** 확성기 게시물 데이터 구조
  *  Megaphone post data structure */
@@ -20,11 +23,35 @@ export interface MegaphonePost {
   createdAt: string;
 }
 
-/** 최근 확성기 게시 목록을 30초 간격으로 폴링
- *  Polls the recent megaphone post list every 30 seconds */
-export const useMegaphonePosts = () =>
-  useQuery<MegaphonePost[]>({
-    queryKey: ['megaphone-posts'],
+const MEGAPHONE_POSTS_QUERY_KEY = ['megaphone-posts'] as const;
+const MAX_VISIBLE_MEGAPHONE_POSTS = 20;
+
+function mergeMegaphonePost(posts: MegaphonePost[] | undefined, post: MegaphonePost) {
+  return [post, ...(posts ?? []).filter(item => item.id !== post.id)].slice(0, MAX_VISIBLE_MEGAPHONE_POSTS);
+}
+
+function isVisibleInCurrentLiveSession(post: MegaphonePost, streamers: Stock[]) {
+  const streamer = streamers.find(item => item.id === post.channelId);
+  if (!streamer?.isLive) {
+    return false;
+  }
+  if (!streamer.liveStartedAt) {
+    return true;
+  }
+  return new Date(post.createdAt).getTime() >= new Date(streamer.liveStartedAt).getTime();
+}
+
+/** 홈 확성기 목록.
+ *  공개 REST 목록과 /topic/megaphone 실시간 수신을 하나로 합치고,
+ *  현재 라이브 세션에 유효한 확성기만 반환한다.
+ *
+ *  Home megaphone feed.
+ *  Combines the public REST list with /topic/megaphone real-time events
+ *  and returns only posts valid for the current live session. */
+export const useVisibleMegaphonePosts = (streamers: Stock[]) => {
+  const queryClient = useQueryClient();
+  const query = useQuery<MegaphonePost[]>({
+    queryKey: MEGAPHONE_POSTS_QUERY_KEY,
     queryFn: async () => {
       const res = await apiFetch('/api/shop/megaphone/posts');
       if (!res.ok) throw new Error('확성기 목록 조회 실패');
@@ -32,6 +59,24 @@ export const useMegaphonePosts = () =>
     },
     refetchInterval: 30_000,
   });
+
+  useEffect(() => {
+    const sub = subscribeStomp('/topic/megaphone', msg => {
+      try {
+        const post = JSON.parse(msg.body) as MegaphonePost;
+        queryClient.setQueryData<MegaphonePost[]>(MEGAPHONE_POSTS_QUERY_KEY, posts => mergeMegaphonePost(posts, post));
+      } catch {
+        /* ignore parse errors */
+      }
+    });
+    return () => sub.unsubscribe();
+  }, [queryClient]);
+
+  return useMemo(
+    () => (query.data ?? []).filter(post => isVisibleInCurrentLiveSession(post, streamers)),
+    [query.data, streamers],
+  );
+};
 
 /** 오늘 해당 사용자의 확성기 사용 횟수를 조회
  *  Fetches how many times the user has used the megaphone today */
@@ -68,11 +113,8 @@ export const useMegaphoneSubmit = (uid: string | undefined) => {
       return res.json() as Promise<MegaphonePost>;
     },
     onSuccess: post => {
-      queryClient.setQueryData<MegaphonePost[]>(['megaphone-posts'], old => {
-        const posts = old ?? [];
-        return [post, ...posts.filter(item => item.id !== post.id)].slice(0, 20);
-      });
-      queryClient.invalidateQueries({ queryKey: ['megaphone-posts'] });
+      queryClient.setQueryData<MegaphonePost[]>(MEGAPHONE_POSTS_QUERY_KEY, posts => mergeMegaphonePost(posts, post));
+      queryClient.invalidateQueries({ queryKey: MEGAPHONE_POSTS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['megaphone-uses-today', uid] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
     },

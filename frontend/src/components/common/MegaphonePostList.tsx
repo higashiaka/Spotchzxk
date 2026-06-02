@@ -1,32 +1,8 @@
-import { useEffect, useState } from 'react';
 import { MegaphonePost } from '../../hooks/useMegaphone';
-import { subscribeStomp } from '../../lib/stompClient';
 
 function formatTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-}
-
-export function useRealtimeMegaphonePosts(posts: MegaphonePost[]) {
-  const [realtimePosts, setRealtimePosts] = useState<MegaphonePost[]>([]);
-
-  useEffect(() => {
-    setRealtimePosts(posts);
-  }, [posts]);
-
-  useEffect(() => {
-    const sub = subscribeStomp('/topic/megaphone', msg => {
-      try {
-        const post = JSON.parse(msg.body) as MegaphonePost;
-        setRealtimePosts(prev => [post, ...prev.filter(item => item.id !== post.id)].slice(0, 20));
-      } catch {
-        /* ignore parse errors */
-      }
-    });
-    return () => sub.unsubscribe();
-  }, []);
-
-  return realtimePosts;
 }
 
 interface MegaphonePostListProps {

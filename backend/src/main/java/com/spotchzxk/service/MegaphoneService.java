@@ -78,7 +78,7 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public List<MegaphonePost> getRecentPosts() {
-        return megaphonePostRepository.findLivePosts(PageRequest.of(0, 20));
+        return megaphonePostRepository.findVisiblePosts(PageRequest.of(0, 20));
     }
 
     @Transactional(readOnly = true)

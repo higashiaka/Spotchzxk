@@ -4,9 +4,9 @@ import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
 import { fmt, fmtCompact, changePct, priceColor, avatarColor, grade } from '../../utils';
 import { Ticker } from '../Ticker';
-import { useMegaphonePosts } from '../../hooks/useMegaphone';
+import { useVisibleMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
-import { MegaphonePostList, useRealtimeMegaphonePosts } from '../common/MegaphonePostList';
+import { MegaphonePostList } from '../common/MegaphonePostList';
 
 /** 홈 화면 컴포넌트.
  *  티커, 최근 확성기 목록, 투자 요약, 보유 종목(최대 3개),
@@ -48,8 +48,7 @@ export const HomeView = ({
   /** 전체 거래 피드 모달 표시 여부 / Whether the full trade feed modal is visible */
   const [showTradeFeed, setShowTradeFeed] = useState(false);
 
-  const { data: initialPosts = [] } = useMegaphonePosts();
-  const realtimeMegaphonePosts = useRealtimeMegaphonePosts(initialPosts);
+  const megaphonePosts = useVisibleMegaphonePosts(streamers);
   const userGrade = portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
@@ -101,7 +100,7 @@ export const HomeView = ({
               상점 보기 →
             </button>
           </div>
-          <MegaphonePostList posts={realtimeMegaphonePosts} compact limit={3} />
+          <MegaphonePostList posts={megaphonePosts} compact limit={3} />
         </div>
 
         {/* 내 투자 요약 / My investment summary */}
