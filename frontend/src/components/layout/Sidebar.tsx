@@ -132,7 +132,7 @@ export const Sidebar = ({
       </div>
 
       {/* 하단 고정 영역: 저빈도 참조 링크 / Sticky footer: low-frequency reference links */}
-      <div className="shrink-0 px-5 py-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
+      <div className="shrink-0 px-5 pt-3 pb-20 md:pb-3 border-t" style={{ borderColor: 'var(--border-primary)' }}>
         <button
           type="button"
           onClick={() => onNavigate('announcements')}
