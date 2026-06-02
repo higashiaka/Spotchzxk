@@ -12,6 +12,35 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_update_v7',
+    title: '고래 방지 정책 도입',
+    date: '최근 업데이트',
+    summary: '특정 유저의 신규 상장 독점 및 대량 매집을 방지하기 위한 보유 한도가 적용됩니다.',
+    sections: [
+      {
+        title: '종목당 보유 한도',
+        rows: [
+          { label: '최대 보유', value: '1인당 1,000개', tone: 'accent' },
+        ],
+        note: '한도 초과 보유자는 해당 종목 추가 매수가 제한됩니다.',
+      },
+      {
+        title: '신규 상장 초기 제한',
+        rows: [
+          { label: '상장 후 24시간', value: '1인당 최대 200개', tone: 'accent' },
+        ],
+        note: '신규 상장 직후 대량 매집을 막기 위한 조치입니다.',
+      },
+      {
+        title: '배당 상한',
+        rows: [
+          { label: '배당 기준', value: '보유량 최대 1,000개까지만 지급', tone: 'accent' },
+        ],
+        note: '1,000개 초과 보유분에 대해서는 배당이 지급되지 않습니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_update_v6',
     title: '상점 가격 조정 & 확성기 변경',
     date: '최근 업데이트',
