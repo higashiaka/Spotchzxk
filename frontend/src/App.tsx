@@ -483,6 +483,9 @@ function App() {
   const handleSwipePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!isSwipeTab || event.pointerType === 'mouse') return;
     if (swipeStartRef.current.pointerId !== -1) return;
+    if (event.nativeEvent.composedPath().some(
+      el => el instanceof HTMLElement && el.dataset.swipeIgnore === 'true'
+    )) return;
     swipeStartRef.current = {
       x: event.clientX,
       y: event.clientY,
@@ -500,9 +503,6 @@ function App() {
     const dy = event.clientY - start.y;
     if (!start.horizontal && Math.abs(dx) < 8) return;
     if (!start.horizontal && Math.abs(dy) > Math.abs(dx)) return;
-
-    const startEl = document.elementFromPoint(start.x, start.y);
-    if (startEl?.closest('[data-swipe-ignore="true"]')) { cancelSwipe(); return; }
 
     start.horizontal = true;
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
