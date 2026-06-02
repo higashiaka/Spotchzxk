@@ -50,6 +50,9 @@ const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapsho
   );
 };
 
+const isSwipeIgnoredTarget = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest('[data-swipe-ignore="true"]');
+
 const liveTradeKey = (trade: LiveTrade) =>
   trade.id ?? `${trade.streamerId}-${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
 
@@ -482,6 +485,7 @@ function App() {
 
   const handleSwipePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!isSwipeTab || event.pointerType === 'mouse') return;
+    if (isSwipeIgnoredTarget(event.target)) return;
     if (swipeStartRef.current.pointerId !== -1) return;
     swipeStartRef.current = {
       x: event.clientX,
