@@ -67,7 +67,11 @@ export const useMegaphoneSubmit = (uid: string | undefined) => {
       }
       return res.json() as Promise<MegaphonePost>;
     },
-    onSuccess: () => {
+    onSuccess: post => {
+      queryClient.setQueryData<MegaphonePost[]>(['megaphone-posts'], old => {
+        const posts = old ?? [];
+        return [post, ...posts.filter(item => item.id !== post.id)].slice(0, 20);
+      });
       queryClient.invalidateQueries({ queryKey: ['megaphone-posts'] });
       queryClient.invalidateQueries({ queryKey: ['megaphone-uses-today', uid] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });

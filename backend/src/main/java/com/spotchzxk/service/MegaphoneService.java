@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,7 +24,9 @@ import java.util.UUID;
 public class MegaphoneService {
 
     private static final int DAILY_LIMIT = 3;
+    private static final int MAX_MESSAGE_LENGTH = 50;
     private static final BigDecimal MEGAPHONE_PRICE = new BigDecimal("30000000");
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final MegaphonePostRepository megaphonePostRepository;
     private final UserRepository userRepository;
@@ -39,7 +42,7 @@ public class MegaphoneService {
             throw new IllegalStateException("잔액이 부족합니다. 확성기 사용에는 3천만 코인이 필요합니다.");
         }
 
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         long usesToday = megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
         if (usesToday >= DAILY_LIMIT) {
@@ -52,6 +55,8 @@ public class MegaphoneService {
             throw new IllegalStateException("현재 라이브 중인 스트리머만 확성기를 사용할 수 있습니다.");
         }
 
+        String normalizedMessage = normalizeMessage(message);
+
         user.deductBalance(MEGAPHONE_PRICE);
         userRepository.save(user);
 
@@ -60,9 +65,9 @@ public class MegaphoneService {
                 .userId(uid)
                 .channelId(channelId)
                 .streamerName(stock.getStreamerName())
-                .message(message != null ? message.trim() : null)
+                .message(normalizedMessage)
                 .liveUrl("https://chzzk.naver.com/live/" + channelId)
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(KST))
                 .build();
 
         megaphonePostRepository.save(post);
@@ -78,8 +83,22 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public long getMyUsesToday(String uid) {
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         return megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
+    }
+
+    private String normalizeMessage(String message) {
+        if (message == null) {
+            return null;
+        }
+        String trimmed = message.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > MAX_MESSAGE_LENGTH) {
+            throw new IllegalStateException("확성기 메시지는 최대 50자까지 입력할 수 있습니다.");
+        }
+        return trimmed;
     }
 }
