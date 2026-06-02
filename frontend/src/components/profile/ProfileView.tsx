@@ -509,7 +509,7 @@ export const ProfileView = ({
         type="button"
         onClick={onReset}
         disabled={isResetting || remainingResets <= 0}
-        className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full rounded-xl border px-4 py-3 mb-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <div className="flex flex-col items-start gap-0.5">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (100만으로 세팅)</span>
@@ -520,6 +520,17 @@ export const ProfileView = ({
         <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? 'var(--text-dim)' : '#FF5252' }}>
           {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
         </span>
+      </button>
+
+      {/* 지난 공지 바로가기 / Past announcements shortcut */}
+      <button
+        type="button"
+        onClick={() => onNavigate('announcements')}
+        className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}
+      >
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>지난 공지 보기</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
       </button>
     </div>
   );
