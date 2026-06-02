@@ -125,10 +125,21 @@ export const InteractiveChart = ({
       },
     });
     chartRef.current = chart;
+    let removeChartGestureGuards: (() => void) | null = null;
     const chartElement = containerRef.current.querySelector('.tv-lightweight-charts');
     if (chartElement instanceof HTMLElement) {
       chartElement.dataset.swipeIgnore = 'true';
       chartElement.style.touchAction = 'none';
+      const stopChartGesturePropagation = (event: Event) => event.stopPropagation();
+      const guardedEvents = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
+      guardedEvents.forEach(eventName => {
+        chartElement.addEventListener(eventName, stopChartGesturePropagation);
+      });
+      removeChartGestureGuards = () => {
+        guardedEvents.forEach(eventName => {
+          chartElement.removeEventListener(eventName, stopChartGesturePropagation);
+        });
+      };
     }
 
     chart.subscribeCrosshairMove((param) => {
@@ -149,6 +160,7 @@ export const InteractiveChart = ({
     });
 
     return () => {
+      removeChartGestureGuards?.();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
