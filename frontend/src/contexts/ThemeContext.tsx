@@ -25,7 +25,8 @@ const ThemeContext = createContext<ThemeContextValue>({
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     const stored = localStorage.getItem('spotchzxk-theme');
-    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+    if (stored === 'light' || stored === 'dark') return stored;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   });
 
   useEffect(() => {
