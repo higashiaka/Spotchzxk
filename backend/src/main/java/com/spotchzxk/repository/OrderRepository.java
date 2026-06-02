@@ -23,7 +23,8 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             """, nativeQuery = true)
     List<Order> findTop50BotCompletedByOrderByCreatedAtDesc();
 
-    List<Order> findTop200ByStreamerIdOrderByCreatedAtAsc(String streamerId);
+    List<Order> findTop200ByStreamerIdOrderByCreatedAtDesc(String streamerId);
+    List<Order> findTop200ByStreamerIdAndStatusOrderByCreatedAtDesc(String streamerId, String status);
     List<Order> findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(String streamerId, long fromMs);
     List<Order> findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(String streamerId, long fromMs, long toMs);
 

@@ -49,7 +49,7 @@ const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapsho
 };
 
 const liveTradeKey = (trade: LiveTrade) =>
-  `${trade.streamerId}-${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
+  trade.id ?? `${trade.streamerId}-${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
 
 /** 앱 최상위 컴포넌트.
  *  Firebase 인증, 탭 라우팅, 실시간 체결 피드(STOMP), 포트폴리오 상태를 통합 관리
@@ -163,6 +163,7 @@ function App() {
       .then((rawOrders: any[] | null) => {
         if (!rawOrders) return;
         const initialTrades: LiveTrade[] = rawOrders.map(item => ({
+          id: item.id,
           streamerId: item.streamerId,
           streamerName: item.streamerName ?? item.streamerId,
           type: item.type as 'buy' | 'sell',

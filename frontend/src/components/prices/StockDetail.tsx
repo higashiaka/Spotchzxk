@@ -13,6 +13,7 @@ import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
 
 interface StockOrderHistoryItem {
+  id: string;
   streamerId: string;
   type: 'buy' | 'sell';
   quantity: number;
@@ -74,8 +75,8 @@ export const StockDetail = ({
       .then((orders: StockOrderHistoryItem[] | null) => {
         if (!orders) return;
         const trades = orders
-          .filter(order => order.status === 'completed')
           .map(order => ({
+            id: order.id,
             streamerId: order.streamerId,
             streamerName: streamer.name,
             type: order.type,
@@ -114,7 +115,7 @@ export const StockDetail = ({
           if (prev.length === 0) return [newCandle];
           const last = prev[prev.length - 1];
           if (last.time === newCandle.time) return [...prev.slice(0, -1), newCandle];
-          return [...prev.slice(-49), newCandle];
+          return [...prev, newCandle];
         });
       } catch (e) {
         console.error('Failed to parse candle update', e);
@@ -134,7 +135,7 @@ export const StockDetail = ({
   const streamerTrades = useMemo(() => {
     const merged = new Map<string, LiveTrade>();
     [...liveTrades.filter(t => t.streamerId === streamer.id), ...stockTrades].forEach(trade => {
-      const key = `${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
+      const key = trade.id ?? `${trade.timestamp}-${trade.type}-${trade.quantity}-${trade.price}`;
       merged.set(key, trade);
     });
     return [...merged.values()].sort((a, b) => b.timestamp - a.timestamp);

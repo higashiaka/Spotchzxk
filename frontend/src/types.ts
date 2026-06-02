@@ -5,6 +5,7 @@ export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'rankings' | 'profi
 /** STOMP를 통해 실시간으로 수신되는 체결 이벤트
  *  Live trade event received via STOMP WebSocket */
 export interface LiveTrade {
+  id?: string;
   /** 스트리머 채널 ID / Streamer channel ID */
   streamerId: string;
   /** 스트리머 이름 / Streamer display name */
