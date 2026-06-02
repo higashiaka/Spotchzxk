@@ -501,6 +501,9 @@ function App() {
     if (!start.horizontal && Math.abs(dx) < 8) return;
     if (!start.horizontal && Math.abs(dy) > Math.abs(dx)) return;
 
+    const startEl = document.elementFromPoint(start.x, start.y);
+    if (startEl?.closest('[data-swipe-ignore="true"]')) { cancelSwipe(); return; }
+
     start.horizontal = true;
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.setPointerCapture(event.pointerId);

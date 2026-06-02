@@ -254,9 +254,9 @@ export const InteractiveChart = ({
       <div className="h-56 md:flex-1 md:min-h-0 relative w-full">
         <div
           ref={containerRef}
+          data-swipe-ignore="true"
           className="w-full h-full rounded-xl border overflow-hidden"
           style={{ borderColor: 'var(--border-card)', touchAction: 'none' }}
-          onPointerDown={e => e.stopPropagation()}
         />
         {/* 데이터 없음 플레이스홀더 (신규 상장 종목) / Empty state placeholder for newly listed stocks */}
         {candles.length === 0 && (
