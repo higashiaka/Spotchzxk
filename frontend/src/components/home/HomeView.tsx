@@ -48,7 +48,7 @@ export const HomeView = ({
   /** 전체 거래 피드 모달 표시 여부 / Whether the full trade feed modal is visible */
   const [showTradeFeed, setShowTradeFeed] = useState(false);
 
-  const megaphonePosts = useVisibleMegaphonePosts(streamers);
+  const megaphonePosts = useVisibleMegaphonePosts();
   const userGrade = portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;

@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
-import type { Stock } from './useStocks';
 
 /** 확성기 게시물 데이터 구조
  *  Megaphone post data structure */
@@ -30,25 +29,14 @@ function mergeMegaphonePost(posts: MegaphonePost[] | undefined, post: MegaphoneP
   return [post, ...(posts ?? []).filter(item => item.id !== post.id)].slice(0, MAX_VISIBLE_MEGAPHONE_POSTS);
 }
 
-function isVisibleInCurrentLiveSession(post: MegaphonePost, streamers: Stock[]) {
-  const streamer = streamers.find(item => item.id === post.channelId);
-  if (!streamer?.isLive) {
-    return false;
-  }
-  if (!streamer.liveStartedAt) {
-    return true;
-  }
-  return new Date(post.createdAt).getTime() >= new Date(streamer.liveStartedAt).getTime();
-}
-
 /** 홈 확성기 목록.
- *  공개 REST 목록과 /topic/megaphone 실시간 수신을 하나로 합치고,
- *  현재 라이브 세션에 유효한 확성기만 반환한다.
+ *  공개 REST 목록과 /topic/megaphone 실시간 수신을 하나로 합친다.
+ *  현재 홈에 보일 수 있는 확성기인지 여부는 백엔드 조회 조건을 단일 기준으로 삼는다.
  *
  *  Home megaphone feed.
- *  Combines the public REST list with /topic/megaphone real-time events
- *  and returns only posts valid for the current live session. */
-export const useVisibleMegaphonePosts = (streamers: Stock[]) => {
+ *  Combines the public REST list with /topic/megaphone real-time events.
+ *  Backend query conditions are the single source of truth for visibility. */
+export const useVisibleMegaphonePosts = () => {
   const queryClient = useQueryClient();
   const query = useQuery<MegaphonePost[]>({
     queryKey: MEGAPHONE_POSTS_QUERY_KEY,
@@ -72,10 +60,7 @@ export const useVisibleMegaphonePosts = (streamers: Stock[]) => {
     return () => sub.unsubscribe();
   }, [queryClient]);
 
-  return useMemo(
-    () => (query.data ?? []).filter(post => isVisibleInCurrentLiveSession(post, streamers)),
-    [query.data, streamers],
-  );
+  return useMemo(() => query.data ?? [], [query.data]);
 };
 
 /** 오늘 해당 사용자의 확성기 사용 횟수를 조회
