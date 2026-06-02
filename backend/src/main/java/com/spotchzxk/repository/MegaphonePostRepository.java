@@ -19,7 +19,10 @@ public interface MegaphonePostRepository extends JpaRepository<MegaphonePost, St
             FROM MegaphonePost p
             JOIN Stock s ON s.channelId = p.channelId
             WHERE s.isLive = true
-              AND (s.liveStartedAt IS NULL OR p.createdAt >= s.liveStartedAt)
+              AND (
+                  (s.liveStartedAt IS NULL AND p.liveSessionStartedAt IS NULL)
+                  OR p.liveSessionStartedAt = s.liveStartedAt
+              )
             ORDER BY p.createdAt DESC
             """)
     List<MegaphonePost> findVisiblePosts(Pageable pageable);

@@ -67,6 +67,7 @@ public class MegaphoneService {
                 .streamerName(stock.getStreamerName())
                 .message(normalizedMessage)
                 .liveUrl("https://chzzk.naver.com/live/" + channelId)
+                .liveSessionStartedAt(stock.getLiveStartedAt())
                 .createdAt(LocalDateTime.now(KST))
                 .build();
 

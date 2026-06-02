@@ -32,6 +32,9 @@ public class MegaphonePost {
     @Column(nullable = false, length = 200)
     private String liveUrl;
 
+    @Column
+    private LocalDateTime liveSessionStartedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

@@ -18,6 +18,8 @@ export interface MegaphonePost {
   message: string | null;
   /** 치지직 라이브 링크 / Chzzk live URL */
   liveUrl: string;
+  /** 확성기를 사용한 라이브 세션 시작 시각 / Live session start time captured when posted */
+  liveSessionStartedAt: string | null;
   /** 게시 시각 (ISO 8601) / Post creation time in ISO 8601 */
   createdAt: string;
 }
