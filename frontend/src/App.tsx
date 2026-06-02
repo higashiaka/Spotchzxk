@@ -760,10 +760,10 @@ function App() {
           <div
             ref={swipeViewportRef}
             className="flex-1 overflow-hidden touch-pan-y"
-            onPointerDown={handleSwipePointerDown}
-            onPointerMove={handleSwipePointerMove}
-            onPointerUp={finishSwipe}
-            onPointerCancel={cancelSwipe}
+            onPointerDownCapture={handleSwipePointerDown}
+            onPointerMoveCapture={handleSwipePointerMove}
+            onPointerUpCapture={finishSwipe}
+            onPointerCancelCapture={cancelSwipe}
           >
             {isSwipeTab ? (
               <div className={`h-full ${mobileRouteClass}`}>

@@ -241,7 +241,7 @@ export const StockDetail = ({
   );
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 pb-24 hide-scrollbar">
+    <div className="h-full overflow-y-auto p-4 md:p-6 pb-24 hide-scrollbar touch-pan-y">
       <div className="mb-4 md:mb-5">
         <h1 className="text-white text-xl md:text-3xl font-bold">{streamer.name}</h1>
         <div className="flex items-baseline gap-3 mt-1">
