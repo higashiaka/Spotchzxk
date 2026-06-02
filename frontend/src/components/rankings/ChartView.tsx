@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
-import { avatarColor, changePct, fmt, fmtCompact, priceColor } from '../../utils';
+import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor } from '../../utils';
 
 /** 차트 화면에서 선택 가능한 카테고리 타입
  *  Category types selectable in the chart screen */
@@ -250,7 +250,7 @@ export const ChartView = ({
                 ) : (
                   <div className="w-24 md:w-36 text-right shrink-0">
                     <p className="text-xs md:text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {category === 'value' ? fmt(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
+                      {category === 'value' ? fmtCompactWon(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>
                 )}

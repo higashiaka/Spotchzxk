@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
-import { fmt, fmtCompact, changePct, priceColor, avatarColor, INITIAL_BALANCE, grade } from '../../utils';
+import { fmt, fmtCompact, changePct, priceColor, avatarColor, grade } from '../../utils';
 import { Ticker } from '../Ticker';
 import { useMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
@@ -50,10 +50,6 @@ export const HomeView = ({
 
   const { data: initialPosts = [] } = useMegaphonePosts();
   const realtimeMegaphonePosts = useRealtimeMegaphonePosts(initialPosts);
-  /** 총 수익 (총 자산 - 초기 투자금) / Total return (total assets - initial balance) */
-  const totalReturn = totalAssets - INITIAL_BALANCE;
-  /** 총 수익률 (%) / Total return rate in % */
-  const totalReturnPct = (totalReturn / INITIAL_BALANCE) * 100;
   const userGrade = portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
@@ -63,6 +59,14 @@ export const HomeView = ({
   /** 보유 종목 목록 (평가금액 내림차순)
    *  Holdings sorted by value descending */
   const { holdings, holdingCount } = useHoldings(portfolio, streamers);
+  /** 보유 종목 총 평가금액 / Total market value of current holdings */
+  const holdingsValue = holdings.reduce((sum, h) => sum + h.value, 0);
+  /** 보유 종목 총 매입 원금 / Total cost basis of current holdings */
+  const holdingsCost = holdings.reduce((sum, h) => sum + h.avgPrice * h.qty, 0);
+  /** 매입 대비 총 손익 / Total P&L relative to cost basis */
+  const holdingsPnL = holdingsValue - holdingsCost;
+  /** 매입 대비 총 수익률 (%) / Total return rate relative to cost basis */
+  const holdingsPnLPct = holdingsCost > 0 ? (holdingsPnL / holdingsCost) * 100 : 0;
 
   /** 최근 본 종목 Stock 객체 배열 (ID 순서 유지)
    *  Recently viewed Stock objects in recency order */
@@ -110,9 +114,10 @@ export const HomeView = ({
                 <span className="text-3xl font-black font-mono text-white">{fmt(totalAssets)}</span>
                 <span className="text-base" style={{ color: 'var(--text-dim)' }}>›</span>
               </button>
-              <p className="text-sm font-bold mt-1" style={{ color: priceColor(totalReturnPct) }}>
-                {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn)}&nbsp;
-                ({totalReturnPct >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)
+              <p className="text-sm font-bold mt-1" style={{ color: priceColor(holdingsPnLPct) }}>
+                {holdingsPnL >= 0 ? '+' : ''}{fmt(holdingsPnL)}&nbsp;
+                ({holdingsPnLPct >= 0 ? '+' : ''}{holdingsPnLPct.toFixed(2)}%)
+                <span className="ml-1 font-normal" style={{ color: 'var(--text-dim)' }}>매입 대비</span>
               </p>
               {userGrade && (
                 <div className="mt-2">
@@ -179,7 +184,7 @@ export const HomeView = ({
         <div style={{ borderBottom: sectionBorder }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
-            { label: '포트폴리오수익', value: totalReturn >= 0 ? `+${fmt(totalReturn)}` : fmt(totalReturn), sub: `${totalReturnPct.toFixed(2)}%` },
+            { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmt(holdingsPnL)}` : fmt(holdingsPnL), sub: `${holdingsPnLPct >= 0 ? '+' : ''}${holdingsPnLPct.toFixed(2)}%` },
             { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}

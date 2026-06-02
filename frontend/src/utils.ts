@@ -19,6 +19,19 @@ export const fmtCompact = (n: number): string => {
   return String(n);
 };
 
+/** 큰 원화 금액을 한국식 단위로 축약 (예: 140,000,000원 → 1.4억)
+ *  Abbreviates large KRW amounts with Korean units (e.g. 140,000,000 KRW → 1.4억) */
+export const fmtCompactWon = (value: number): string => {
+  const rounded = Math.round(value);
+  if (Math.abs(rounded) >= 100_000_000) {
+    return `${(rounded / 100_000_000).toFixed(1).replace(/\.0$/, '')}억`;
+  }
+  if (Math.abs(rounded) >= 10_000) {
+    return `${(rounded / 10_000).toFixed(1).replace(/\.0$/, '')}만`;
+  }
+  return fmt(rounded);
+};
+
 /** 기준가 대비 현재가 등락률(%) 계산
  *  Calculates percentage return relative to the base price */
 export const changePct = (price: number, basePrice: number = BASE_PRICE) =>

@@ -89,6 +89,36 @@ export const Sidebar = ({
         <p className="text-xs font-bold uppercase tracking-widest mt-1 text-dim-token">
           Global Streamer Exchange
         </p>
+        <div className="flex items-center gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => onNavigate('guide')}
+              className="h-9 px-3 rounded-xl border flex items-center justify-center shrink-0 text-xs font-bold transition-colors hover:opacity-80 active:opacity-60"
+              style={{
+                background: activeTab === 'guide' ? 'var(--accent-soft)' : 'var(--bg-card)',
+                borderColor: activeTab === 'guide' ? 'var(--accent-border)' : 'var(--border-primary)',
+                color: activeTab === 'guide' ? 'var(--accent)' : 'var(--text-dim)',
+              }}
+              aria-label="가이드"
+              title="가이드"
+            >
+              가이드
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('announcements')}
+              className="h-9 px-3 rounded-xl border flex items-center justify-center shrink-0 text-xs font-bold transition-colors hover:opacity-80 active:opacity-60"
+              style={{
+                background: activeTab === 'announcements' ? 'var(--accent-soft)' : 'var(--bg-card)',
+                borderColor: activeTab === 'announcements' ? 'var(--accent-border)' : 'var(--border-primary)',
+                color: activeTab === 'announcements' ? 'var(--accent)' : 'var(--text-dim)',
+              }}
+              aria-label="지난 공지"
+              title="지난 공지"
+            >
+              지난 공지
+            </button>
+        </div>
       </div>
 
       {/* ProfileView: 프로필·자산·보유 종목·설정 영역 / ProfileView: profile, assets, holdings, settings */}
