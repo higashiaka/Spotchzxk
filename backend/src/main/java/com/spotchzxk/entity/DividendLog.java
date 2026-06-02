@@ -3,6 +3,7 @@ package com.spotchzxk.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,8 +22,8 @@ public class DividendLog {
     @JoinColumn(name = "channel_id")
     private Stock stock;
 
-    @Column(nullable = false)
-    private int totalDividendPool;
+    @Column(nullable = false, precision = 20, scale = 2)
+    private BigDecimal totalDividendPool;
 
     @Column
     private String payoutReason;

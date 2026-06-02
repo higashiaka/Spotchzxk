@@ -4,6 +4,7 @@ import com.spotchzxk.entity.DividendLog;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.entity.UserDividendLog;
 import com.spotchzxk.entity.UserShare;
+import com.spotchzxk.policy.AntiWhalePolicy;
 import com.spotchzxk.repository.DividendLogRepository;
 import com.spotchzxk.repository.UserDividendLogRepository;
 import com.spotchzxk.repository.UserShareRepository;
@@ -56,16 +57,19 @@ public class DividendService {
                     .filter(us -> us.getPreStreamQuantity() > 0
                             && !"__house__".equals(us.getUser().getId())
                             && !us.getUser().isBot())
-                    .map(us -> UserDividendLog.builder()
-                            .userId(us.getUser().getId())
-                            .channelId(stock.getChannelId())
-                            .streamerName(stock.getStreamerName())
-                            .profileImageUrl(stock.getProfileImageUrl())
-                            .quantity(us.getPreStreamQuantity())
-                            .ratePerShare(ratePerShare)
-                            .amount(ratePerShare.multiply(BigDecimal.valueOf(us.getPreStreamQuantity()))
-                                    .setScale(2, RoundingMode.HALF_UP))
-                            .build())
+                    .map(us -> {
+                        long cappedQty = Math.min(us.getPreStreamQuantity(), AntiWhalePolicy.DIVIDEND_CAP);
+                        return UserDividendLog.builder()
+                                .userId(us.getUser().getId())
+                                .channelId(stock.getChannelId())
+                                .streamerName(stock.getStreamerName())
+                                .profileImageUrl(stock.getProfileImageUrl())
+                                .quantity(cappedQty)
+                                .ratePerShare(ratePerShare)
+                                .amount(ratePerShare.multiply(BigDecimal.valueOf(cappedQty))
+                                        .setScale(2, RoundingMode.HALF_UP))
+                                .build();
+                    })
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
 
@@ -76,10 +80,10 @@ public class DividendService {
                     .collect(Collectors.toCollection(LinkedHashSet::new)));
 
             BigDecimal actualPaid = ratePerShare.multiply(BigDecimal.valueOf(eligibleShares))
-                    .setScale(0, RoundingMode.HALF_UP);
+                    .setScale(2, RoundingMode.HALF_UP);
             DividendLog logEntry = DividendLog.builder()
                     .stock(stock)
-                    .totalDividendPool(actualPaid.intValue())
+                    .totalDividendPool(actualPaid)
                     .payoutReason("interval")
                     .streamMinutes(null)
                     .build();
@@ -95,7 +99,7 @@ public class DividendService {
                     "channelId", stock.getChannelId(),
                     "streamerName", stock.getStreamerName(),
                     "profileImageUrl", stock.getProfileImageUrl() != null ? stock.getProfileImageUrl() : "",
-                    "totalDividendPool", actualPaid.intValue(),
+                    "totalDividendPool", actualPaid,
                     "streamMinutes", 0L,
                     "createdAt", now
             );

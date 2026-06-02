@@ -6,6 +6,7 @@ import com.spotchzxk.entity.Order;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
+import com.spotchzxk.policy.AntiWhalePolicy;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
@@ -19,6 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -126,6 +129,15 @@ public class TradeEngine {
 
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("Stock not found."));
+        boolean isNewListing = stock.getListedAt() != null
+                && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
+        long holdingLimit = isNewListing ? AntiWhalePolicy.NEW_LISTING_CAP : AntiWhalePolicy.MAX_HOLDING;
+        if (heldQty + qty > holdingLimit) {
+            throw new IllegalStateException(isNewListing
+                    ? "신규 상장 초기 최대 200개까지 매수 가능합니다."
+                    : "종목당 최대 1,000개까지 보유 가능합니다.");
+        }
+
         if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + qty > stock.getTotalSupply()) {
             throw new IllegalStateException("Issued share limit exceeded.");
         }
