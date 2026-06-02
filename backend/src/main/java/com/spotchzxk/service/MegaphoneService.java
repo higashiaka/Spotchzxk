@@ -16,7 +16,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -79,7 +81,22 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public List<MegaphonePost> getRecentPosts() {
-        return megaphonePostRepository.findVisiblePosts(PageRequest.of(0, 20));
+        List<Stock> liveStocks = stockRepository.findByIsLiveTrue();
+        if (liveStocks.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> liveChannelIds = liveStocks.stream()
+                .map(Stock::getChannelId)
+                .toList();
+        List<MegaphonePost> recentPosts = megaphonePostRepository
+                .findByChannelIdInOrderByCreatedAtDesc(liveChannelIds, PageRequest.of(0, 200));
+
+        return recentPosts.stream()
+                .filter(post -> isVisibleInCurrentLiveSession(post, liveStocks))
+                .sorted(Comparator.comparing(MegaphonePost::getCreatedAt).reversed())
+                .limit(20)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -101,5 +118,13 @@ public class MegaphoneService {
             throw new IllegalStateException("확성기 메시지는 최대 50자까지 입력할 수 있습니다.");
         }
         return trimmed;
+    }
+
+    private boolean isVisibleInCurrentLiveSession(MegaphonePost post, List<Stock> liveStocks) {
+        return liveStocks.stream()
+                .filter(stock -> stock.getChannelId().equals(post.getChannelId()))
+                .findFirst()
+                .map(stock -> Objects.equals(stock.getLiveStartedAt(), post.getLiveSessionStartedAt()))
+                .orElse(false);
     }
 }

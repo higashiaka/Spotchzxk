@@ -8,10 +8,12 @@ import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +51,7 @@ class MegaphoneServiceTest {
         assertThat(user.getCoinBalance()).isEqualByComparingTo("10000000");
         assertThat(post.getMessage()).isEqualTo("지금 라이브 재밌어요");
         assertThat(post.getLiveUrl()).isEqualTo("https://chzzk.naver.com/live/channel-1");
+        assertThat(post.getLiveSessionStartedAt()).isEqualTo(stock.getLiveStartedAt());
 
         ArgumentCaptor<MegaphonePost> savedPost = ArgumentCaptor.forClass(MegaphonePost.class);
         verify(megaphonePostRepository).save(savedPost.capture());
@@ -102,6 +105,28 @@ class MegaphoneServiceTest {
         verify(megaphonePostRepository, never()).save(any());
     }
 
+    @Test
+    void getRecentPostsReturnsOnlyPostsFromCurrentLiveSessionWithoutJoiningTables() {
+        LocalDateTime currentLiveStartedAt = LocalDateTime.of(2026, 6, 2, 20, 0);
+        Stock liveStock = Stock.builder()
+                .channelId("channel-1")
+                .streamerName("테스트")
+                .isLive(true)
+                .liveStartedAt(currentLiveStartedAt)
+                .build();
+        MegaphonePost currentPost = post("current-post", "channel-1", currentLiveStartedAt, currentLiveStartedAt.plusMinutes(5));
+        MegaphonePost oldPost = post("old-post", "channel-1", currentLiveStartedAt.minusHours(2), currentLiveStartedAt.minusHours(1));
+        when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(liveStock));
+        when(megaphonePostRepository.findByChannelIdInOrderByCreatedAtDesc(
+                eq(List.of("channel-1")),
+                eq(PageRequest.of(0, 200))
+        )).thenReturn(List.of(currentPost, oldPost));
+
+        List<MegaphonePost> posts = service.getRecentPosts();
+
+        assertThat(posts).containsExactly(currentPost);
+    }
+
     private User user(String id, String coinBalance) {
         return User.builder()
                 .id(id)
@@ -110,11 +135,25 @@ class MegaphoneServiceTest {
     }
 
     private Stock liveStock(String channelId) {
+        LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(5);
         return Stock.builder()
                 .channelId(channelId)
                 .streamerName("테스트")
                 .isLive(true)
-                .liveStartedAt(LocalDateTime.now().minusMinutes(5))
+                .liveStartedAt(liveStartedAt)
+                .build();
+    }
+
+    private MegaphonePost post(String id, String channelId, LocalDateTime liveSessionStartedAt, LocalDateTime createdAt) {
+        return MegaphonePost.builder()
+                .id(id)
+                .userId("user-1")
+                .channelId(channelId)
+                .streamerName("테스트")
+                .message("hello")
+                .liveUrl("https://chzzk.naver.com/live/" + channelId)
+                .liveSessionStartedAt(liveSessionStartedAt)
+                .createdAt(createdAt)
                 .build();
     }
 }
