@@ -13,6 +13,7 @@ export interface TradeDetails {
   quantity: number;
   /** 주문 시점의 예상 체결가 / Estimated execution price at the time of order */
   estimatedPrice: number;
+  estimatedExecutionPrice?: number;
   orderMode?: 'market' | 'limit';
   limitPrice?: number;
 }
@@ -53,7 +54,7 @@ export const useTrade = (userId: string) => {
       const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
-        const cost = newTrade.estimatedPrice * newTrade.quantity;
+        const cost = (newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * newTrade.quantity;
         const state = old || { balance: 1000000, shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
         let newBalance = state.balance ?? 1000000;

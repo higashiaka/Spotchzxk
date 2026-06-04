@@ -8,6 +8,33 @@ import { fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
+const PRICE_IMPACT_PER_SHARE = 0.0005;
+
+const averageImpactPrice = (currentPrice: number, isBuy: boolean, quantity: number): number => {
+  if (currentPrice <= 0 || quantity <= 0) return 0;
+  const rate = isBuy ? 1 + PRICE_IMPACT_PER_SHARE : 1 - PRICE_IMPACT_PER_SHARE;
+  const total = isBuy
+    ? currentPrice * rate * (Math.pow(rate, quantity) - 1) / (rate - 1)
+    : currentPrice * rate * (1 - Math.pow(rate, quantity)) / (1 - rate);
+  return Math.max(1, Math.round(total / quantity));
+};
+
+const maxAffordableMarketBuyQuantity = (balance: number, currentPrice: number): number => {
+  if (balance <= 0 || currentPrice <= 0) return 0;
+  let low = 0;
+  let high = Math.max(0, Math.floor(balance / currentPrice));
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    const cost = averageImpactPrice(currentPrice, true, mid) * mid;
+    if (cost <= balance) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return low;
+};
+
 /** 매수/매도 주문 폼 컴포넌트.
  *  실시간 현재가, 보유 수량, 잔고를 기반으로 주문 가능 여부를 계산하고
  *  시장가 주문을 서버에 제출
@@ -48,15 +75,19 @@ export const OrderForm = ({
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
   const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
+  const marketExecutionPrice = averageImpactPrice(currentPrice, orderType === 'buy', qty);
+  const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
 
-  /** 주문 총액 (현재가 × 수량) / Total order cost (current price × quantity) */
-  const totalCost = orderPrice * qty;
+  /** 주문 총액 / Total order cost */
+  const totalCost = estimatedExecutionPrice * qty;
   /** 주문 후 예상 잔고 / Estimated balance after the order */
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
   /** 잔고로 살 수 있는 최대 수량 / Maximum purchasable quantity given current balance */
-  const maxBuy = orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
+  const maxBuy = orderMode === 'market'
+    ? maxAffordableMarketBuyQuantity(balance, currentPrice)
+    : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
   /** 매도 가능한 최대 수량 (보유 수량) / Maximum sellable quantity (equals held quantity) */
   const maxSell = held;
 
@@ -91,6 +122,7 @@ export const OrderForm = ({
       type: orderType,
       quantity: qty,
       estimatedPrice: currentPrice,
+      estimatedExecutionPrice,
       orderMode,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
     });
