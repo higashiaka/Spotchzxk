@@ -23,11 +23,19 @@ public class SystemSellPressureProperties {
     private int stateTtlMinHours = 6;
     private int stateTtlMaxHours = 24;
 
+    private int highPriceTriggerMin = 800_000;
+    private int highPriceTriggerMax = 1_400_000;
+    private int highPriceStopRatioMinPercent = 65;
+    private int highPriceStopRatioMaxPercent = 90;
+    private int highPriceReferenceDivisorMin = 8;
+    private int highPriceReferenceDivisorMax = 15;
+
     private Tier weak = new Tier(5, 30, 45, 120);
     private Tier medium = new Tier(30, 120, 20, 75);
     private Tier strong = new Tier(100, 350, 8, 35);
-    private Tier extreme = new Tier(250, 800, 4, 18);
+    private Tier extreme = new Tier(250, 1_000, 4, 18);
 
+    private int maxQuantityPerOrder = 1_000;
     private int dailySellLimitMin = 1_000;
     private int dailySellLimitMax = 5_000;
     private int maxConsecutiveSellMin = 3;
@@ -45,6 +53,18 @@ public class SystemSellPressureProperties {
         }
         if (stopGainMaxPercent >= startGainMinPercent) {
             throw new IllegalStateException("system-sell.pressure stop gain max must be lower than start gain min");
+        }
+        if (highPriceTriggerMin > highPriceTriggerMax) {
+            throw new IllegalStateException("system-sell.pressure high price trigger min must be <= max");
+        }
+        if (highPriceStopRatioMinPercent > highPriceStopRatioMaxPercent) {
+            throw new IllegalStateException("system-sell.pressure high price stop ratio min must be <= max");
+        }
+        if (highPriceReferenceDivisorMin < 1 || highPriceReferenceDivisorMin > highPriceReferenceDivisorMax) {
+            throw new IllegalStateException("system-sell.pressure high price reference divisor range is invalid");
+        }
+        if (maxQuantityPerOrder < 1) {
+            throw new IllegalStateException("system-sell.pressure max quantity per order must be >= 1");
         }
         weak.validate("weak");
         medium.validate("medium");

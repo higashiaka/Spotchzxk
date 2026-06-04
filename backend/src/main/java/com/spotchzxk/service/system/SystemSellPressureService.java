@@ -50,7 +50,6 @@ public class SystemSellPressureService {
         resetDailyLimitsIfNeeded();
         List<Stock> candidates = stockRepository.findAll().stream()
                 .filter(this::hasValidReferencePrice)
-                .filter(stock -> gainPercent(stock) > 0)
                 .collect(Collectors.toList());
         if (candidates.isEmpty()) {
             return;
@@ -74,12 +73,15 @@ public class SystemSellPressureService {
             return false;
         }
 
-        int gainPercent = gainPercent(stock);
-        if (!state.active && gainPercent < state.startGainPercent) {
+        refreshHighPricePressure(stock, state);
+        int baseGainPercent = gainPercent(stock);
+        int effectiveGainPercent = effectiveGainPercent(stock, state, baseGainPercent);
+
+        if (!state.active && baseGainPercent < state.startGainPercent && !state.highPriceActive) {
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
             return false;
         }
-        if (state.active && gainPercent <= state.stopGainPercent) {
+        if (state.active && baseGainPercent <= state.stopGainPercent && !state.highPriceActive) {
             state.active = false;
             state.consecutiveSells = 0;
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
@@ -88,11 +90,11 @@ public class SystemSellPressureService {
 
         state.active = true;
         if (randomInt(1, 100) > clampPercent(properties.getExecutionChancePercent())) {
-            state.nextRunAtMs = now + randomDelayMs(tierFor(gainPercent, state));
+            state.nextRunAtMs = now + randomDelayMs(tierFor(effectiveGainPercent, state));
             return false;
         }
 
-        int quantity = pickQuantity(stock, gainPercent, state);
+        int quantity = pickQuantity(stock, effectiveGainPercent, state);
         if (quantity <= 0) {
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
             return false;
@@ -107,7 +109,7 @@ public class SystemSellPressureService {
             state.maxConsecutiveSells = randomInt(properties.getMaxConsecutiveSellMin(), properties.getMaxConsecutiveSellMax());
             state.nextRunAtMs = now + randomSeconds(properties.getCooldownMinSeconds(), properties.getCooldownMaxSeconds()) * 1_000L;
         } else {
-            state.nextRunAtMs = now + randomDelayMs(tierFor(gainPercent, state));
+            state.nextRunAtMs = now + randomDelayMs(tierFor(effectiveGainPercent, state));
         }
         return true;
     }
@@ -130,11 +132,35 @@ public class SystemSellPressureService {
                 .intValue();
     }
 
+    int effectiveGainPercent(Stock stock, PressureState state, int baseGainPercent) {
+        if (!state.highPriceActive) {
+            return baseGainPercent;
+        }
+        int currentPrice = Math.max(1, stock.getCurrentPrice());
+        int referencePrice = Math.max(1, currentPrice / Math.max(1, state.highPriceReferenceDivisor));
+        return BigDecimal.valueOf(currentPrice - referencePrice)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(referencePrice), 0, RoundingMode.DOWN)
+                .intValue();
+    }
+
+    private void refreshHighPricePressure(Stock stock, PressureState state) {
+        int currentPrice = Math.max(1, stock.getCurrentPrice());
+        if (currentPrice >= state.highPriceTriggerPrice) {
+            state.highPriceActive = true;
+            return;
+        }
+        if (state.highPriceActive && currentPrice <= state.highPriceStopPrice) {
+            state.highPriceActive = false;
+        }
+    }
+
     int pickQuantity(Stock stock, int gainPercent, PressureState state) {
         SystemSellPressureProperties.Tier tier = tierFor(gainPercent, state);
         int quantity = randomInt(tier.getQuantityMin(), tier.getQuantityMax());
         int dailyRemaining = Math.max(0, state.dailySellLimit - state.soldToday);
-        return Math.max(0, Math.min(quantity, dailyRemaining));
+        int maxPerOrder = Math.max(1, properties.getMaxQuantityPerOrder());
+        return Math.max(0, Math.min(quantity, Math.min(maxPerOrder, dailyRemaining)));
     }
 
     private SystemSellPressureProperties.Tier tierFor(int gainPercent, PressureState state) {
@@ -221,6 +247,12 @@ public class SystemSellPressureService {
         PressureState state = new PressureState();
         state.startGainPercent = start;
         state.stopGainPercent = stop;
+        state.highPriceTriggerPrice = randomInt(properties.getHighPriceTriggerMin(), properties.getHighPriceTriggerMax());
+        int stopRatio = randomInt(properties.getHighPriceStopRatioMinPercent(), properties.getHighPriceStopRatioMaxPercent());
+        state.highPriceStopPrice = Math.max(1, state.highPriceTriggerPrice * stopRatio / 100);
+        state.highPriceReferenceDivisor = randomInt(
+                properties.getHighPriceReferenceDivisorMin(),
+                properties.getHighPriceReferenceDivisorMax());
         state.expiresAtMs = now + randomInt(properties.getStateTtlMinHours(), properties.getStateTtlMaxHours()) * 3_600_000L;
         state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
         state.dailySellLimit = randomInt(properties.getDailySellLimitMin(), properties.getDailySellLimitMax());
@@ -272,5 +304,9 @@ public class SystemSellPressureService {
         int maxConsecutiveSells;
         int soldToday;
         int dailySellLimit;
+        int highPriceTriggerPrice;
+        int highPriceStopPrice;
+        int highPriceReferenceDivisor;
+        boolean highPriceActive;
     }
 }

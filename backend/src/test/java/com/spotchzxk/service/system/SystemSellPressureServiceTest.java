@@ -48,6 +48,13 @@ class SystemSellPressureServiceTest {
         properties.setExecutionChancePercent(100);
         properties.setDailySellLimitMin(1_000);
         properties.setDailySellLimitMax(1_000);
+        properties.setHighPriceTriggerMin(1_000_000);
+        properties.setHighPriceTriggerMax(1_000_000);
+        properties.setHighPriceStopRatioMinPercent(80);
+        properties.setHighPriceStopRatioMaxPercent(80);
+        properties.setHighPriceReferenceDivisorMin(10);
+        properties.setHighPriceReferenceDivisorMax(10);
+        properties.setMaxQuantityPerOrder(1_000);
         properties.getWeak().setQuantityMin(10);
         properties.getWeak().setQuantityMax(10);
         properties.getWeak().setIntervalMinSeconds(1);
@@ -73,6 +80,16 @@ class SystemSellPressureServiceTest {
     @Test
     void gainUsesBasePriceAsReference() {
         assertThat(service.gainPercent(stock("hot", 1_000, 4_000))).isEqualTo(300);
+    }
+
+    @Test
+    void highPricePressureUsesRandomizedSyntheticReference() {
+        long now = System.currentTimeMillis();
+        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
+        state.highPriceActive = true;
+
+        assertThat(service.effectiveGainPercent(stock("hot", 1_200_000, 1_200_000), state, 0))
+                .isEqualTo(900);
     }
 
     @Test
@@ -106,6 +123,20 @@ class SystemSellPressureServiceTest {
     }
 
     @Test
+    void highPriceStockCanSellEvenWhenDailyBaseGainIsFlat() {
+        long now = System.currentTimeMillis();
+        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
+        state.nextRunAtMs = now;
+
+        boolean sold = service.runStockIfDue(stock("hot", 1_200_000, 1_200_000), now);
+
+        ArgumentCaptor<TradeRequest> request = ArgumentCaptor.forClass(TradeRequest.class);
+        verify(tradeEngine).submitTrade(request.capture());
+        assertThat(sold).isTrue();
+        assertThat(request.getValue().getType()).isEqualTo("sell");
+    }
+
+    @Test
     void activePressureStopsBelowStopThreshold() {
         long now = System.currentTimeMillis();
         SystemSellPressureService.PressureState state = service.stateFor("hot", now);
@@ -129,6 +160,21 @@ class SystemSellPressureServiceTest {
         int quantity = service.pickQuantity(stock("hot", 1_000, 5_000), 400, state);
 
         assertThat(quantity).isEqualTo(5);
+    }
+
+    @Test
+    void pickQuantityIsCappedAtPerOrderLimit() {
+        properties.setDailySellLimitMin(5_000);
+        properties.setDailySellLimitMax(5_000);
+        properties.getExtreme().setQuantityMin(1_500);
+        properties.getExtreme().setQuantityMax(1_500);
+        long now = System.currentTimeMillis();
+        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
+        state.dailySellLimit = 5_000;
+
+        int quantity = service.pickQuantity(stock("hot", 1_000, 20_000), 1_900, state);
+
+        assertThat(quantity).isEqualTo(1_000);
     }
 
     @Test
