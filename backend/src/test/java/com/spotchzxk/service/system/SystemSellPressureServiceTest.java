@@ -78,8 +78,25 @@ class SystemSellPressureServiceTest {
     }
 
     @Test
-    void gainUsesBasePriceAsReference() {
+    void gainUsesListingPriceAsReference() {
         assertThat(service.gainPercent(stock("hot", 1_000, 4_000))).isEqualTo(300);
+    }
+
+    @Test
+    void listingPriceKeepsOverheatedStockDetectableAfterDailyBaseReset() {
+        Stock stock = Stock.builder()
+                .channelId("hot")
+                .streamerName("hot")
+                .listingPrice(10_000)
+                .basePrice(1_000_000)
+                .currentPrice(1_000_000)
+                .totalSupply(10_000)
+                .issuedShares(0)
+                .dailyVolume(0)
+                .isLive(false)
+                .build();
+
+        assertThat(service.gainPercent(stock)).isEqualTo(9_900);
     }
 
     @Test
@@ -192,6 +209,7 @@ class SystemSellPressureServiceTest {
         return Stock.builder()
                 .channelId(channelId)
                 .streamerName(channelId)
+                .listingPrice(basePrice)
                 .basePrice(basePrice)
                 .currentPrice(currentPrice)
                 .totalSupply(10_000)

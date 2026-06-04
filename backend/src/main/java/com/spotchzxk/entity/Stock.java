@@ -38,6 +38,9 @@ public class Stock {
     @Column(nullable = false)
     private int basePrice;
 
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 10000")
+    private int listingPrice;
+
     @Column
     private int currentPrice;
 
@@ -67,6 +70,7 @@ public class Stock {
     public void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (listedAt == null)  listedAt  = LocalDateTime.now();
+        if (listingPrice <= 0) listingPrice = Math.max(10_000, currentPrice);
     }
 
     public void applyTrade(int executedPrice, boolean isBuy, int qty) {
@@ -119,6 +123,7 @@ public class Stock {
     public void finalizeListing(int listingPrice, long totalSupply) {
         this.currentPrice = listingPrice;
         this.basePrice = listingPrice;
+        this.listingPrice = listingPrice;
         this.totalSupply = totalSupply;
         this.issuedShares = 0;
     }

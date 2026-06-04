@@ -124,12 +124,19 @@ public class SystemSellPressureService {
     }
 
     int gainPercent(Stock stock) {
-        int basePrice = Math.max(1, stock.getBasePrice());
+        int basePrice = Math.max(1, referencePrice(stock));
         int currentPrice = Math.max(1, stock.getCurrentPrice());
         return BigDecimal.valueOf(currentPrice - basePrice)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(basePrice), 0, RoundingMode.DOWN)
                 .intValue();
+    }
+
+    int referencePrice(Stock stock) {
+        if (stock.getListingPrice() > 0) {
+            return stock.getListingPrice();
+        }
+        return stock.getBasePrice();
     }
 
     int effectiveGainPercent(Stock stock, PressureState state, int baseGainPercent) {
@@ -273,7 +280,7 @@ public class SystemSellPressureService {
     }
 
     private boolean hasValidReferencePrice(Stock stock) {
-        return stock.getBasePrice() > 0 && stock.getCurrentPrice() > 0;
+        return referencePrice(stock) > 0 && stock.getCurrentPrice() > 0;
     }
 
     private long randomDelayMs(SystemSellPressureProperties.Tier tier) {

@@ -70,6 +70,7 @@ public class StockService {
                 .totalSupply(0L)
                 .currentPrice(1000)
                 .basePrice(1000)
+                .listingPrice(1000)
                 .isLive(false)
                 .listedAt(java.time.LocalDateTime.now())
                 .build();
