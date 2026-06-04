@@ -22,6 +22,8 @@ public class SystemSellPressureProperties {
     private int stopGainMaxPercent = 220;
     private int stateTtlMinHours = 6;
     private int stateTtlMaxHours = 24;
+    private int dailyReferenceRatioMinPercent = 40;
+    private int dailyReferenceRatioMaxPercent = 70;
 
     private int highPriceTriggerMin = 800_000;
     private int highPriceTriggerMax = 1_400_000;
@@ -53,6 +55,9 @@ public class SystemSellPressureProperties {
         }
         if (stopGainMaxPercent >= startGainMinPercent) {
             throw new IllegalStateException("system-sell.pressure stop gain max must be lower than start gain min");
+        }
+        if (dailyReferenceRatioMinPercent < 0 || dailyReferenceRatioMinPercent > dailyReferenceRatioMaxPercent) {
+            throw new IllegalStateException("system-sell.pressure daily reference ratio range is invalid");
         }
         if (highPriceTriggerMin > highPriceTriggerMax) {
             throw new IllegalStateException("system-sell.pressure high price trigger min must be <= max");

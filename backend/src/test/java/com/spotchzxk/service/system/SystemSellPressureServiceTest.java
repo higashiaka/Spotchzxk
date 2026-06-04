@@ -46,6 +46,8 @@ class SystemSellPressureServiceTest {
         properties.setStopGainMinPercent(120);
         properties.setStopGainMaxPercent(120);
         properties.setExecutionChancePercent(100);
+        properties.setDailyReferenceRatioMinPercent(60);
+        properties.setDailyReferenceRatioMaxPercent(60);
         properties.setDailySellLimitMin(1_000);
         properties.setDailySellLimitMax(1_000);
         properties.setHighPriceTriggerMin(1_000_000);
@@ -83,7 +85,7 @@ class SystemSellPressureServiceTest {
     }
 
     @Test
-    void listingPriceKeepsOverheatedStockDetectableAfterDailyBaseReset() {
+    void dailyBasePriceCanRaiseListingReferenceForLongRunningOverheatedStock() {
         Stock stock = Stock.builder()
                 .channelId("hot")
                 .streamerName("hot")
@@ -96,7 +98,11 @@ class SystemSellPressureServiceTest {
                 .isLive(false)
                 .build();
 
-        assertThat(service.gainPercent(stock)).isEqualTo(9_900);
+        long now = System.currentTimeMillis();
+        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
+
+        assertThat(service.referencePrice(stock, state)).isEqualTo(600_000);
+        assertThat(service.gainPercent(stock, state)).isEqualTo(66);
     }
 
     @Test

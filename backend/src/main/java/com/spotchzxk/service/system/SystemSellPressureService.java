@@ -74,7 +74,7 @@ public class SystemSellPressureService {
         }
 
         refreshHighPricePressure(stock, state);
-        int baseGainPercent = gainPercent(stock);
+        int baseGainPercent = gainPercent(stock, state);
         int effectiveGainPercent = effectiveGainPercent(stock, state, baseGainPercent);
 
         if (!state.active && baseGainPercent < state.startGainPercent && !state.highPriceActive) {
@@ -124,7 +124,11 @@ public class SystemSellPressureService {
     }
 
     int gainPercent(Stock stock) {
-        int basePrice = Math.max(1, referencePrice(stock));
+        return gainPercent(stock, stateFor(stock.getChannelId(), System.currentTimeMillis()));
+    }
+
+    int gainPercent(Stock stock, PressureState state) {
+        int basePrice = Math.max(1, referencePrice(stock, state));
         int currentPrice = Math.max(1, stock.getCurrentPrice());
         return BigDecimal.valueOf(currentPrice - basePrice)
                 .multiply(BigDecimal.valueOf(100))
@@ -132,11 +136,12 @@ public class SystemSellPressureService {
                 .intValue();
     }
 
-    int referencePrice(Stock stock) {
-        if (stock.getListingPrice() > 0) {
-            return stock.getListingPrice();
-        }
-        return stock.getBasePrice();
+    int referencePrice(Stock stock, PressureState state) {
+        int listingPrice = stock.getListingPrice() > 0 ? stock.getListingPrice() : stock.getBasePrice();
+        long dailyAdjustedPrice = stock.getBasePrice() <= 0
+                ? 0
+                : (long) stock.getBasePrice() * Math.max(0, state.dailyReferenceRatioPercent) / 100;
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(listingPrice, dailyAdjustedPrice));
     }
 
     int effectiveGainPercent(Stock stock, PressureState state, int baseGainPercent) {
@@ -260,6 +265,9 @@ public class SystemSellPressureService {
         state.highPriceReferenceDivisor = randomInt(
                 properties.getHighPriceReferenceDivisorMin(),
                 properties.getHighPriceReferenceDivisorMax());
+        state.dailyReferenceRatioPercent = randomInt(
+                properties.getDailyReferenceRatioMinPercent(),
+                properties.getDailyReferenceRatioMaxPercent());
         state.expiresAtMs = now + randomInt(properties.getStateTtlMinHours(), properties.getStateTtlMaxHours()) * 3_600_000L;
         state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
         state.dailySellLimit = randomInt(properties.getDailySellLimitMin(), properties.getDailySellLimitMax());
@@ -280,7 +288,8 @@ public class SystemSellPressureService {
     }
 
     private boolean hasValidReferencePrice(Stock stock) {
-        return referencePrice(stock) > 0 && stock.getCurrentPrice() > 0;
+        return stock.getCurrentPrice() > 0
+                && (stock.getListingPrice() > 0 || stock.getBasePrice() > 0);
     }
 
     private long randomDelayMs(SystemSellPressureProperties.Tier tier) {
@@ -315,5 +324,6 @@ public class SystemSellPressureService {
         int highPriceStopPrice;
         int highPriceReferenceDivisor;
         boolean highPriceActive;
+        int dailyReferenceRatioPercent;
     }
 }
