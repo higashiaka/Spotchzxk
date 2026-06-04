@@ -64,7 +64,10 @@ public class TradeEngine {
             loadPortfolioIfAbsent(userId);
             stockLock.lock();
             try {
-                return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice());
+                if ("limit".equals(req.getOrderMode())) {
+                    return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice());
+                }
+                return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true);
             } finally {
                 stockLock.unlock();
             }
@@ -78,9 +81,42 @@ public class TradeEngine {
         sharesCache.remove(userId);
     }
 
+    public TradeResponse cancelLimitOrder(String userId, String orderId) {
+        BigDecimal newBalance = new TransactionTemplate(txManager).execute(status -> {
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new IllegalStateException("Order not found."));
+            if (!userId.equals(order.getUserId())) {
+                throw new IllegalStateException("Order not found.");
+            }
+            if (!"pending".equals(order.getStatus())) {
+                throw new IllegalStateException("Order is not pending.");
+            }
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new IllegalStateException("User not found."));
+            BigDecimal balance = user.getCoinBalance();
+            if ("buy".equals(order.getType())) {
+                BigDecimal refund = order.getLimitPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+                balance = balance.add(refund);
+                user.updateBalance(balance);
+                userRepository.save(user);
+            }
+
+            order.cancel();
+            orderRepository.save(order);
+            return balance;
+        });
+
+        evictUserCache(userId);
+        messagingTemplate.convertAndSend("/topic/orders/" + userId,
+                Map.of("orderId", orderId, "status", "cancelled"));
+        return new TradeResponse("cancelled", BigDecimal.ZERO, newBalance, BigDecimal.ZERO, orderId, "limit");
+    }
+
     private TradeResponse executeMarketOrder(String userId, String channelId,
                                              boolean isBuy, int qty,
-                                             BigDecimal fallbackPrice) {
+                                             BigDecimal fallbackPrice,
+                                             boolean processPendingAfterExecution) {
         BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
         BigDecimal executedPrice = calculateExecutedPrice(currentPrice, isBuy, qty);
         BigDecimal cost = executedPrice.multiply(BigDecimal.valueOf(qty));
@@ -95,9 +131,80 @@ public class TradeEngine {
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, executedPrice,
                 currentBalance, shares, heldQty, cost);
         broadcastTrade(channelId, streamerName, isBuy, qty, executedPrice, executedAt);
+        if (processPendingAfterExecution) {
+            processPendingLimitOrders(channelId);
+        }
 
         return new TradeResponse("executed", executedPrice, newBalance,
                 BigDecimal.ZERO, UUID.randomUUID().toString(), "market");
+    }
+
+    private TradeResponse submitLimitOrder(String userId, String channelId, boolean isBuy, int qty,
+                                           BigDecimal fallbackPrice, BigDecimal limitPrice) {
+        if (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("Limit price is required.");
+        }
+
+        BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
+        if (isLimitMarketable(currentPrice, isBuy, limitPrice)) {
+            return executeImmediateLimitOrder(userId, channelId, isBuy, qty, fallbackPrice, limitPrice);
+        }
+        return createPendingLimitOrder(userId, channelId, isBuy, qty, fallbackPrice, limitPrice);
+    }
+
+    private boolean isLimitMarketable(BigDecimal currentPrice, boolean isBuy, BigDecimal limitPrice) {
+        return isBuy
+                ? currentPrice.compareTo(limitPrice) <= 0
+                : currentPrice.compareTo(limitPrice) >= 0;
+    }
+
+    private BigDecimal calculateLimitExecutedPrice(BigDecimal currentPrice, boolean isBuy, int qty, BigDecimal limitPrice) {
+        BigDecimal impactedPrice = calculateExecutedPrice(currentPrice, isBuy, qty);
+        return isBuy
+                ? impactedPrice.min(limitPrice).setScale(0, RoundingMode.HALF_UP)
+                : impactedPrice.max(limitPrice).setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private TradeResponse executeImmediateLimitOrder(String userId, String channelId, boolean isBuy, int qty,
+                                                     BigDecimal fallbackPrice, BigDecimal limitPrice) {
+        BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
+        BigDecimal executedPrice = calculateLimitExecutedPrice(currentPrice, isBuy, qty, limitPrice);
+        BigDecimal cost = executedPrice.multiply(BigDecimal.valueOf(qty));
+        long executedAt = System.currentTimeMillis();
+
+        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
+        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        long heldQty = shares.getOrDefault(channelId, 0L);
+
+        validateTrade(channelId, isBuy, qty, cost, currentBalance, heldQty);
+        String orderId = UUID.randomUUID().toString();
+        String streamerName = persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost,
+                executedAt, orderId, "limit", limitPrice);
+        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, executedPrice,
+                currentBalance, shares, heldQty, cost);
+        broadcastTrade(channelId, streamerName, isBuy, qty, executedPrice, executedAt);
+        processPendingLimitOrders(channelId);
+
+        return new TradeResponse("executed", executedPrice, newBalance, BigDecimal.ZERO, orderId, "limit");
+    }
+
+    private TradeResponse createPendingLimitOrder(String userId, String channelId, boolean isBuy, int qty,
+                                                  BigDecimal fallbackPrice, BigDecimal limitPrice) {
+        BigDecimal reserveAmount = limitPrice.multiply(BigDecimal.valueOf(qty));
+        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
+        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        long heldQty = shares.getOrDefault(channelId, 0L);
+
+        validateLimitOrder(channelId, userId, isBuy, qty, reserveAmount, currentBalance, heldQty);
+        String orderId = UUID.randomUUID().toString();
+        BigDecimal newBalance = reservePendingLimitOrder(userId, channelId, isBuy, qty, fallbackPrice, limitPrice,
+                reserveAmount, orderId);
+
+        if (isBuy) {
+            balanceCache.put(userId, newBalance);
+        }
+
+        return new TradeResponse("pending", BigDecimal.ZERO, newBalance, BigDecimal.ZERO, orderId, "limit");
     }
 
     private BigDecimal loadPrice(String channelId, BigDecimal fallbackPrice) {
@@ -143,8 +250,34 @@ public class TradeEngine {
         }
     }
 
+    private void validateLimitOrder(String channelId, String userId, boolean isBuy, int qty, BigDecimal reserveAmount,
+                                    BigDecimal currentBalance, long heldQty) {
+        if (isBuy) {
+            validateTrade(channelId, true, qty, reserveAmount, currentBalance, heldQty);
+            Stock stock = stockRepository.findById(channelId)
+                    .orElseThrow(() -> new IllegalStateException("Stock not found."));
+            long pendingBuyQty = orderRepository.sumPendingBuyQuantityByStreamerId(channelId);
+            if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + pendingBuyQty + qty > stock.getTotalSupply()) {
+                throw new IllegalStateException("Issued share limit exceeded.");
+            }
+            return;
+        }
+
+        long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
+        if (heldQty - pendingSellQty < qty) {
+            throw new IllegalStateException("Insufficient shares.");
+        }
+    }
+
     private String persistTrade(String userId, String channelId, boolean isBuy, int qty,
                                 BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost, long executedAt) {
+        return persistTrade(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, cost, executedAt,
+                UUID.randomUUID().toString(), "market", null);
+    }
+
+    private String persistTrade(String userId, String channelId, boolean isBuy, int qty,
+                                BigDecimal fallbackPrice, BigDecimal executedPrice, BigDecimal cost, long executedAt,
+                                String orderId, String orderMode, BigDecimal limitPrice) {
         return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
             User user = userRepository.findById(userId)
@@ -153,7 +286,8 @@ public class TradeEngine {
             updateStock(stock, isBuy, qty, executedPrice);
             updateUserBalance(user, isBuy, cost);
             updateUserShare(user, stock, channelId, isBuy, qty, cost);
-            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, executedAt);
+            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, executedAt,
+                    orderId, orderMode, limitPrice, "completed");
             return stock.getStreamerName();
         });
     }
@@ -221,18 +355,124 @@ public class TradeEngine {
 
     private void saveOrder(String userId, String channelId, boolean isBuy, int qty,
                            BigDecimal fallbackPrice, BigDecimal executedPrice, long executedAt) {
+        saveOrder(userId, channelId, isBuy, qty, fallbackPrice, executedPrice, executedAt,
+                UUID.randomUUID().toString(), "market", null, "completed");
+    }
+
+    private void saveOrder(String userId, String channelId, boolean isBuy, int qty,
+                           BigDecimal fallbackPrice, BigDecimal executedPrice, long executedAt,
+                           String orderId, String orderMode, BigDecimal limitPrice, String orderStatus) {
         orderRepository.save(Order.builder()
-                .id(UUID.randomUUID().toString())
+                .id(orderId)
                 .userId(userId)
                 .streamerId(channelId)
                 .type(isBuy ? "buy" : "sell")
                 .quantity(qty)
                 .estimatedPrice(fallbackPrice)
                 .executedPrice(executedPrice)
-                .orderMode("market")
-                .status("completed")
+                .orderMode(orderMode)
+                .limitPrice(limitPrice)
+                .status(orderStatus)
                 .createdAt(executedAt)
                 .build());
+    }
+
+    private BigDecimal reservePendingLimitOrder(String userId, String channelId, boolean isBuy, int qty,
+                                                BigDecimal fallbackPrice, BigDecimal limitPrice,
+                                                BigDecimal reserveAmount, String orderId) {
+        return new TransactionTemplate(txManager).execute(status -> {
+            Stock stock = stockRepository.findById(channelId).orElseThrow();
+            User user = userRepository.findById(userId)
+                    .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
+            BigDecimal newBalance = user.getCoinBalance();
+            if (isBuy) {
+                newBalance = user.getCoinBalance().subtract(reserveAmount);
+                if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new IllegalStateException("Insufficient balance.");
+                }
+                user.updateBalance(newBalance);
+                userRepository.save(user);
+            }
+            orderRepository.save(Order.builder()
+                    .id(orderId)
+                    .userId(userId)
+                    .streamerId(channelId)
+                    .type(isBuy ? "buy" : "sell")
+                    .quantity(qty)
+                    .estimatedPrice(fallbackPrice)
+                    .executedPrice(null)
+                    .orderMode("limit")
+                    .limitPrice(limitPrice)
+                    .status("pending")
+                    .createdAt(System.currentTimeMillis())
+                    .build());
+            return newBalance;
+        });
+    }
+
+    private void processPendingLimitOrders(String channelId) {
+        for (Order order : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")) {
+            BigDecimal currentPrice = loadPrice(channelId, BigDecimal.valueOf(1));
+            boolean isBuy = "buy".equals(order.getType());
+            BigDecimal limitPrice = order.getLimitPrice();
+            if (limitPrice == null || !isLimitMarketable(currentPrice, isBuy, limitPrice)) {
+                continue;
+            }
+            executePendingLimitOrder(order);
+        }
+    }
+
+    private void executePendingLimitOrder(Order order) {
+        boolean isBuy = "buy".equals(order.getType());
+        long executedAt = System.currentTimeMillis();
+        BigDecimal executedPrice = new TransactionTemplate(txManager).execute(status -> {
+            Stock stock = stockRepository.findById(order.getStreamerId()).orElseThrow();
+            User user = userRepository.findById(order.getUserId())
+                    .orElseThrow(() -> new IllegalStateException("User not found."));
+            BigDecimal currentPrice = BigDecimal.valueOf(Math.max(1, stock.getCurrentPrice()));
+            BigDecimal price = calculateLimitExecutedPrice(currentPrice, isBuy, order.getQuantity(), order.getLimitPrice());
+            BigDecimal cost = price.multiply(BigDecimal.valueOf(order.getQuantity()));
+
+            if (isBuy) {
+                BigDecimal reserved = order.getLimitPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+                BigDecimal refund = reserved.subtract(cost).max(BigDecimal.ZERO);
+                if (refund.compareTo(BigDecimal.ZERO) > 0) {
+                    user.updateBalance(user.getCoinBalance().add(refund));
+                    userRepository.save(user);
+                }
+                updateUserShare(user, stock, order.getStreamerId(), true, order.getQuantity(), cost);
+            } else {
+                UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), order.getStreamerId())
+                        .orElseThrow(() -> new IllegalStateException("Insufficient shares."));
+                if (share.getQuantity() < order.getQuantity()) {
+                    order.cancel();
+                    orderRepository.save(order);
+                    return null;
+                }
+                updateRealizedProfit(user, share, order.getQuantity(), cost);
+                updateSoldShare(share, order.getQuantity());
+                updateUserBalance(user, false, cost);
+            }
+
+            updateStock(stock, isBuy, order.getQuantity(), price);
+            order.complete(price, executedAt);
+            orderRepository.save(order);
+            return price;
+        });
+
+        if (executedPrice == null) {
+            evictUserCache(order.getUserId());
+            return;
+        }
+
+        priceCache.put(order.getStreamerId(), executedPrice);
+        evictUserCache(order.getUserId());
+        String streamerName = stockRepository.findById(order.getStreamerId())
+                .map(Stock::getStreamerName)
+                .orElse(order.getStreamerId());
+        broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), executedPrice, executedAt);
+        messagingTemplate.convertAndSend("/topic/orders/" + order.getUserId(),
+                Map.of("orderId", order.getId(), "status", "completed"));
     }
 
     private BigDecimal updateCaches(String userId, String channelId, boolean isBuy, int qty,

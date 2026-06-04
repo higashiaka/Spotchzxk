@@ -48,4 +48,14 @@ public class Order {
 
     @Column(name = "created_at", nullable = false)
     private long createdAt; // epoch milliseconds
+
+    public void complete(BigDecimal executedPrice, long executedAt) {
+        this.executedPrice = executedPrice;
+        this.status = "completed";
+        this.createdAt = executedAt;
+    }
+
+    public void cancel() {
+        this.status = "cancelled";
+    }
 }

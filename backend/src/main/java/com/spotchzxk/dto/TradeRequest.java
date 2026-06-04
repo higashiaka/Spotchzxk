@@ -24,4 +24,10 @@ public class TradeRequest {
     @NotNull
     @DecimalMin("0.01")
     private BigDecimal estimatedPrice;
+
+    @Pattern(regexp = "market|limit")
+    private String orderMode = "market";
+
+    @DecimalMin("0.01")
+    private BigDecimal limitPrice;
 }

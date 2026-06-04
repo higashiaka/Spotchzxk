@@ -33,4 +33,13 @@ public class TradeController {
         }
     }
 
+    @PostMapping("/api/trade/cancel")
+    public ResponseEntity<?> cancel(@RequestParam("orderId") String orderId,
+                                    @AuthenticationPrincipal String uid) {
+        try {
+            return ResponseEntity.ok(tradeEngine.cancelLimitOrder(uid, orderId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

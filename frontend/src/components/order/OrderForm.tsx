@@ -1,9 +1,12 @@
 import { User } from 'firebase/auth';
+import { useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
+import { OrderBookPanel } from './OrderBookPanel';
+import { PendingOrdersPanel } from './PendingOrdersPanel';
 
 /** 매수/매도 주문 폼 컴포넌트.
  *  실시간 현재가, 보유 수량, 잔고를 기반으로 주문 가능 여부를 계산하고
@@ -34,6 +37,8 @@ export const OrderForm = ({
   const { currentPrice } = useStockPrice(streamer.id, streamer.price);
   const tradeMutation = useTrade(user?.uid || 'spectator');
   const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(user?.uid);
+  const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
+  const [limitPriceStr, setLimitPriceStr] = useState('');
 
   /** 정수로 파싱된 주문 수량 (0 미만 방지) / Parsed integer quantity, clamped to minimum 0 */
   const qty = Math.max(0, parseInt(qtyStr, 10) || 0);
@@ -41,15 +46,17 @@ export const OrderForm = ({
   const balance: number = Number(portfolio?.balance ?? 0);
   /** 해당 종목 보유 수량 / Held quantity for this stock */
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
+  const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
+  const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
 
   /** 주문 총액 (현재가 × 수량) / Total order cost (current price × quantity) */
-  const totalCost = currentPrice * qty;
+  const totalCost = orderPrice * qty;
   /** 주문 후 예상 잔고 / Estimated balance after the order */
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
   /** 잔고로 살 수 있는 최대 수량 / Maximum purchasable quantity given current balance */
-  const maxBuy = currentPrice > 0 ? Math.floor(balance / currentPrice) : 0;
+  const maxBuy = orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
   /** 매도 가능한 최대 수량 (보유 수량) / Maximum sellable quantity (equals held quantity) */
   const maxSell = held;
 
@@ -65,7 +72,8 @@ export const OrderForm = ({
   /** 매도 가능 여부: 로그인 + 수량 > 0 + 보유 수량 충분 / Sell feasibility: logged in + qty > 0 + sufficient holdings */
   const canSell = !!user && qty > 0 && held >= qty;
   /** 현재 방향 기준 주문 제출 가능 여부 / Whether the order can be submitted for the current direction */
-  const canSubmit = orderType === 'buy' ? canBuy : canSell;
+  const hasValidLimit = orderMode === 'market' || limitPrice > 0;
+  const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
 
   if (portfolioLoading) {
     return (
@@ -83,6 +91,8 @@ export const OrderForm = ({
       type: orderType,
       quantity: qty,
       estimatedPrice: currentPrice,
+      orderMode,
+      limitPrice: orderMode === 'limit' ? limitPrice : undefined,
     });
   };
 
@@ -97,6 +107,17 @@ export const OrderForm = ({
         <button type="button" onClick={() => setOrderType('sell')}
           className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderType === 'sell' ? 'bg-info text-white' : 'bg-transparent text-dim-token'}`}>
           매도
+        </button>
+      </div>
+
+      <div className="rounded-xl p-1 flex mb-4 surface-card-secondary">
+        <button type="button" onClick={() => setOrderMode('market')}
+          className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderMode === 'market' ? 'bg-primary text-white' : 'bg-transparent text-dim-token'}`}>
+          시장가
+        </button>
+        <button type="button" onClick={() => setOrderMode('limit')}
+          className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderMode === 'limit' ? 'bg-primary text-white' : 'bg-transparent text-dim-token'}`}>
+          지정가
         </button>
       </div>
 
@@ -123,6 +144,21 @@ export const OrderForm = ({
           <span className="text-[10px] text-[var(--text-dim)]">시장가</span>
         </div>
       </div>
+
+      {orderMode === 'limit' && (
+        <div className="mb-4">
+          <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">지정가</p>
+          <input
+            type="number"
+            value={limitPriceStr}
+            onChange={(e) => setLimitPriceStr(e.target.value)}
+            min="1"
+            disabled={!user}
+            placeholder="가격 입력"
+            className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50 surface-card-secondary border-primary-token"
+          />
+        </div>
+      )}
 
       {/* 주문 수량 입력 / Order quantity input */}
       <div className="mb-3">
@@ -185,6 +221,10 @@ export const OrderForm = ({
           ? '잔고 부족'
           : `${orderType === 'buy' ? '매수' : '매도'} 주문하기`}
       </button>
+      <div className="mt-4 space-y-3">
+        <OrderBookPanel streamerId={streamer.id} />
+        <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
+      </div>
     </div>
   );
 };

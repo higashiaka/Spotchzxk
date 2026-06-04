@@ -1,8 +1,10 @@
 package com.spotchzxk.service;
 
 import com.spotchzxk.entity.Stock;
+import com.spotchzxk.dto.OrderBookDto;
 import com.spotchzxk.exception.ChannelNotFoundException;
 import com.spotchzxk.exception.InsufficientFollowerCountException;
+import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +24,7 @@ public class StockService {
     private static final int MIN_FOLLOWER_COUNT = 100;
 
     private final StockRepository stockRepository;
+    private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChzzkApiClient chzzkApiClient;
@@ -27,6 +32,27 @@ public class StockService {
 
     public List<Stock> getAllStocks() {
         return stockRepository.findAll();
+    }
+
+    public OrderBookDto getOrderBook(String channelId, int depth) {
+        Stock stock = stockRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalStateException("Stock not found."));
+        int safeDepth = Math.max(1, Math.min(depth, 20));
+        return new OrderBookDto(
+                channelId,
+                BigDecimal.valueOf(stock.getCurrentPrice()),
+                toOrderBookEntries(orderRepository.findAskLevels(channelId, safeDepth)),
+                toOrderBookEntries(orderRepository.findBidLevels(channelId, safeDepth))
+        );
+    }
+
+    private List<OrderBookDto.OrderBookEntry> toOrderBookEntries(List<Object[]> rows) {
+        return rows.stream()
+                .map(row -> new OrderBookDto.OrderBookEntry(
+                        row[0] instanceof BigDecimal price ? price : new BigDecimal(String.valueOf(row[0])),
+                        ((Number) row[1]).longValue()
+                ))
+                .collect(Collectors.toList());
     }
 
     /**

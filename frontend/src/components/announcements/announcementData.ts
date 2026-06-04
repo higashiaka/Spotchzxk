@@ -12,6 +12,37 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_limit_order_reservation',
+    title: '지정가 예약 주문 안내',
+    date: '최근 업데이트',
+    summary: '시장가 주문 외에 원하는 가격을 지정해 대기하는 예약 주문 기능이 추가되었습니다.',
+    sections: [
+      {
+        title: '주문 방식',
+        rows: [
+          { label: '시장가', value: '현재가 기준 즉시 체결', tone: 'accent' },
+          { label: '지정가', value: '조건 충족 전까지 대기 주문으로 저장', tone: 'accent' },
+        ],
+        note: '지정가 주문은 현재가가 조건에 닿으면 자동으로 체결됩니다.',
+      },
+      {
+        title: '대기 주문과 호가창',
+        rows: [
+          { label: '내 대기 주문', value: '미체결 지정가 확인 및 취소 가능', tone: 'accent' },
+          { label: '호가창', value: '대기 중인 지정가 매수/매도 수량 표시', tone: 'accent' },
+        ],
+        note: '시장가 주문은 호가창에 쌓이지 않고 즉시 체결되며, 가격 변동을 통해 지정가 주문을 체결시킬 수 있습니다.',
+      },
+      {
+        title: '예약금 안내',
+        rows: [
+          { label: '지정가 매수', value: '주문 금액 예약 차감, 취소 시 환불', tone: 'accent' },
+          { label: '지정가 매도', value: '보유 수량 범위 안에서 대기 주문 등록', tone: 'accent' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'notice_update_v7',
     title: '고래 방지 정책 도입',
     date: '최근 업데이트',

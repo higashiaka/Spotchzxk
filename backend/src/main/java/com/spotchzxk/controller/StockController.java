@@ -1,6 +1,7 @@
 package com.spotchzxk.controller;
 
 import com.spotchzxk.entity.Stock;
+import com.spotchzxk.dto.OrderBookDto;
 import com.spotchzxk.exception.ChannelNotFoundException;
 import com.spotchzxk.exception.InsufficientFollowerCountException;
 import com.spotchzxk.service.StockService;
@@ -25,6 +26,14 @@ public class StockController {
     @GetMapping
     public ResponseEntity<List<Stock>> getAllStocks() {
         return ResponseEntity.ok(stockService.getAllStocks());
+    }
+
+    @GetMapping("/{channelId}/order-book")
+    public ResponseEntity<OrderBookDto> getOrderBook(
+            @PathVariable String channelId,
+            @RequestParam(defaultValue = "10") int depth
+    ) {
+        return ResponseEntity.ok(stockService.getOrderBook(channelId, depth));
     }
 
     @PostMapping

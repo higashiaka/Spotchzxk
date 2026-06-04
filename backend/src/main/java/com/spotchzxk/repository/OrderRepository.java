@@ -49,4 +49,38 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     // 보유 한도 계산용 — 특정 유저의 종목별 미체결 매수 수량 합산
     @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
     long sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
+
+    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'sell' AND status = 'pending'", nativeQuery = true)
+    long sumPendingSellQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
+
+    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
+    long sumPendingBuyQuantityByStreamerId(@Param("streamerId") String streamerId);
+
+    @Query(value = """
+            SELECT limit_price, COALESCE(SUM(quantity), 0)
+            FROM orders
+            WHERE streamer_id = :streamerId
+              AND type = 'sell'
+              AND status = 'pending'
+              AND order_mode = 'limit'
+              AND limit_price IS NOT NULL
+            GROUP BY limit_price
+            ORDER BY limit_price ASC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findAskLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
+
+    @Query(value = """
+            SELECT limit_price, COALESCE(SUM(quantity), 0)
+            FROM orders
+            WHERE streamer_id = :streamerId
+              AND type = 'buy'
+              AND status = 'pending'
+              AND order_mode = 'limit'
+              AND limit_price IS NOT NULL
+            GROUP BY limit_price
+            ORDER BY limit_price DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findBidLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
 }

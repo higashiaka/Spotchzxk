@@ -13,6 +13,8 @@ export interface TradeDetails {
   quantity: number;
   /** 주문 시점의 예상 체결가 / Estimated execution price at the time of order */
   estimatedPrice: number;
+  orderMode?: 'market' | 'limit';
+  limitPrice?: number;
 }
 
 /** 주문 요청 mutation 훅.
@@ -43,6 +45,10 @@ export const useTrade = (userId: string) => {
     /** 서버 응답 전 포트폴리오 캐시를 낙관적으로 업데이트
      *  Optimistically updates the portfolio cache before the server responds */
     onMutate: async (newTrade: TradeDetails) => {
+      if (newTrade.orderMode === 'limit') {
+        return {};
+      }
+
       await queryClient.cancelQueries({ queryKey: ['portfolio', userId] });
       const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
 
@@ -80,6 +86,7 @@ export const useTrade = (userId: string) => {
     onSettled: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
+        queryClient.invalidateQueries({ queryKey: ['history', userId] });
       }, 3500);
     },
   });
