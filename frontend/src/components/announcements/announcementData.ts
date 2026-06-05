@@ -15,11 +15,12 @@ export const announcements: AnnouncementItem[] = [
     id: 'notice_wash_trading_clawback',
     title: '자전거래 부당이득 회수 안내',
     date: '운영 조치',
-    summary: '자전거래를 통해 발생한 부당이득이 회수되었으며, 동일한 방식의 이익 발생을 구조적으로 차단하였습니다.',
+    summary: '최근 주문 1,000건을 검토하여 자전거래로 발생한 부당이득을 회수하였으며, 동일한 방식의 이익 발생을 구조적으로 차단하였습니다.',
     sections: [
       {
         title: '조치 내용',
         rows: [
+          { label: '검토 범위', value: '최근 주문 1,000건', tone: 'accent' },
           { label: '부당이득 회수', value: '자전거래로 확인된 실현 수익 회수 완료', tone: 'danger' },
           { label: '구조 개선', value: '매수·매도 가격 충격 공식 대칭화 적용', tone: 'accent' },
         ],
