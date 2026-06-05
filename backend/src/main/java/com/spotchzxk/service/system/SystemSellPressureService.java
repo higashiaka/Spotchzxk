@@ -77,11 +77,11 @@ public class SystemSellPressureService {
         int baseGainPercent = gainPercent(stock, state);
         int effectiveGainPercent = effectiveGainPercent(stock, state, baseGainPercent);
 
-        if (!state.active && baseGainPercent < state.startGainPercent && !state.highPriceActive) {
+        if (!state.active && baseGainPercent < state.startGainPercent) {
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
             return false;
         }
-        if (state.active && baseGainPercent <= state.stopGainPercent && !state.highPriceActive) {
+        if (state.active && baseGainPercent <= state.stopGainPercent) {
             state.active = false;
             state.consecutiveSells = 0;
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());

@@ -106,7 +106,7 @@ class SystemSellPressureServiceTest {
     }
 
     @Test
-    void highPricePressureUsesRandomizedSyntheticReference() {
+    void highPricePressureUsesRandomizedSyntheticReferenceForStrengthOnly() {
         long now = System.currentTimeMillis();
         SystemSellPressureService.PressureState state = service.stateFor("hot", now);
         state.highPriceActive = true;
@@ -128,6 +128,20 @@ class SystemSellPressureServiceTest {
     }
 
     @Test
+    void highPriceAloneDoesNotStartPressureWhenBaseGainIsBelowStart() {
+        long now = System.currentTimeMillis();
+        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
+        state.nextRunAtMs = now;
+
+        boolean sold = service.runStockIfDue(stock("hot", 1_200_000, 1_200_000), now);
+
+        assertThat(sold).isFalse();
+        assertThat(state.active).isFalse();
+        assertThat(state.highPriceActive).isTrue();
+        verify(tradeEngine, never()).submitTrade(any());
+    }
+
+    @Test
     void overheatedStockSubmitsSystemMarketSell() {
         long now = System.currentTimeMillis();
         SystemSellPressureService.PressureState state = service.stateFor("hot", now);
@@ -143,20 +157,6 @@ class SystemSellPressureServiceTest {
         assertThat(request.getValue().getType()).isEqualTo("sell");
         assertThat(request.getValue().getOrderMode()).isEqualTo("market");
         assertThat(request.getValue().getQuantity()).isEqualTo(10);
-    }
-
-    @Test
-    void highPriceStockCanSellEvenWhenDailyBaseGainIsFlat() {
-        long now = System.currentTimeMillis();
-        SystemSellPressureService.PressureState state = service.stateFor("hot", now);
-        state.nextRunAtMs = now;
-
-        boolean sold = service.runStockIfDue(stock("hot", 1_200_000, 1_200_000), now);
-
-        ArgumentCaptor<TradeRequest> request = ArgumentCaptor.forClass(TradeRequest.class);
-        verify(tradeEngine).submitTrade(request.capture());
-        assertThat(sold).isTrue();
-        assertThat(request.getValue().getType()).isEqualTo("sell");
     }
 
     @Test
