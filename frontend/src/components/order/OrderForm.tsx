@@ -253,10 +253,12 @@ export const OrderForm = ({
           ? '잔고 부족'
           : `${orderType === 'buy' ? '매수' : '매도'} 주문하기`}
       </button>
-      <div className="mt-4 space-y-3">
-        <OrderBookPanel streamerId={streamer.id} />
-        <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
-      </div>
+      {!embedded && (
+        <div className="mt-4 space-y-3">
+          <OrderBookPanel streamerId={streamer.id} />
+          <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
+        </div>
+      )}
     </div>
   );
 };

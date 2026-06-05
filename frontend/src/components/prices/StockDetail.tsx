@@ -11,6 +11,8 @@ import { fmt, fmtCompact, changePct, priceColor } from '../../utils';
 import { InteractiveChart } from '../chart/InteractiveChart';
 import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
+import { OrderBookPanel } from '../order/OrderBookPanel';
+import { PendingOrdersPanel } from '../order/PendingOrdersPanel';
 
 interface StockOrderHistoryItem {
   id: string;
@@ -389,11 +391,15 @@ export const StockDetail = ({
               </p>
             </div>
           </div>
+          <div className="hidden md:block mb-6">
+            {tradeHistoryPanel}
+          </div>
         </div>
 
-        {/* [row2 col2] 체결내역 (PC only) */}
-        <div className="hidden md:block">
-          {tradeHistoryPanel}
+        {/* [row2 col2] order book + pending orders (PC only) */}
+        <div className="hidden md:flex flex-col gap-3">
+          <OrderBookPanel streamerId={streamer.id} />
+          <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
         </div>
 
       </div>
