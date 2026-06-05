@@ -21,6 +21,7 @@ import java.util.List;
 public class ChzzkLivePollingService {
 
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
+    private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
@@ -36,6 +37,7 @@ public class ChzzkLivePollingService {
         }
 
         List<Stock> pollingOrder = stocks.stream()
+                .filter(stock -> !isEventStock(stock))
                 .sorted(Comparator.comparing(Stock::isLive).reversed())
                 .toList();
         for (Stock stock : pollingOrder) {
@@ -80,6 +82,7 @@ public class ChzzkLivePollingService {
     public void payDueIntervalDividends() {
         int paidCount = 0;
         List<Stock> dueStocks = stockRepository.findByIsLiveTrue().stream()
+                .filter(stock -> !isEventStock(stock))
                 .filter(this::isIntervalDue)
                 .sorted(Comparator.comparing(s ->
                         s.getLiveStartedAt().plusMinutes(s.getDividendAccumulationCount() * 10L)))
@@ -118,6 +121,10 @@ public class ChzzkLivePollingService {
         }
         long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
         return elapsedMinutes / 10 > stock.getDividendAccumulationCount();
+    }
+
+    private boolean isEventStock(Stock stock) {
+        return stock.getChannelId() != null && stock.getChannelId().startsWith(EVENT_CHANNEL_PREFIX);
     }
 
     private void markStreamStarted(Stock stock) {

@@ -12,6 +12,29 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_event_guobao_listing',
+    title: '궈바오 신규 상장 안내',
+    date: '이벤트 상장',
+    summary: '이벤트성 특별 종목 궈바오가 신규 상장됩니다. 일반 종목과 다른 운영 기준이 적용될 수 있습니다.',
+    sections: [
+      {
+        title: '상장 정보',
+        rows: [
+          { label: '종목명', value: '궈바오', tone: 'accent' },
+          { label: '상장가', value: '10,000,000 코인', tone: 'accent' },
+        ],
+      },
+      {
+        title: '운영 안내',
+        rows: [
+          { label: '배당', value: '배당이 지급되지 않는 종목', tone: 'accent' },
+          { label: '종목 성격', value: '이벤트성으로 추가된 특별 종목', tone: 'accent' },
+        ],
+        note: '이벤트 운영 상황에 따라 별도 공지 없이 상장폐지될 수 있습니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_limit_order_reservation',
     title: '지정가 예약 주문 안내',
     date: '최근 업데이트',
