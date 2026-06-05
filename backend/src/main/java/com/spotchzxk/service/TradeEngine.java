@@ -217,7 +217,7 @@ public class TradeEngine {
     }
 
     private BigDecimal calculateExecutedPrice(BigDecimal currentPrice, boolean isBuy, int qty) {
-        double rate = isBuy ? (1.0 + PRICE_IMPACT_PER_SHARE) : (1.0 - PRICE_IMPACT_PER_SHARE);
+        double rate = priceImpactRate(isBuy);
         double finalPriceRaw = currentPrice.doubleValue() * Math.pow(rate, qty);
         return BigDecimal.valueOf(Math.max(1.0, finalPriceRaw))
                 .setScale(0, RoundingMode.HALF_UP);
@@ -230,7 +230,7 @@ public class TradeEngine {
     }
 
     BigDecimal calculateAverageExecutionPrice(BigDecimal currentPrice, boolean isBuy, int qty) {
-        double rate = isBuy ? (1.0 + PRICE_IMPACT_PER_SHARE) : (1.0 - PRICE_IMPACT_PER_SHARE);
+        double rate = priceImpactRate(isBuy);
         double start = currentPrice.doubleValue();
         double total;
         if (qty <= 0) {
@@ -243,6 +243,11 @@ public class TradeEngine {
         double average = total / Math.max(1, qty);
         return BigDecimal.valueOf(Math.max(1.0, average))
                 .setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private double priceImpactRate(boolean isBuy) {
+        double buyRate = 1.0 + PRICE_IMPACT_PER_SHARE;
+        return isBuy ? buyRate : 1.0 / buyRate;
     }
 
     private void validateTrade(String channelId, boolean isBuy, int qty, BigDecimal cost,

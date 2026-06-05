@@ -12,7 +12,8 @@ const PRICE_IMPACT_PER_SHARE = 0.0005;
 
 const averageImpactPrice = (currentPrice: number, isBuy: boolean, quantity: number): number => {
   if (currentPrice <= 0 || quantity <= 0) return 0;
-  const rate = isBuy ? 1 + PRICE_IMPACT_PER_SHARE : 1 - PRICE_IMPACT_PER_SHARE;
+  const buyRate = 1 + PRICE_IMPACT_PER_SHARE;
+  const rate = isBuy ? buyRate : 1 / buyRate;
   const total = isBuy
     ? currentPrice * rate * (Math.pow(rate, quantity) - 1) / (rate - 1)
     : currentPrice * rate * (1 - Math.pow(rate, quantity)) / (1 - rate);

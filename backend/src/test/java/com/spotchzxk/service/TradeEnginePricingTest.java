@@ -46,4 +46,13 @@ class TradeEnginePricingTest {
 
         assertThat(sellProceeds).isLessThan(buyCost);
     }
+
+    @Test
+    void splitBuyThenSingleSellReturnsPriceToStartingLevel() {
+        TradeEngine.TradePrices firstBuy = tradeEngine.calculateTradePrices(BigDecimal.valueOf(10_000), true, 700);
+        TradeEngine.TradePrices secondBuy = tradeEngine.calculateTradePrices(firstBuy.finalPrice(), true, 300);
+        TradeEngine.TradePrices sell = tradeEngine.calculateTradePrices(secondBuy.finalPrice(), false, 1_000);
+
+        assertThat(sell.finalPrice()).isEqualByComparingTo(BigDecimal.valueOf(10_000));
+    }
 }
