@@ -12,10 +12,35 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_schedule_update_20260608',
+    title: '배당 지급 및 액면분할 주기 변경 안내',
+    date: '운영 정책 업데이트',
+    summary: '배당 지급은 방송 시작 후 1시간마다, 액면분할은 3시간마다 정각에 실행되도록 변경됩니다.',
+    sections: [
+      {
+        title: '배당 지급 주기',
+        rows: [
+          { label: '변경 후', value: '방송 시작 후 1시간마다 지급', tone: 'accent' },
+          { label: '기존', value: '방송 시작 후 10분마다 지급', tone: 'danger' },
+        ],
+        note: '배당 대상과 계산 방식은 기존 정책을 따르며, 지급 간격만 변경됩니다.',
+      },
+      {
+        title: '액면분할 주기',
+        rows: [
+          { label: '변경 후', value: '3시간마다 정각 실행', tone: 'accent' },
+          { label: '실행 시간', value: '00시, 03시, 06시, 09시, 12시, 15시, 18시, 21시 KST', tone: 'accent' },
+          { label: '기존', value: '매일 오전 9시 KST', tone: 'danger' },
+        ],
+        note: '분할 대상 기준과 제외 대상은 기존 액면분할 정책과 동일합니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_split_limit_policy_20260608',
     title: '매수·배당 제한 해제 및 액면분할 안내',
     date: '운영 정책 업데이트',
-    summary: '일반 종목 보유 제한과 배당 상한을 해제하고, 고가 종목은 매일 오전 9시 기준으로 10:1 액면분할을 적용합니다.',
+    summary: '일반 종목 보유 제한과 배당 상한을 해제하고, 고가 종목은 3시간마다 정각 기준으로 10:1 액면분할을 적용합니다.',
     sections: [
       {
         title: '제한 해제',
@@ -29,7 +54,7 @@ export const announcements: AnnouncementItem[] = [
       {
         title: '액면분할 기준',
         rows: [
-          { label: '실행 시간', value: '매일 오전 9시 KST', tone: 'accent' },
+          { label: '실행 시간', value: '3시간마다 정각 KST', tone: 'accent' },
           { label: '대상', value: '현재가 1,000,000원 초과 종목', tone: 'accent' },
           { label: '비율', value: '10:1 액면분할', tone: 'accent' },
         ],
