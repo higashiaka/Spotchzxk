@@ -35,6 +35,9 @@ public class Stock {
     @Column(nullable = false)
     private long dailyVolume;
 
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long dailyTradingValue;
+
     @Column(nullable = false)
     private int basePrice;
 
@@ -73,9 +76,10 @@ public class Stock {
         if (listingPrice <= 0) listingPrice = Math.max(10_000, currentPrice);
     }
 
-    public void applyTrade(int executedPrice, boolean isBuy, long qty) {
+    public void applyTrade(int executedPrice, boolean isBuy, long qty, long tradingValue) {
         this.currentPrice = executedPrice;
         this.dailyVolume += qty;
+        this.dailyTradingValue += tradingValue;
         if (isBuy) {
             this.issuedShares += qty;
         } else {
@@ -86,6 +90,7 @@ public class Stock {
     public void applyDailyReset() {
         this.basePrice = this.currentPrice;
         this.dailyVolume = 0;
+        this.dailyTradingValue = 0;
     }
 
     public void startLive(LocalDateTime startedAt) {

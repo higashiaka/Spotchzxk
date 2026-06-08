@@ -1,6 +1,6 @@
 # Spotchzxk 백엔드 구조 발표 자료
 
-작성일: 2026-06-02  
+작성일: 2026-06-08  
 기준 코드: `backend/src/main/java/com/spotchzxk`
 
 ---
@@ -50,11 +50,13 @@ backend/src/main/java/com/spotchzxk/
 │   ├── RankingController.java         # GET /api/rankings — 실현손익/배당 순위 조회
 │   ├── ProfileController.java         # POST /api/profile/nickname, /ranking-nickname-public
 │   ├── ShopController.java            # GET/POST /api/shop/megaphone, POST /api/shop/items/purchase
+│   ├── AnnouncementController.java    # GET /api/announcements/stock-splits/latest — 주식 분할 공지
 │   └── OnlineController.java          # GET /api/online-count — 현재 접속자 수
 │
 ├── service/                           # 비즈니스 로직
 │   ├── TradeEngine.java               # 거래 핵심 엔진 — 잔고 검증, 체결, 가격 갱신, WebSocket 발행
 │   ├── StockService.java              # 종목 등록 — Chzzk API 조회 → DB 저장, 티켓 차감
+│   ├── StockSplitService.java         # 주식 분할 — 매일 09:00 KST, 1,000,000원 초과 종목 10:1 분할
 │   ├── CandleService.java             # 주문 이력에서 OHLC 캔들 집계 (1m/5m/1h/1d/1w)
 │   ├── DividendService.java           # 10분 인터벌 배당 지급 — preStreamQuantity 스냅샷 기준
 │   ├── ChzzkApiClient.java            # Chzzk OpenAPI HTTP 클라이언트 (채널 정보/팔로워 수 조회)
@@ -68,29 +70,39 @@ backend/src/main/java/com/spotchzxk/
 │   ├── ShopItemService.java           # 상점 아이템 구매 — 닉네임 변경권/종목 추가권
 │   ├── OnlineUserService.java         # 접속자 수 관리 (WebSocket 세션 기반)
 │   ├── EnvResolver.java               # 환경변수/설정값 통합 접근 유틸
-│   └── bot/
-│       ├── BotActivityService.java    # 봇 계정 자동 매매 — 거래 활성화를 위한 시장 참여자
-│       └── BotActivityProperties.java # 봇 설정값 (활성화 여부, 거래 주기 등)
+│   ├── bot/
+│   │   ├── BotActivityService.java    # 봇 계정 자동 매매 — 거래 활성화를 위한 시장 참여자
+│   │   └── BotActivityProperties.java # 봇 설정값 (활성화 여부, 거래 주기 등)
+│   └── system/
+│       ├── SystemSellPressureService.java    # 시스템 매도 압박 — 가격 폭등 억제용 자동 매도
+│       └── SystemSellPressureProperties.java # 매도 압박 설정값 (임계치, 수량, 쿨다운 등)
+│
+├── policy/
+│   └── AntiWhalePolicy.java           # 신규 상장 anti-whale 정책 상수 (24h 내 200주 상한)
 │
 ├── entity/                            # JPA 엔티티 (DB 테이블 매핑)
 │   ├── User.java                      # users — 사용자 계정, 잔고, 티켓, 리셋 정보
-│   ├── Stock.java                     # stocks — 종목(스트리머), 현재가, 발행량, 라이브 상태
-│   ├── Order.java                     # orders — 매수/매도 주문 이력 (시장가/지정가)
+│   ├── Stock.java                     # stocks — 종목(스트리머), 현재가, 상장가, 발행량, 라이브 상태
+│   ├── Order.java                     # orders — 매수/매도 주문 이력 (시장가/지정가, quantity BIGINT)
 │   ├── UserShare.java                 # user_shares — 사용자별 종목 보유량 및 평균단가
 │   ├── DividendLog.java               # dividend_logs — 배당 이벤트 로그 (종목별)
 │   ├── UserDividendLog.java           # user_dividend_logs — 사용자별 배당 수령 내역
 │   ├── DeviceMapping.java             # device_mappings — 디바이스 지문 ↔ UID 매핑
-│   └── MegaphonePost.java             # megaphone_posts — 확성기 게시글
+│   ├── MegaphonePost.java             # megaphone_posts — 확성기 게시글 (라이브 세션 타임스탬프 포함)
+│   ├── StockSplitNotice.java          # stock_split_notices — 일별 주식 분할 공지
+│   └── StockSplitEvent.java           # stock_split_events — 종목별 주식 분할 실행 이력
 │
 ├── repository/                        # Spring Data JPA 리포지토리
-│   ├── UserRepository.java
-│   ├── StockRepository.java
-│   ├── OrderRepository.java
-│   ├── UserShareRepository.java
-│   ├── DividendLogRepository.java
-│   ├── UserDividendLogRepository.java
-│   ├── DeviceMappingRepository.java
-│   └── MegaphonePostRepository.java
+│   ├── UserRepository.java            # 랭킹 조회(상위 50명), 잔고/손익/티켓 증감, 닉네임 변경, 일일 랭킹 초기화
+│   ├── StockRepository.java           # 라이브 중인 종목 조회, 현재가 기준 필터 (주식 분할 대상 탐색)
+│   ├── OrderRepository.java           # 주문 이력 조회, 지정가 호가창 집계, 주식 분할 시 미체결 주문 일괄 보정
+│   ├── UserShareRepository.java       # 보유량 조회, 배당 일괄 지급(벌크 UPDATE), 라이브 시작 시 preStreamQuantity 스냅샷, 주식 분할 적용
+│   ├── DividendLogRepository.java     # 최근 배당 이벤트 30건 조회
+│   ├── UserDividendLogRepository.java # 사용자별 배당 수령 내역 최근 50건 조회
+│   ├── DeviceMappingRepository.java   # 디바이스 지문 ↔ UID 매핑, 계정 병합 시 UID 일괄 갱신
+│   ├── MegaphonePostRepository.java   # 오늘 사용 횟수 카운트, 라이브 채널 최신 게시글 페이지 조회
+│   ├── StockSplitNoticeRepository.java # 날짜 기준 분할 공지 존재 여부 확인 및 단건 조회 (중복 방지)
+│   └── StockSplitEventRepository.java  # 특정 종목의 분할 실행 이력 조회 (캔들 보정용)
 │
 ├── dto/                               # 요청/응답 데이터 전송 객체
 │   ├── TradeRequest.java              # 거래 요청 (streamerId, type, quantity, estimatedPrice)
@@ -123,6 +135,7 @@ backend/src/main/java/com/spotchzxk/
                     ├─ 잔고/보유량 검증
                     ├─ 지수 가격 모델로 체결가 계산
                     │     executedPrice = currentPrice × (1 ± 0.0005)^qty
+                    ├─ AntiWhalePolicy — 신규 상장 24h 내 200주 매수 상한
                     ├─ User 잔고 차감/증가
                     ├─ UserShare 수량/평균단가 갱신
                     ├─ Order 저장 (status=completed)
@@ -159,6 +172,41 @@ ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
                           └─ /topic/user-dividends/{userId}  (개인 알림)
 ```
 
+### 주식 분할 흐름
+
+```
+StockSplitService (@Scheduled cron="0 0 9 * * *" KST)
+  └─ 오늘 분할 공지가 없는 경우에만 실행
+        └─ currentPrice > 1,000,000 인 종목 필터
+              ├─ event- 종목 제외
+              └─ 상장 24h 미경과 종목 제외 (AntiWhalePolicy.NEW_LISTING_HOURS)
+                    └─ 대상 종목 10:1 분할
+                          ├─ stock.applyStockSplit(10)   — currentPrice/10, totalSupply×10
+                          ├─ userShare 수량 ×10, avgPrice /10
+                          ├─ 미체결 지정가 주문 수량 ×10, limitPrice /10
+                          ├─ StockSplitNotice 저장 (일별 1건)
+                          ├─ StockSplitEvent 저장 (종목별)
+                          ├─ TradeEngine/CandleService/SystemSellPressure 캐시 무효화
+                          └─ WebSocket 발행
+                                ├─ /topic/streamers
+                                ├─ /topic/prices/{channelId}
+                                └─ /topic/stock-split-notices
+```
+
+### 시스템 매도 압박 흐름
+
+```
+SystemSellPressureService (@Scheduled fixedDelay=1_000)
+  └─ 활성화된 경우 전체 종목 중 기준가 대비 상승률이 startGainPercent 이상인 종목 탐색
+        └─ PressureState (TTL 6~24h) 기반 tier 결정
+              ├─ weak   (상승률 기준 초과 200% 미만) — 소량/긴 인터벌
+              ├─ medium (200~600%) — 중간
+              ├─ strong (600~1200%) — 고량/짧은 인터벌
+              └─ extreme (1200%+) — 매우 고량/매우 짧은 인터벌
+                    └─ __system_sell_pressure__ 계정으로 시장가 매도 제출
+                          (일별 한도, 연속 매도 후 쿨다운 적용)
+```
+
 ### 종목 등록 흐름
 
 ```
@@ -170,7 +218,7 @@ ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
                     ├─ ChzzkApiClient로 채널 정보 조회
                     ├─ 팔로워 수 기준 검증
                     ├─ 종목 추가 티켓 차감
-                    ├─ Stock 엔티티 저장
+                    ├─ Stock 엔티티 저장 (listingPrice 자동 계산)
                     └─ WebSocket /topic/streamers 발행
 ```
 
@@ -182,15 +230,15 @@ ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
 erDiagram
     users {
         VARCHAR(128)  id PK
-        DECIMAL(14_2) coinBalance
+        DECIMAL(20_2) coinBalance
         VARCHAR(20)   display_name
-        DECIMAL(14_2) realized_profit
+        DECIMAL(20_2) realized_profit
         BOOLEAN       ranking_nickname_public
         INT           nickname_change_tickets
         INT           stock_add_tickets
         INT           resetCount
         DATE          lastResetDate
-        DECIMAL(14_2) dividendTotal
+        DECIMAL(20_2) dividendTotal
         BOOLEAN       isBot
         BOOLEAN       is_guest
     }
@@ -204,6 +252,7 @@ erDiagram
         BIGINT       totalSupply
         BIGINT       dailyVolume
         INT          basePrice
+        INT          listingPrice
         INT          currentPrice
         BOOLEAN      isLive
         DATETIME     liveStartedAt
@@ -219,7 +268,7 @@ erDiagram
         VARCHAR(128)  user_id FK
         VARCHAR(50)   streamer_id FK
         VARCHAR(10)   type
-        INT           quantity
+        BIGINT        quantity
         DECIMAL(12_2) estimated_price
         DECIMAL(12_2) executed_price
         VARCHAR(20)   status
@@ -241,7 +290,7 @@ erDiagram
     dividend_logs {
         BIGINT      log_id PK
         VARCHAR(50) channel_id FK
-        INT         totalDividendPool
+        DECIMAL(20_2) totalDividendPool
         VARCHAR     payoutReason
         BIGINT      streamMinutes
         DATETIME    createdAt
@@ -254,8 +303,8 @@ erDiagram
         VARCHAR(100)  streamerName
         TEXT          profileImageUrl
         BIGINT        quantity
-        DECIMAL(14_4) ratePerShare
-        DECIMAL(14_2) amount
+        DECIMAL(20_4) ratePerShare
+        DECIMAL(20_2) amount
         DATETIME      createdAt
     }
 
@@ -272,7 +321,26 @@ erDiagram
         VARCHAR(100) streamerName
         VARCHAR(100) message
         VARCHAR(200) liveUrl
+        DATETIME     liveSessionStartedAt
         DATETIME     createdAt
+    }
+
+    stock_split_notices {
+        VARCHAR(36) id PK
+        DATE        splitDate
+        INT         thresholdPrice
+        INT         splitRatio
+        INT         stockCount
+        TEXT        stockNames
+        TIMESTAMP   createdAt
+    }
+
+    stock_split_events {
+        VARCHAR(36) id PK
+        VARCHAR(50) channelId FK
+        INT         splitRatio
+        BIGINT      executedAt
+        TIMESTAMP   createdAt
     }
 
     users ||--o{ orders : "userId"
@@ -285,6 +353,7 @@ erDiagram
     users ||--o{ device_mappings : "uid"
     users ||--o{ megaphone_posts : "userId"
     stocks ||--o{ megaphone_posts : "channelId"
+    stocks ||--o{ stock_split_events : "channelId"
 ```
 
 ---
@@ -302,7 +371,7 @@ erDiagram
 
 | 구분 | 해당 API |
 |------|---------|
-| 공개 (토큰 불필요) | `GET /health`, `POST /api/guest/**`, `GET /api/auth/me`, `GET /api/stocks`, `GET /api/orders/recent`, `GET /api/orders/history`, `/ws/**` |
+| 공개 (토큰 불필요) | `GET /health`, `POST /api/guest/**`, `GET /api/auth/me`, `GET /api/stocks`, `GET /api/orders/recent`, `GET /api/orders/history`, `GET /api/announcements/**`, `/ws/**` |
 | Google 계정 필요 | `POST /api/stocks` |
 | 로그인 필요 | 위 공개 API 외 모든 API |
 
@@ -405,6 +474,8 @@ erDiagram
 { "status": "executed", "executedPrice": 10500, "newBalance": 895000, "fee": 0, "orderId": "uuid", "orderMode": "market" }
 ```
 
+> 신규 상장 후 24시간 이내 종목은 1회 매수 시 200주 상한 적용 (AntiWhalePolicy)
+
 ---
 
 ### 주문 API
@@ -423,7 +494,7 @@ erDiagram
 | `userId` | string | Firebase UID |
 | `streamerId` | string | 종목 채널 ID |
 | `type` | string | `buy` / `sell` |
-| `quantity` | number | 수량 |
+| `quantity` | number | 수량 (BIGINT) |
 | `estimatedPrice` | number | 요청 시 추정가 |
 | `executedPrice` | number | 체결가 |
 | `status` | string | `completed` / `pending` / `cancelled` |
@@ -527,6 +598,26 @@ erDiagram
 
 ---
 
+### 공지 API
+
+#### `GET /api/announcements/stock-splits/latest` — 오늘의 주식 분할 공지 조회
+인증: 공개
+
+응답: `204 No Content` (분할 없는 날) 또는
+```json
+{
+  "id": "uuid",
+  "splitDate": "2026-06-08",
+  "thresholdPrice": 1000000,
+  "splitRatio": 10,
+  "stockCount": 2,
+  "stockNames": "스트리머A, 스트리머B",
+  "createdAt": "2026-06-08T09:00:00"
+}
+```
+
+---
+
 ### 기타
 
 #### `GET /health` — 헬스체크
@@ -544,20 +635,21 @@ Simple Broker: `/topic`
 
 | 토픽 | 발행 시점 | Payload |
 |------|----------|---------|
-| `/topic/streamers` | 종목 등록, 라이브 상태 변경, 배당 tick, 일일 리셋 | `Stock[]` (변경된 종목만) |
-| `/topic/prices/{channelId}` | 거래 체결 시 가격 변동 | `{ "streamerId", "price" }` |
+| `/topic/streamers` | 종목 등록, 라이브 상태 변경, 배당 tick, 일일 리셋, 주식 분할 | `Stock[]` (변경된 종목만) |
+| `/topic/prices/{channelId}` | 거래 체결 시 가격 변동, 주식 분할 | `{ "streamerId", "price" }` |
 | `/topic/trades` | 거래 체결 | `{ "streamerId", "streamerName", "type", "quantity", "price", "timestamp" }` |
 | `/topic/candles/{channelId}` | 캔들 갱신 (거래 발생 / 라이브 종목 분봉) | `{ "1m": OhlcCandle, "5m": OhlcCandle, ... }` |
 | `/topic/dividends` | 배당 지급 | `{ "channelId", "streamerName", "profileImageUrl", "totalDividendPool", "streamMinutes", "createdAt" }` |
 | `/topic/user-dividends/{userId}` | 개인 배당 알림 | `{ "channelId", "streamerName", "quantity", "ratePerShare", "amount", "createdAt" }` |
 | `/topic/megaphone` | 확성기 사용 | `MegaphonePost` |
 | `/topic/rankings-reset` | 일일 랭킹 초기화 | `{}` |
+| `/topic/stock-split-notices` | 주식 분할 실행 | `StockSplitNotice` |
 
 ---
 
 ## 6. DB 마이그레이션 이력 (Flyway)
 
-`backend/src/main/resources/db/migration/` — 총 37개
+`backend/src/main/resources/db/migration/` — 총 44개
 
 | 버전 | 주요 내용 |
 |------|---------|
@@ -576,3 +668,10 @@ Simple Broker: `/topic`
 | V30–V31 | 닉네임/실현손익/랭킹 공개 설정 |
 | V32–V33 | 상점 티켓, 게스트 계정 구분 |
 | V34–V37 | 성능 인덱스 (orders 복합 인덱스, user_shares/dividend 인덱스, orders_streamer_status) |
+| V38 | dividend_logs/user_dividend_logs/users 잔고 컬럼 DECIMAL(20,x)로 확장 |
+| V39 | megaphone_posts에 live_session_started_at 추가 |
+| V40 | stocks에 listing_price 추가 및 팔로워 수 기반 백필 |
+| V41 | stock_split_notices 테이블 생성 (일별 주식 분할 공지) |
+| V42 | stock_split_events 테이블 생성 (종목별 분할 실행 이력) |
+| V43 | orders.quantity를 BIGINT로 확장 |
+| V44 | 일반 종목의 total_supply 제한 해제 (event- 종목 제외) |

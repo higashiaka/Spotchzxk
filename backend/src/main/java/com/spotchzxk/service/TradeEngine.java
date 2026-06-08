@@ -153,7 +153,7 @@ public class TradeEngine {
                 prices.executionPrice(), prices.finalPrice(), cost, executedAt);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, prices.finalPrice(),
                 currentBalance, shares, heldQty, cost);
-        broadcastTrade(channelId, streamerName, isBuy, qty, prices.finalPrice(), executedAt);
+        broadcastTrade(channelId, streamerName, isBuy, qty, prices.finalPrice(), executedAt, cost);
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -206,7 +206,7 @@ public class TradeEngine {
                 prices.executionPrice(), prices.finalPrice(), cost, executedAt, orderId, "limit", limitPrice);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, prices.finalPrice(),
                 currentBalance, shares, heldQty, cost);
-        broadcastTrade(channelId, streamerName, isBuy, qty, prices.finalPrice(), executedAt);
+        broadcastTrade(channelId, streamerName, isBuy, qty, prices.finalPrice(), executedAt, cost);
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", prices.executionPrice(), newBalance, BigDecimal.ZERO, orderId, "limit");
@@ -348,7 +348,7 @@ public class TradeEngine {
             Stock stock = stockRepository.findById(channelId).orElseThrow();
             User user = getOrCreateUser(userId);
 
-            updateStock(stock, isBuy, qty, finalPrice);
+            updateStock(stock, isBuy, qty, finalPrice, cost);
             BigDecimal realizedProfit = updateUserShareAndCalculateProfit(user, stock, channelId, isBuy, qty, cost);
             addToUserBalance(userId, isBuy ? cost.negate() : cost);
             if (!isBuy) {
@@ -365,8 +365,8 @@ public class TradeEngine {
                 .orElseGet(() -> userRepository.save(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build()));
     }
 
-    private void updateStock(Stock stock, boolean isBuy, long qty, BigDecimal executedPrice) {
-        stock.applyTrade(executedPrice.intValue(), isBuy, qty);
+    private void updateStock(Stock stock, boolean isBuy, long qty, BigDecimal finalPrice, BigDecimal cost) {
+        stock.applyTrade(finalPrice.intValue(), isBuy, qty, cost.longValue());
         stockRepository.save(stock);
     }
 
@@ -457,7 +457,6 @@ public class TradeEngine {
                                                 BigDecimal fallbackPrice, BigDecimal limitPrice,
                                                 BigDecimal reserveAmount, String orderId) {
         return new TransactionTemplate(txManager).execute(status -> {
-            Stock stock = stockRepository.findById(channelId).orElseThrow();
             getOrCreateUser(userId);
             BigDecimal newBalance = userRepository.findById(userId)
                     .map(User::getCoinBalance)
@@ -542,7 +541,7 @@ public class TradeEngine {
                 addToUserRealizedProfit(user.getId(), profit);
             }
 
-            updateStock(stock, freshIsBuy, freshOrder.getQuantity(), calculatedPrices.finalPrice());
+            updateStock(stock, freshIsBuy, freshOrder.getQuantity(), calculatedPrices.finalPrice(), cost);
             freshOrder.complete(calculatedPrices.executionPrice(), executedAt);
             orderRepository.save(freshOrder);
             return calculatedPrices;
@@ -558,7 +557,8 @@ public class TradeEngine {
         String streamerName = stockRepository.findById(order.getStreamerId())
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
-        broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), prices.finalPrice(), executedAt);
+        BigDecimal filledCost = prices.executionPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+        broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), prices.finalPrice(), executedAt, filledCost);
         messagingTemplate.convertAndSend("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -579,7 +579,7 @@ public class TradeEngine {
     }
 
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, long qty,
-                                BigDecimal executedPrice, long executedAt) {
+                                BigDecimal executedPrice, long executedAt, BigDecimal cost) {
         candleService.onTrade(channelId, executedPrice, executedAt);
         messagingTemplate.convertAndSend("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
@@ -589,6 +589,7 @@ public class TradeEngine {
                 "type", isBuy ? "buy" : "sell",
                 "quantity", qty,
                 "price", executedPrice,
+                "tradingValue", cost.longValue(),
                 "timestamp", executedAt
         ));
     }

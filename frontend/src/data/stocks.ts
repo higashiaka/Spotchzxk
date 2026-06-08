@@ -8,6 +8,8 @@ export interface Stock {
   price: number;
   /** Daily cumulative trading volume */
   totalVolume: number;
+  /** Daily cumulative trading value in KRW (sum of executedPrice × quantity per trade) */
+  dailyTradingValue: number;
   /** Base price used for return calculation */
   basePrice?: number;
   /** Number of followers */

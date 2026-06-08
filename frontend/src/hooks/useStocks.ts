@@ -14,6 +14,7 @@ function mapRawToStock(r: any): Stock {
     name: r.streamerName || r.name,
     price: r.currentPrice ?? r.price ?? 1000,
     totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
+    dailyTradingValue: Number(r.dailyTradingValue ?? 0),
     basePrice: r.basePrice ?? 1000,
     profileImageUrl: r.profileImageUrl,
     isLive: r.isLive ?? false,
@@ -84,6 +85,7 @@ export const useStocks = () => {
             ...stock,
             price: Number(trade.price),
             totalVolume: stock.totalVolume + Number(trade.quantity),
+            dailyTradingValue: stock.dailyTradingValue + Number(trade.tradingValue ?? 0),
           };
         }));
       } catch (e) {

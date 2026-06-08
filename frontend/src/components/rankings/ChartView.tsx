@@ -76,8 +76,8 @@ export const ChartView = ({
           : s.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 30);
       case 'value':
         return valueAsc
-          ? s.sort((a, b) => a.price * a.totalVolume - b.price * b.totalVolume).slice(0, 30)
-          : s.sort((a, b) => b.price * b.totalVolume - a.price * a.totalVolume).slice(0, 30);
+          ? s.sort((a, b) => a.dailyTradingValue - b.dailyTradingValue).slice(0, 30)
+          : s.sort((a, b) => b.dailyTradingValue - a.dailyTradingValue).slice(0, 30);
       case 'surge':
         return s
           .filter(st => changePct(st.price, st.basePrice) > 0)
@@ -235,7 +235,7 @@ export const ChartView = ({
                 ) : (
                   <div className="w-24 md:w-36 text-right shrink-0">
                     <p className="text-xs md:text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {category === 'value' ? fmtCompactWon(s.price * s.totalVolume) : fmtCompact(s.totalVolume)}
+                      {category === 'value' ? fmtCompactWon(s.dailyTradingValue) : fmtCompact(s.totalVolume)}
                     </p>
                   </div>
                 )}
