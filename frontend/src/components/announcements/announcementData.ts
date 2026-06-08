@@ -33,7 +33,7 @@ export const announcements: AnnouncementItem[] = [
           { label: '대상', value: '현재가 1,000,000원 초과 종목', tone: 'accent' },
           { label: '비율', value: '10:1 액면분할', tone: 'accent' },
         ],
-        note: '상장 후 24시간이 지나지 않은 종목은 신규 상장 제한 보호를 위해 액면분할 대상에서 제외됩니다.',
+        note: '상장 후 24시간이 지나지 않은 종목과 이벤트 상장 종목은 액면분할 대상에서 제외됩니다.',
       },
       {
         title: '분할 반영 방식',
