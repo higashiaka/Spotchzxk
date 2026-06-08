@@ -220,7 +220,7 @@ export const HoldingsView = ({
                     )}
                   </div>
                   <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-                    {qty}주 &nbsp;·&nbsp; 평단 {fmt(avgPrice)}
+                    {qty}주
                   </p>
                 </div>
 
