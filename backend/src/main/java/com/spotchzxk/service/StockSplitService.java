@@ -36,6 +36,7 @@ public class StockSplitService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int SPLIT_THRESHOLD_PRICE = 1_000_000;
     private static final int SPLIT_RATIO = 10;
+    private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
     private final UserShareRepository userShareRepository;
@@ -59,6 +60,7 @@ public class StockSplitService {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
         List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
+                .filter(stock -> !isEventStock(stock))
                 .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
                 .sorted(Comparator.comparing(Stock::getStreamerName))
                 .toList();
@@ -134,6 +136,10 @@ public class StockSplitService {
                 .stockNames(stockNames)
                 .createdAt(LocalDateTime.now(KST))
                 .build();
+    }
+
+    private boolean isEventStock(Stock stock) {
+        return stock.getChannelId() != null && stock.getChannelId().startsWith(EVENT_CHANNEL_PREFIX);
     }
 
     private void sendAfterCommit(Runnable task) {
