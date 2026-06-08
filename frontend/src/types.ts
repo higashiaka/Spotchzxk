@@ -14,6 +14,8 @@ export interface LiveTrade {
   quantity: number;
   /** Executed price */
   price: number;
+  /** Executed trading value */
+  tradingValue?: number;
   /** Execution timestamp in Unix ms */
   timestamp: number;
 }
