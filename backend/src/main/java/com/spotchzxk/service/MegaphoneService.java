@@ -11,6 +11,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,9 +37,17 @@ public class MegaphoneService {
     private final UserRepository userRepository;
     private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public MegaphonePost useMegaphone(String uid, String channelId, String message) {
+        MegaphonePost[] result = new MegaphonePost[1];
+        tradeEngine.runWithUserLock(uid, () -> result[0] = transactionTemplate.execute(status ->
+                useMegaphoneLocked(uid, channelId, message)));
+        return result[0];
+    }
+
+    private MegaphonePost useMegaphoneLocked(String uid, String channelId, String message) {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
@@ -59,8 +70,10 @@ public class MegaphoneService {
 
         String normalizedMessage = normalizeMessage(message);
 
-        user.deductBalance(MEGAPHONE_PRICE);
-        userRepository.save(user);
+        if (userRepository.addToBalance(uid, MEGAPHONE_PRICE.negate()) != 1) {
+            throw new IllegalStateException("User not found.");
+        }
+        tradeEngine.evictUserCache(uid);
 
         MegaphonePost post = MegaphonePost.builder()
                 .id(UUID.randomUUID().toString())
@@ -73,10 +86,23 @@ public class MegaphoneService {
                 .createdAt(LocalDateTime.now(KST))
                 .build();
 
-        megaphonePostRepository.save(post);
-        messagingTemplate.convertAndSend("/topic/megaphone", post);
+        MegaphonePost savedPost = megaphonePostRepository.save(post);
+        sendAfterCommit(savedPost);
 
-        return post;
+        return savedPost;
+    }
+
+    private void sendAfterCommit(MegaphonePost post) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            messagingTemplate.convertAndSend("/topic/megaphone", post);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                messagingTemplate.convertAndSend("/topic/megaphone", post);
+            }
+        });
     }
 
     @Transactional(readOnly = true)

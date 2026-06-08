@@ -1,0 +1,151 @@
+package com.spotchzxk.service;
+
+import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.StockSplitEvent;
+import com.spotchzxk.entity.StockSplitNotice;
+import com.spotchzxk.policy.AntiWhalePolicy;
+import com.spotchzxk.repository.OrderRepository;
+import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.StockSplitEventRepository;
+import com.spotchzxk.repository.StockSplitNoticeRepository;
+import com.spotchzxk.repository.UserShareRepository;
+import com.spotchzxk.service.system.SystemSellPressureService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class StockSplitService {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final int SPLIT_THRESHOLD_PRICE = 1_000_000;
+    private static final int SPLIT_RATIO = 10;
+
+    private final StockRepository stockRepository;
+    private final UserShareRepository userShareRepository;
+    private final OrderRepository orderRepository;
+    private final StockSplitEventRepository stockSplitEventRepository;
+    private final StockSplitNoticeRepository stockSplitNoticeRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final TradeEngine tradeEngine;
+    private final CandleService candleService;
+    private final SystemSellPressureService systemSellPressureService;
+
+    @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Seoul")
+    @Transactional
+    public void performDailyStockSplit() {
+        LocalDate today = LocalDate.now(KST);
+        if (stockSplitNoticeRepository.existsBySplitDate(today)) {
+            log.info("Stock split already processed for {}.", today);
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now(KST);
+        LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
+        List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
+                .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
+                .sorted(Comparator.comparing(Stock::getStreamerName))
+                .toList();
+        if (targets.isEmpty()) {
+            log.info("No stocks exceeded the split threshold of {}.", SPLIT_THRESHOLD_PRICE);
+            return;
+        }
+
+        StockSplitNotice notice = createNotice(today, targets);
+        stockSplitNoticeRepository.saveAndFlush(notice);
+
+        for (Stock stock : targets) {
+            stock.applyStockSplit(SPLIT_RATIO);
+            userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
+            orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
+            tradeEngine.evictStockCache(stock.getChannelId());
+            candleService.evictStockCache(stock.getChannelId());
+            systemSellPressureService.evictStockState(stock.getChannelId());
+        }
+        stockRepository.saveAll(targets);
+        tradeEngine.evictAllPortfolioCaches();
+
+        long executedAt = System.currentTimeMillis();
+        LocalDateTime createdAt = now;
+        List<StockSplitEvent> events = targets.stream()
+                .map(stock -> StockSplitEvent.builder()
+                        .id(UUID.randomUUID().toString())
+                        .channelId(stock.getChannelId())
+                        .splitRatio(SPLIT_RATIO)
+                        .executedAt(executedAt)
+                        .createdAt(createdAt)
+                        .build())
+                .toList();
+        stockSplitEventRepository.saveAll(events);
+
+        List<Map<String, Object>> priceUpdates = targets.stream()
+                .map(stock -> Map.<String, Object>of(
+                        "channelId", stock.getChannelId(),
+                        "price", stock.getCurrentPrice()
+                ))
+                .toList();
+        sendAfterCommit(() -> {
+            messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+            for (Map<String, Object> priceUpdate : priceUpdates) {
+                String channelId = (String) priceUpdate.get("channelId");
+                messagingTemplate.convertAndSend("/topic/prices/" + channelId,
+                        Map.of("streamerId", channelId, "price", priceUpdate.get("price")));
+            }
+            messagingTemplate.convertAndSend("/topic/stock-split-notices", notice);
+        });
+
+        log.info("Applied {}:1 stock split to {} stocks: {}",
+                SPLIT_RATIO,
+                targets.size(),
+                targets.stream().map(Stock::getStreamerName).collect(Collectors.joining(", ")));
+    }
+
+    @Transactional(readOnly = true)
+    public StockSplitNotice getLatestNotice() {
+        return stockSplitNoticeRepository.findBySplitDate(LocalDate.now(KST)).orElse(null);
+    }
+
+    private StockSplitNotice createNotice(LocalDate today, List<Stock> targets) {
+        String stockNames = targets.stream()
+                .map(Stock::getStreamerName)
+                .collect(Collectors.joining(", "));
+        return StockSplitNotice.builder()
+                .id(UUID.randomUUID().toString())
+                .splitDate(today)
+                .thresholdPrice(SPLIT_THRESHOLD_PRICE)
+                .splitRatio(SPLIT_RATIO)
+                .stockCount(targets.size())
+                .stockNames(stockNames)
+                .createdAt(LocalDateTime.now(KST))
+                .build();
+    }
+
+    private void sendAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
+    }
+}

@@ -1,9 +1,10 @@
 package com.spotchzxk.service;
 
+import com.spotchzxk.entity.User;
 import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -11,34 +12,35 @@ public class ProfileService {
 
     private final UserRepository userRepository;
     private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public void changeNickname(String uid, String displayName) {
         String trimmed = displayName == null ? "" : displayName.trim();
         if (trimmed.isBlank()) {
-            throw new IllegalArgumentException("닉네임을 입력해 주세요.");
+            throw new IllegalArgumentException("Display name is required.");
         }
         if (trimmed.length() > 8) {
-            throw new IllegalArgumentException("닉네임은 최대 8자까지 가능합니다.");
+            throw new IllegalArgumentException("Display name can be at most 8 characters.");
         }
 
-        var user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        if (user.getNicknameChangeTickets() <= 0) {
-            throw new IllegalStateException("닉네임 변경권이 없습니다.");
-        }
-
-        user.changeDisplayName(trimmed);
-        user.useNicknameTicket();
-        userRepository.save(user);
-        tradeEngine.evictUserCache(uid);
+        tradeEngine.runWithUserLock(uid, () -> transactionTemplate.executeWithoutResult(status -> {
+            User user = userRepository.findById(uid)
+                    .orElseThrow(() -> new IllegalStateException("User not found."));
+            if (user.getNicknameChangeTickets() <= 0) {
+                throw new IllegalStateException("No nickname-change ticket available.");
+            }
+            if (userRepository.changeDisplayNameAndUseNicknameTicket(uid, trimmed) != 1) {
+                throw new IllegalStateException("No nickname-change ticket available.");
+            }
+            tradeEngine.evictUserCache(uid);
+        }));
     }
 
-    @Transactional
     public void updateRankingNicknamePublic(String uid, boolean isPublic) {
-        var user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        user.updateRankingVisibility(isPublic);
-        userRepository.save(user);
+        transactionTemplate.executeWithoutResult(status -> {
+            if (userRepository.updateRankingNicknamePublic(uid, isPublic) != 1) {
+                throw new IllegalStateException("User not found.");
+            }
+        });
     }
 }

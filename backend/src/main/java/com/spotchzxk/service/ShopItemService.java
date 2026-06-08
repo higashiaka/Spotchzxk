@@ -4,10 +4,11 @@ import com.spotchzxk.entity.User;
 import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 @RequiredArgsConstructor
@@ -18,35 +19,49 @@ public class ShopItemService {
 
     private final UserRepository userRepository;
     private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public Map<String, Object> purchase(String uid, String item) {
+        AtomicReference<Map<String, Object>> result = new AtomicReference<>();
+        tradeEngine.runWithUserLock(uid, () -> result.set(transactionTemplate.execute(status ->
+                purchaseLocked(uid, item))));
+        return result.get();
+    }
+
+    private Map<String, Object> purchaseLocked(String uid, String item) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalStateException("User not found."));
 
         BigDecimal price = switch (item) {
             case "nickname-change-ticket" -> NICKNAME_TICKET_PRICE;
             case "stock-add-ticket" -> STOCK_ADD_TICKET_PRICE;
-            default -> throw new IllegalArgumentException("알 수 없는 상품입니다.");
+            default -> throw new IllegalArgumentException("Unknown item.");
         };
 
         if (user.getCoinBalance().compareTo(price) < 0) {
-            throw new IllegalStateException("잔액이 부족합니다.");
+            throw new IllegalStateException("Insufficient balance.");
         }
 
-        user.deductBalance(price);
-        if ("nickname-change-ticket".equals(item)) {
-            user.addNicknameTicket();
-        } else {
-            user.addStockAddTicket();
+        if (userRepository.addToBalance(uid, price.negate()) != 1) {
+            throw new IllegalStateException("User not found.");
         }
-        userRepository.save(user);
+
+        if ("nickname-change-ticket".equals(item)) {
+            if (userRepository.addNicknameTicket(uid) != 1) {
+                throw new IllegalStateException("User not found.");
+            }
+        } else if (userRepository.addStockAddTicket(uid) != 1) {
+            throw new IllegalStateException("User not found.");
+        }
+
         tradeEngine.evictUserCache(uid);
 
+        User updated = userRepository.findById(uid)
+                .orElseThrow(() -> new IllegalStateException("User not found."));
         return Map.of(
-                "balance", user.getCoinBalance(),
-                "nicknameChangeTickets", user.getNicknameChangeTickets(),
-                "stockAddTickets", user.getStockAddTickets()
+                "balance", updated.getCoinBalance(),
+                "nicknameChangeTickets", updated.getNicknameChangeTickets(),
+                "stockAddTickets", updated.getStockAddTickets()
         );
     }
 }

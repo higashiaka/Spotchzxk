@@ -1,7 +1,8 @@
 package com.spotchzxk.service;
 
-import com.spotchzxk.entity.Stock;
 import com.spotchzxk.dto.OrderBookDto;
+import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.User;
 import com.spotchzxk.exception.ChannelNotFoundException;
 import com.spotchzxk.exception.InsufficientFollowerCountException;
 import com.spotchzxk.repository.OrderRepository;
@@ -10,11 +11,12 @@ import com.spotchzxk.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +31,7 @@ public class StockService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ChzzkApiClient chzzkApiClient;
     private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
     public List<Stock> getAllStocks() {
         return stockRepository.findAll();
@@ -58,7 +61,6 @@ public class StockService {
     /**
      * @return empty if stock already exists, filled if newly created with Chzzk API name.
      */
-    @Transactional
     public Optional<Stock> addStockIfNew(String userId, String channelId) {
         if (stockRepository.existsById(channelId)) {
             return Optional.empty();
@@ -83,20 +85,34 @@ public class StockService {
             throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
         }
 
-        var user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
-        if (user.getStockAddTickets() <= 0) {
-            throw new IllegalStateException("종목 추가 티켓이 없습니다.");
+        AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
+        tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
+                addStockIfNewLocked(userId, channelId, stock))));
+
+        result.get().ifPresent(savedStock ->
+                messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll()));
+        return result.get();
+    }
+
+    private Optional<Stock> addStockIfNewLocked(String userId, String channelId, Stock stock) {
+        if (stockRepository.existsById(channelId)) {
+            return Optional.empty();
         }
-        user.useStockAddTicket();
-        userRepository.save(user);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("User not found."));
+        if (user.getStockAddTickets() <= 0) {
+            throw new IllegalStateException("No stock-add ticket available.");
+        }
+        if (userRepository.useStockAddTicket(userId) != 1) {
+            throw new IllegalStateException("No stock-add ticket available.");
+        }
         tradeEngine.evictUserCache(userId);
 
         int listingPrice = calcListingPrice(stock.getFollowerCount());
         stock.finalizeListing(listingPrice, 100_000L);
         stockRepository.save(stock);
 
-        messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
         return Optional.of(stockRepository.findById(channelId).orElseThrow());
     }
 

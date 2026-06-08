@@ -10,6 +10,7 @@ import com.spotchzxk.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -37,6 +38,7 @@ public class PortfolioService {
     private final UserShareRepository userShareRepository;
     private final OrderRepository orderRepository;
     private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
     @Transactional
     public User getOrCreate(String userId) {
@@ -78,9 +80,9 @@ public class PortfolioService {
         return response;
     }
 
-    @Transactional
     public void resetPortfolio(String userId) {
-        tradeEngine.runWithUserLock(userId, () -> resetPortfolioLocked(userId));
+        tradeEngine.runWithUserLock(userId, () -> transactionTemplate.executeWithoutResult(status ->
+                resetPortfolioLocked(userId)));
     }
 
     private void resetPortfolioLocked(String userId) {

@@ -48,11 +48,31 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query("SELECT COUNT(u) FROM User u WHERE u.isBot = false AND u.isGuest = false")
     long countActiveUsers();
 
-    @Modifying(flushAutomatically = true)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.coinBalance = u.coinBalance + :delta WHERE u.id = :userId")
     int addToBalance(@Param("userId") String userId, @Param("delta") BigDecimal delta);
 
-    @Modifying(flushAutomatically = true)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.realizedProfit = u.realizedProfit + :delta WHERE u.id = :userId")
     int addToRealizedProfit(@Param("userId") String userId, @Param("delta") BigDecimal delta);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.nicknameChangeTickets = u.nicknameChangeTickets + 1 WHERE u.id = :userId")
+    int addNicknameTicket(@Param("userId") String userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.stockAddTickets = u.stockAddTickets + 1 WHERE u.id = :userId")
+    int addStockAddTicket(@Param("userId") String userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.stockAddTickets = u.stockAddTickets - 1 WHERE u.id = :userId AND u.stockAddTickets > 0")
+    int useStockAddTicket(@Param("userId") String userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.displayName = :displayName, u.nicknameChangeTickets = u.nicknameChangeTickets - 1 WHERE u.id = :userId AND u.nicknameChangeTickets > 0")
+    int changeDisplayNameAndUseNicknameTicket(@Param("userId") String userId, @Param("displayName") String displayName);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.rankingNicknamePublic = :isPublic WHERE u.id = :userId")
+    int updateRankingNicknamePublic(@Param("userId") String userId, @Param("isPublic") boolean isPublic);
 }
