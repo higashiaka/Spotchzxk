@@ -21,6 +21,7 @@ import java.util.List;
 public class ChzzkLivePollingService {
 
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
+    private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
@@ -50,7 +51,8 @@ public class ChzzkLivePollingService {
                 boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
                         handleLiveTransition(stock, status)));
                 if (changed) {
-                    messagingTemplate.convertAndSend("/topic/streamers", List.of(stock));
+                    stockRepository.findById(stock.getChannelId()).ifPresent(s ->
+                            messagingTemplate.convertAndSend("/topic/streamers", List.of(s)));
                 }
             } catch (Exception e) {
                 log.error("Failed to handle live transition for channel {}: {}",
@@ -85,7 +87,7 @@ public class ChzzkLivePollingService {
                 .filter(stock -> !isEventStock(stock))
                 .filter(this::isIntervalDue)
                 .sorted(Comparator.comparing(s ->
-                        s.getLiveStartedAt().plusMinutes(s.getDividendAccumulationCount() * 10L)))
+                        s.getLiveStartedAt().plusMinutes(s.getDividendAccumulationCount() * DIVIDEND_INTERVAL_MINUTES)))
                 .toList();
 
         for (Stock stock : dueStocks) {
@@ -120,7 +122,7 @@ public class ChzzkLivePollingService {
             return false;
         }
         long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
-        return elapsedMinutes / 10 > stock.getDividendAccumulationCount();
+        return elapsedMinutes / DIVIDEND_INTERVAL_MINUTES > stock.getDividendAccumulationCount();
     }
 
     private boolean isEventStock(Stock stock) {
@@ -128,22 +130,24 @@ public class ChzzkLivePollingService {
     }
 
     private void markStreamStarted(Stock stock) {
-        stock.startLive(LocalDateTime.now());
-        userShareRepository.snapshotPreStreamQuantities(stock.getChannelId());
-        long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
-        stock.updatePreStreamFloat(preStreamFloat);
-        stockRepository.save(stock);
+        Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
+        fresh.startLive(LocalDateTime.now());
+        userShareRepository.snapshotPreStreamQuantities(fresh.getChannelId());
+        long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
+        fresh.updatePreStreamFloat(preStreamFloat);
+        stockRepository.save(fresh);
         log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
-                stock.getChannelId(), preStreamFloat);
+                fresh.getChannelId(), preStreamFloat);
     }
 
     private void markStreamEnded(Stock stock, String status, boolean isBlocked) {
         if (isBlocked) {
             log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
         }
-        stock.endLive();
-        stockRepository.save(stock);
-        log.info("Stream ended ({}): channel={}", status, stock.getChannelId());
+        Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
+        fresh.endLive();
+        stockRepository.save(fresh);
+        log.info("Stream ended ({}): channel={}", status, fresh.getChannelId());
     }
 
     private boolean payIntervalIfDue(Stock stock) {
@@ -152,7 +156,7 @@ public class ChzzkLivePollingService {
         }
 
         long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
-        long completedIntervals = elapsedMinutes / 10;
+        long completedIntervals = elapsedMinutes / DIVIDEND_INTERVAL_MINUTES;
         long alreadyPaid = stock.getDividendAccumulationCount();
 
         if (completedIntervals <= alreadyPaid) {

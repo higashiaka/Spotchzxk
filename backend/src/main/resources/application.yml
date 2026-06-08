@@ -1,6 +1,6 @@
 system-sell:
   pressure:
-    enabled: true
+    enabled: false
     max-orders-per-tick: 1
     execution-chance-percent: 60
 

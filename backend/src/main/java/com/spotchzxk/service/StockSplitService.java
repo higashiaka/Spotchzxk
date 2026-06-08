@@ -48,16 +48,17 @@ public class StockSplitService {
     private final CandleService candleService;
     private final SystemSellPressureService systemSellPressureService;
 
-    @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 0/3 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyStockSplit() {
-        LocalDate today = LocalDate.now(KST);
-        if (stockSplitNoticeRepository.existsBySplitDate(today)) {
-            log.info("Stock split already processed for {}.", today);
+        LocalDateTime now = LocalDateTime.now(KST);
+        LocalDate today = now.toLocalDate();
+        int splitHour = now.getHour();
+        if (stockSplitNoticeRepository.existsBySplitDateAndSplitHour(today, splitHour)) {
+            log.info("Stock split already processed for {} {}:00.", today, splitHour);
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now(KST);
         LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
         List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
                 .filter(stock -> !isEventStock(stock))
@@ -69,7 +70,7 @@ public class StockSplitService {
             return;
         }
 
-        StockSplitNotice notice = createNotice(today, targets);
+        StockSplitNotice notice = createNotice(today, splitHour, targets);
         stockSplitNoticeRepository.saveAndFlush(notice);
 
         for (Stock stock : targets) {
@@ -120,16 +121,17 @@ public class StockSplitService {
 
     @Transactional(readOnly = true)
     public StockSplitNotice getLatestNotice() {
-        return stockSplitNoticeRepository.findBySplitDate(LocalDate.now(KST)).orElse(null);
+        return stockSplitNoticeRepository.findTopBySplitDateOrderByCreatedAtDesc(LocalDate.now(KST)).orElse(null);
     }
 
-    private StockSplitNotice createNotice(LocalDate today, List<Stock> targets) {
+    private StockSplitNotice createNotice(LocalDate today, int splitHour, List<Stock> targets) {
         String stockNames = targets.stream()
                 .map(Stock::getStreamerName)
                 .collect(Collectors.joining(", "));
         return StockSplitNotice.builder()
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
+                .splitHour(splitHour)
                 .thresholdPrice(SPLIT_THRESHOLD_PRICE)
                 .splitRatio(SPLIT_RATIO)
                 .stockCount(targets.size())

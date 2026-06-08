@@ -48,7 +48,7 @@ class ChzzkLivePollingServiceTest {
 
     @Test
     void payDueIntervalDividendsSkipsEventStocks() {
-        LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(11);
+        LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(61);
         when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(
                 stock("event-live-stock", true, liveStartedAt),
                 stock("real-live-channel", true, liveStartedAt)

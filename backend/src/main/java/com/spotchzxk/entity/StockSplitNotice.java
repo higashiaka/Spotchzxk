@@ -22,6 +22,9 @@ public class StockSplitNotice {
     private LocalDate splitDate;
 
     @Column(nullable = false)
+    private int splitHour;
+
+    @Column(nullable = false)
     private int thresholdPrice;
 
     @Column(nullable = false)

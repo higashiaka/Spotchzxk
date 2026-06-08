@@ -9,6 +9,6 @@ import java.util.Optional;
 
 @Repository
 public interface StockSplitNoticeRepository extends JpaRepository<StockSplitNotice, String> {
-    boolean existsBySplitDate(LocalDate splitDate);
-    Optional<StockSplitNotice> findBySplitDate(LocalDate splitDate);
+    boolean existsBySplitDateAndSplitHour(LocalDate splitDate, int splitHour);
+    Optional<StockSplitNotice> findTopBySplitDateOrderByCreatedAtDesc(LocalDate splitDate);
 }
