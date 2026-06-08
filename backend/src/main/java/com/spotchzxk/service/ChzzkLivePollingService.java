@@ -85,9 +85,9 @@ public class ChzzkLivePollingService {
         int paidCount = 0;
         List<Stock> dueStocks = stockRepository.findByIsLiveTrue().stream()
                 .filter(stock -> !isEventStock(stock))
-                .filter(this::isIntervalDue)
+                .filter(this::needsDividendIntervalUpdate)
                 .sorted(Comparator.comparing(s ->
-                        s.getLiveStartedAt().plusMinutes(s.getDividendAccumulationCount() * DIVIDEND_INTERVAL_MINUTES)))
+                        s.getLiveStartedAt().plusMinutes(effectiveDividendIntervalCount(s) * DIVIDEND_INTERVAL_MINUTES)))
                 .toList();
 
         for (Stock stock : dueStocks) {
@@ -117,12 +117,13 @@ public class ChzzkLivePollingService {
         }
     }
 
-    private boolean isIntervalDue(Stock stock) {
+    private boolean needsDividendIntervalUpdate(Stock stock) {
         if (stock.getLiveStartedAt() == null) {
             return false;
         }
-        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
-        return elapsedMinutes / DIVIDEND_INTERVAL_MINUTES > stock.getDividendAccumulationCount();
+        long completedIntervals = completedDividendIntervals(stock);
+        long recordedIntervals = stock.getDividendAccumulationCount();
+        return completedIntervals != recordedIntervals;
     }
 
     private boolean isEventStock(Stock stock) {
@@ -155,9 +156,16 @@ public class ChzzkLivePollingService {
             return false;
         }
 
-        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
-        long completedIntervals = elapsedMinutes / DIVIDEND_INTERVAL_MINUTES;
+        long completedIntervals = completedDividendIntervals(stock);
         long alreadyPaid = stock.getDividendAccumulationCount();
+
+        if (alreadyPaid > completedIntervals) {
+            stock.updateDividendAccumulation(completedIntervals);
+            stockRepository.save(stock);
+            log.info("Dividend interval count normalized for channel {}: intervals {} -> {}",
+                    stock.getChannelId(), alreadyPaid, completedIntervals);
+            return true;
+        }
 
         if (completedIntervals <= alreadyPaid) {
             return false;
@@ -172,5 +180,14 @@ public class ChzzkLivePollingService {
         log.info("Interval dividend paid for channel {}: intervals {} -> {}",
                 stock.getChannelId(), alreadyPaid, completedIntervals);
         return true;
+    }
+
+    private long completedDividendIntervals(Stock stock) {
+        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
+        return Math.max(0, elapsedMinutes / DIVIDEND_INTERVAL_MINUTES);
+    }
+
+    private long effectiveDividendIntervalCount(Stock stock) {
+        return Math.min(stock.getDividendAccumulationCount(), completedDividendIntervals(stock));
     }
 }

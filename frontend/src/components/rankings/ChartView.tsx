@@ -7,6 +7,18 @@ type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
 
 const DIVIDEND_INTERVAL_MS = 60 * 60 * 1000;
 
+const dividendRemainingMsFor = (s: Stock): number => {
+  if (!s.isLive || !s.liveStartedAt) return Number.NaN;
+  const startMs = new Date(s.liveStartedAt).getTime();
+  if (!Number.isFinite(startMs)) return Number.NaN;
+  const elapsedMs = Date.now() - startMs;
+  const completedIntervals = Math.max(0, Math.floor(elapsedMs / DIVIDEND_INTERVAL_MS));
+  const recordedIntervals = s.dividendAccumulationCount ?? 0;
+  const effectiveIntervals = Math.min(recordedIntervals, completedIntervals);
+  const nextMs = (effectiveIntervals + 1) * DIVIDEND_INTERVAL_MS;
+  return nextMs - elapsedMs;
+};
+
 /** Chart/ranking screen component.
  *  Sorts and displays stocks in ranking form by category
  *  (volume, value, surge, drop, new listing, dividend) */
@@ -64,10 +76,8 @@ export const ChartView = ({
   const list = useMemo(() => {
     const s = [...streamers];
     const remainingMs = (st: Stock): number => {
-      if (!st.isLive || !st.liveStartedAt) return Number.POSITIVE_INFINITY;
-      const startMs = new Date(st.liveStartedAt).getTime();
-      const nextMs = ((st.dividendAccumulationCount ?? 0) + 1) * DIVIDEND_INTERVAL_MS;
-      return nextMs - (Date.now() - startMs);
+      const ms = dividendRemainingMsFor(st);
+      return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
     };
 
     void tick;
@@ -116,15 +126,13 @@ export const ChartView = ({
   /** Calculates milliseconds remaining until next dividend.
    *  Returns -1 if not live or no start time */
   const dividendRemainingMs = (s: Stock): number => {
-    if (!s.isLive || !s.liveStartedAt) return -1;
     void tick; // Reference tick to force re-render every second
-    const startMs = new Date(s.liveStartedAt).getTime();
-    const nextMs = ((s.dividendAccumulationCount ?? 0) + 1) * DIVIDEND_INTERVAL_MS;
-    return nextMs - (Date.now() - startMs);
+    return dividendRemainingMsFor(s);
   };
 
   /** Converts remaining ms to mm:ss string */
   const fmtRemaining = (ms: number): string => {
+    if (!Number.isFinite(ms)) return '-';
     if (ms <= 0) return '곧 지급';
     const totalSecs = Math.floor(ms / 1000);
     const mins = Math.floor(totalSecs / 60);
