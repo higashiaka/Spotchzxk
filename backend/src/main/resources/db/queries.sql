@@ -1,5 +1,5 @@
 -- ============================================================
--- Spotchzxk — 운영/분석용 MySQL 쿼리 모음
+-- Spotchzxk — MySQL query collection for operations and analysis
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS spotchzxk
@@ -9,7 +9,7 @@ CREATE DATABASE IF NOT EXISTS spotchzxk
 USE spotchzxk;
 
 -- ============================================================
--- 0. DB 초기화 (테이블 생성 + 기존 데이터 전체 삭제 후 시드 재삽입)
+-- 0. DB initialization (create tables + delete all existing data then re-seed)
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -261,21 +261,21 @@ INSERT INTO streamers (id, name, price, total_volume, created_at) VALUES
 
 
 -- ============================================================
--- 1. 시장 현황
+-- 1. Market overview
 -- ============================================================
 
--- 전체 스트리머 시세 (거래량 내림차순, 마켓 보드 기준)
+-- All streamer prices (volume descending, market board basis)
 SELECT id, name, price, total_volume
 FROM streamers
 ORDER BY total_volume DESC;
 
--- 거래량 상위 10개 종목
+-- Top 10 stocks by trading volume
 SELECT id, name, price, total_volume
 FROM streamers
 ORDER BY total_volume DESC
 LIMIT 10;
 
--- 가격 상위/하위 10개 종목
+-- Top/bottom 10 stocks by price
 SELECT id, name, price
 FROM streamers
 ORDER BY price DESC
@@ -286,7 +286,7 @@ FROM streamers
 ORDER BY price ASC
 LIMIT 10;
 
--- 초기가($100) 대비 등락률
+-- Change rate vs initial price ($100)
 SELECT
     id,
     name,
@@ -295,15 +295,15 @@ SELECT
 FROM streamers
 ORDER BY change_pct DESC;
 
--- 거래 없는 종목 (볼륨 0)
+-- Stocks with no trades (volume 0)
 SELECT id, name FROM streamers WHERE total_volume = 0;
 
 
 -- ============================================================
--- 2. 포트폴리오 조회
+-- 2. Portfolio queries
 -- ============================================================
 
--- 특정 유저 포트폴리오 (잔고 + 보유 종목 + 평가금액)
+-- Specific user portfolio (balance + holdings + market value)
 SELECT
     p.user_id,
     p.balance,
@@ -315,10 +315,10 @@ SELECT
 FROM portfolios p
 LEFT JOIN portfolio_shares ps ON ps.user_id = p.user_id
 LEFT JOIN streamers s         ON s.id = ps.streamer_id
-WHERE p.user_id = 'YOUR_USER_ID'  -- ← 유저 UID로 교체
+WHERE p.user_id = 'YOUR_USER_ID'  -- ← replace with user UID
   AND (ps.quantity IS NULL OR ps.quantity > 0);
 
--- 특정 유저 총 자산 (잔고 + 주식 평가금액)
+-- Specific user total assets (balance + stock market value)
 SELECT
     p.user_id,
     p.balance,
@@ -330,7 +330,7 @@ LEFT JOIN streamers s         ON s.id = ps.streamer_id
 WHERE p.user_id = 'YOUR_USER_ID'
 GROUP BY p.user_id, p.balance;
 
--- 전체 유저 총 자산 순위 (리치 리스트)
+-- All user total asset ranking (rich list)
 SELECT
     p.user_id,
     ROUND(p.balance + COALESCE(SUM(ps.quantity * s.price), 0), 2) AS total_asset
@@ -341,19 +341,19 @@ GROUP BY p.user_id, p.balance
 ORDER BY total_asset DESC
 LIMIT 20;
 
--- 총 등록 유저 수
+-- Total number of registered users
 SELECT COUNT(*) AS total_users FROM portfolios;
 
--- 잔고가 초기값($10,000)에서 변하지 않은 유저 (거래 0회)
+-- Users whose balance has not changed from initial value ($10,000) (0 trades)
 SELECT user_id FROM portfolios WHERE balance = 10000.00
   AND user_id NOT IN (SELECT DISTINCT user_id FROM orders);
 
 
 -- ============================================================
--- 3. 거래 내역 조회
+-- 3. Trade history queries
 -- ============================================================
 
--- 특정 유저 최근 거래 15건
+-- Last 15 trades for a specific user
 SELECT
     o.id,
     o.type,
@@ -370,7 +370,7 @@ WHERE o.user_id = 'YOUR_USER_ID'
 ORDER BY o.created_at DESC
 LIMIT 15;
 
--- 특정 종목 전체 거래 내역
+-- All trade history for a specific stock
 SELECT
     o.user_id,
     o.type,
@@ -378,10 +378,10 @@ SELECT
     o.executed_price,
     FROM_UNIXTIME(o.created_at / 1000) AS traded_at
 FROM orders o
-WHERE o.streamer_id = 'chzzk-kangji'  -- ← 종목 ID로 교체
+WHERE o.streamer_id = 'chzzk-kangji'  -- ← replace with stock ID
 ORDER BY o.created_at DESC;
 
--- 오늘 하루 전체 거래량 및 거래 건수
+-- Total trading volume and order count for today
 SELECT
     COUNT(*)           AS total_orders,
     SUM(quantity)      AS total_volume,
@@ -390,7 +390,7 @@ SELECT
 FROM orders
 WHERE created_at >= UNIX_TIMESTAMP(CURDATE()) * 1000;
 
--- 종목별 오늘 거래 순매수량 (buy - sell)
+-- Net buy volume per stock today (buy - sell)
 SELECT
     o.streamer_id,
     s.name,
@@ -403,7 +403,7 @@ WHERE o.created_at >= UNIX_TIMESTAMP(CURDATE()) * 1000
 GROUP BY o.streamer_id, s.name
 ORDER BY net_vol DESC;
 
--- 가장 많이 거래된 종목 TOP 10 (전체 누적)
+-- Most traded stocks TOP 10 (all-time cumulative)
 SELECT
     o.streamer_id,
     s.name,
@@ -415,7 +415,7 @@ GROUP BY o.streamer_id, s.name
 ORDER BY total_qty DESC
 LIMIT 10;
 
--- 가장 활발한 유저 TOP 10
+-- Most active users TOP 10
 SELECT
     user_id,
     COUNT(*)        AS order_count,
@@ -427,49 +427,49 @@ LIMIT 10;
 
 
 -- ============================================================
--- 4. 관리자 / 유지보수
+-- 4. Admin / maintenance
 -- ============================================================
 
--- 관리자 목록 조회
+-- List admins
 SELECT user_id FROM admins;
 
--- 관리자 추가
+-- Add admin
 INSERT IGNORE INTO admins (user_id) VALUES ('FIREBASE_UID_HERE');
 
--- 관리자 제거
+-- Remove admin
 DELETE FROM admins WHERE user_id = 'FIREBASE_UID_HERE';
 
--- 게스트 디바이스 매핑 조회 (최근 10건)
+-- Query guest device mappings (last 10)
 SELECT fingerprint, uid, created_at
 FROM device_mappings
 ORDER BY created_at DESC
 LIMIT 10;
 
--- 특정 유저 포트폴리오 초기화 (잔고 $10,000, 주식 전체 삭제)
+-- Reset specific user portfolio (balance $10,000, delete all holdings)
 START TRANSACTION;
 UPDATE portfolios SET balance = 10000.00 WHERE user_id = 'TARGET_USER_ID';
 DELETE FROM portfolio_shares WHERE user_id = 'TARGET_USER_ID';
 COMMIT;
 
--- 전체 스트리머 가격 초기화 ($100, 볼륨 0)
+-- Reset all streamer prices ($100, volume 0)
 SET SQL_SAFE_UPDATES = 0;
 UPDATE streamers SET price = 100.00, total_volume = 0;
 SET SQL_SAFE_UPDATES = 1;
 
--- 특정 스트리머 가격 수동 조정
+-- Manually adjust a specific streamer price
 UPDATE streamers SET price = 150.00 WHERE id = 'chzzk-kangji';
 
--- 일일 볼륨 리셋 (TradeEngine의 @Scheduled와 동일한 작업)
+-- Daily volume reset (same operation as @Scheduled in TradeEngine)
 SET SQL_SAFE_UPDATES = 0;
 UPDATE streamers SET total_volume = 0;
 SET SQL_SAFE_UPDATES = 1;
 
 
 -- ============================================================
--- 5. 시장 통계 분석
+-- 5. Market statistics analysis
 -- ============================================================
 
--- 스트리머별 보유자 수 (주주 수)
+-- Number of holders per streamer (shareholder count)
 SELECT
     ps.streamer_id,
     s.name,
@@ -481,18 +481,18 @@ WHERE ps.quantity > 0
 GROUP BY ps.streamer_id, s.name
 ORDER BY holder_count DESC;
 
--- 특정 스트리머 주주 목록 + 보유 수량
+-- Specific streamer shareholder list + held quantities
 SELECT
     ps.user_id,
     ps.quantity,
     ROUND(ps.quantity * s.price, 2) AS market_value
 FROM portfolio_shares ps
 JOIN streamers s ON s.id = ps.streamer_id
-WHERE ps.streamer_id = 'chzzk-kangji'  -- ← 종목 ID로 교체
+WHERE ps.streamer_id = 'chzzk-kangji'  -- ← replace with stock ID
   AND ps.quantity > 0
 ORDER BY ps.quantity DESC;
 
--- 시간대별 거래 건수 (오늘, KST 기준)
+-- Trade count by hour (today, KST basis)
 SELECT
     HOUR(CONVERT_TZ(FROM_UNIXTIME(created_at / 1000), '+00:00', '+09:00')) AS hour_kst,
     COUNT(*) AS order_count,
@@ -502,7 +502,7 @@ WHERE created_at >= UNIX_TIMESTAMP(CURDATE()) * 1000
 GROUP BY hour_kst
 ORDER BY hour_kst;
 
--- 평균 체결가 vs 예상가 괴리 (슬리피지 분석)
+-- Average execution price vs estimated price deviation (slippage analysis)
 SELECT
     streamer_id,
     ROUND(AVG(executed_price - estimated_price), 4) AS avg_slippage,
@@ -512,14 +512,14 @@ WHERE executed_price IS NOT NULL
 GROUP BY streamer_id
 ORDER BY avg_abs_slippage DESC;
 
--- 전체 유저 총 잔고 합산 (시스템 내 현금 총량)
+-- Sum of all user balances (total cash in system)
 SELECT
     ROUND(SUM(balance), 2)  AS total_cash,
     COUNT(*)                AS user_count,
     ROUND(AVG(balance), 2)  AS avg_balance
 FROM portfolios;
 
--- 전체 시스템 시가총액 (발행된 주식 평가금액 총합)
+-- Total system market cap (sum of market value of all issued shares)
 SELECT
     ROUND(SUM(ps.quantity * s.price), 2) AS total_market_cap
 FROM portfolio_shares ps

@@ -5,14 +5,10 @@ import { fmt, priceColor, avatarColor } from '../../utils';
 import { useHoldings } from '../../hooks/useHoldings';
 import { OrderHistory } from '../../hooks/useTransactionHistory';
 
-/** 보유 종목 정렬 기준
- *  Sort key for the holdings list */
+/** Sort key for the holdings list */
 type SortKey = 'recent' | 'value' | 'pct' | 'name';
 
-/** 보유 주식 상세 화면 컴포넌트.
- *  전체 보유 종목을 정렬·필터링하여 손익 정보와 함께 표시
- *
- *  Holdings detail screen component.
+/** Holdings detail screen component.
  *  Displays all held stocks with P&L info; supports sorting. */
 export const HoldingsView = ({
   portfolio,
@@ -22,26 +18,25 @@ export const HoldingsView = ({
   onSelect,
   onBack,
 }: {
-  /** 포트폴리오 데이터 (잔고·보유주식·평단가) / Portfolio data (balance, shares, avgPrices) */
+  /** Portfolio data (balance, shares, avgPrices) */
   portfolio: any;
-  /** 전체 종목 목록 (현재가 조회용) / Full stock list for price lookup */
+  /** Full stock list for price lookup */
   streamers: Stock[];
-  /** 현재 사용자의 거래 내역 / Current user's transaction history */
+  /** Current user's transaction history */
   history: OrderHistory[];
-  /** 탭 전환 핸들러 / Tab navigation handler */
+  /** Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
-  /** 종목 선택 → 시세 상세로 이동하는 핸들러 / Handler to open stock detail in prices tab */
+  /** Handler to open stock detail in prices tab */
   onSelect: (s: Stock) => void;
   onBack: () => void;
 }) => {
-  /** 현재 정렬 기준 / Currently selected sort key */
+  /** Currently selected sort key */
   const [sortKey, setSortKey] = useState<SortKey>('recent');
 
-  /** 전체 보유 종목 목록 (DEFAULT_STOCKS 포함, 평가금액 내림차순 기본값)
-   *  Full holding list including DEFAULT_STOCKS, default order by market value desc */
+  /** Full holding list including DEFAULT_STOCKS, default order by market value desc */
   const { holdings, holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
-  /** 종목별 가장 최근 체결 시각 / Latest executed trade timestamp by stock */
+  /** Latest executed trade timestamp by stock */
   const latestTradeTimeByStock = useMemo(() => {
     const latest = new Map<string, number>();
     history
@@ -53,8 +48,7 @@ export const HoldingsView = ({
     return latest;
   }, [history]);
 
-  /** 정렬 기준에 따라 재정렬된 보유 종목 목록
-   *  Holdings re-sorted based on the selected sort key */
+  /** Holdings re-sorted based on the selected sort key */
   const sorted = useMemo(() => {
     return [...holdings].sort((a, b) => {
       if (sortKey === 'recent') {
@@ -70,16 +64,16 @@ export const HoldingsView = ({
     });
   }, [holdings, latestTradeTimeByStock, sortKey]);
 
-  /** 전체 보유 주식 평가금액 합산 / Sum of all holdings' market value */
+  /** Sum of all holdings' market value */
   const totalValue = holdings.reduce((sum, h) => sum + h.value, 0);
-  /** 전체 매입 원금 합산 / Sum of all holdings' cost basis */
+  /** Sum of all holdings' cost basis */
   const totalCost  = holdings.reduce((sum, h) => sum + h.avgPrice * h.qty, 0);
-  /** 총 손익 금액 / Total profit and loss in KRW */
+  /** Total profit and loss in KRW */
   const totalPnL   = totalValue - totalCost;
-  /** 총 손익률 (%) / Total P&L rate in % */
+  /** Total P&L rate in % */
   const totalPnLPct = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
 
-  /** 정렬 버튼 목록 / Sort button definitions */
+  /** Sort button definitions */
   const SORT_BUTTONS: { key: SortKey; label: string }[] = [
     { key: 'recent', label: '최근거래' },
     { key: 'value', label: '평가금액' },
@@ -90,8 +84,7 @@ export const HoldingsView = ({
   return (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
 
-      {/* ── 상단 헤더: 뒤로가기 + 제목 ──────────────────────────────
-          Top header: back button + title */}
+      {/* ── Top header: back button + title ───────────────────────────── */}
       <div
         className="flex items-center gap-3 px-4 py-3 shrink-0"
         style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #222A3A' }}
@@ -115,8 +108,7 @@ export const HoldingsView = ({
         </h1>
       </div>
 
-      {/* ── 요약 카드: 총 평가금액 · 손익 ────────────────────────────
-          Summary card: total market value and P&L */}
+      {/* ── Summary card: total market value and P&L ──────────────────── */}
       <div
         className="px-4 py-4 shrink-0"
         style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #222A3A' }}
@@ -143,8 +135,7 @@ export const HoldingsView = ({
         </div>
       </div>
 
-      {/* ── 정렬 버튼 바 ─────────────────────────────────────────────
-          Sort button bar */}
+      {/* ── Sort button bar ──────────────────────────────────────────── */}
       <div
         className="flex items-center gap-1 px-4 py-2.5 shrink-0"
         style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid #1A2232' }}
@@ -167,11 +158,10 @@ export const HoldingsView = ({
         ))}
       </div>
 
-      {/* ── 보유 종목 목록 ────────────────────────────────────────────
-          Holdings list */}
+      {/* ── Holdings list ────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto hide-scrollbar pb-24">
         {sorted.length === 0 ? (
-          /* 보유 종목 없음 상태 / Empty state */
+          /* Empty state */
           <div
             className="flex flex-col items-center justify-center h-full gap-3"
             style={{ color: 'var(--text-dim)' }}
@@ -193,9 +183,9 @@ export const HoldingsView = ({
         ) : (
           sorted.map((h) => {
             const { streamer: s, qty, value, pct, avgPrice } = h;
-            /** 주당 손익 / Per-share P&L */
+            /** Per-share P&L */
             const pnlPerShare = s.price - avgPrice;
-            /** 총 손익 금액 / Total P&L in KRW */
+            /** Total P&L in KRW */
             const pnlTotal    = pnlPerShare * qty;
 
             return (
@@ -206,7 +196,7 @@ export const HoldingsView = ({
                 className="w-full flex items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-white/5 active:bg-white/10"
                 style={{ borderBottom: '1px solid #1A2232' }}
               >
-                {/* 아바타 / Avatar */}
+                {/* Avatar */}
                 <div
                   className="w-11 h-11 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-black overflow-hidden"
                   style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}
@@ -216,7 +206,7 @@ export const HoldingsView = ({
                     : s.name.slice(0, 2)}
                 </div>
 
-                {/* 종목명 + 보유 정보 / Name + holding info */}
+                {/* Name + holding info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-white text-sm font-bold truncate">{s.name}</p>
@@ -234,7 +224,7 @@ export const HoldingsView = ({
                   </p>
                 </div>
 
-                {/* 평가금액 + 손익 / Market value + P&L */}
+                {/* Market value + P&L */}
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold font-mono text-white mb-0.5">
                     {fmt(value)}

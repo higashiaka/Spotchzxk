@@ -1,18 +1,26 @@
 package com.spotchzxk.repository;
 
 import com.spotchzxk.entity.Order;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
     List<Order> findTop50ByOrderByCreatedAtDesc();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") String id);
+
     @Query(value = """
             SELECT o.* FROM orders o
             JOIN users u ON u.id = o.user_id
@@ -29,7 +37,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(String streamerId, long fromMs, long toMs);
     Order findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(String streamerId, long beforeMs);
 
-    // 지정가 주문 조회
+    // Limit order lookup
     List<Order> findByStreamerIdAndStatusOrderByCreatedAtAsc(String streamerId, String status);
     List<Order> findByUserIdAndStatusOrderByCreatedAtDesc(String userId, String status);
 
@@ -41,12 +49,12 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query(value = "DELETE FROM orders WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") String userId);
 
-    // 유저의 PENDING 주문 일괄 취소 (포트폴리오 리셋 시 사용)
+    // Bulk cancel a user's PENDING orders (used when resetting portfolio)
     @Modifying
     @Query(value = "UPDATE orders SET status = 'cancelled' WHERE user_id = :userId AND status = 'pending'", nativeQuery = true)
     int cancelPendingOrdersByUserId(@Param("userId") String userId);
 
-    // 보유 한도 계산용 — 특정 유저의 종목별 미체결 매수 수량 합산
+    // For holding limit calculation — sums pending buy quantity per stock for a specific user
     @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
     long sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 
@@ -83,4 +91,15 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             LIMIT :limit
             """, nativeQuery = true)
     List<Object[]> findBidLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE orders
+            SET quantity = quantity * :ratio,
+                estimated_price = estimated_price / :ratio,
+                limit_price = CASE WHEN limit_price IS NULL THEN NULL ELSE limit_price / :ratio END
+            WHERE streamer_id = :streamerId
+              AND status = 'pending'
+            """, nativeQuery = true)
+    int applyPendingStockSplit(@Param("streamerId") String streamerId, @Param("ratio") int ratio);
 }

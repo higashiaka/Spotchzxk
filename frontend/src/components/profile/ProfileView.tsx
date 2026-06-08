@@ -8,10 +8,7 @@ import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { useHoldings } from '../../hooks/useHoldings';
 
-/** 프로필 화면 컴포넌트.
- *  미로그인 시 로그인 화면, 로그인 시 보유 주식·투자 요약·배당 내역·종목 추가·자금 초기화를 표시
- *
- *  Profile screen component.
+/** Profile screen component.
  *  Shows a login screen when not authenticated; when logged in, displays holdings,
  *  investment summary, dividend history, stock addition, and fund reset. */
 export const ProfileView = ({
@@ -19,80 +16,75 @@ export const ProfileView = ({
   onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
   onSelect: _onSelect, onNavigate,
 }: {
-  /** 로그인된 Firebase 사용자 (미로그인 시 null) / Authenticated Firebase user, null if not logged in */
+  /** Authenticated Firebase user, null if not logged in */
   user: User | null;
-  /** 서버에서 받아온 포트폴리오 데이터 / Portfolio data fetched from the server */
+  /** Portfolio data fetched from the server */
   portfolio: any;
-  /** 체결 주문 내역 배열 / Array of completed order records */
+  /** Array of completed order records */
   history: any[];
-  /** 전체 종목 목록 / Full list of stocks */
+  /** Full list of stocks */
   streamers: Stock[];
-  /** 현금 + 보유 주식 평가액의 합산 총 자산 / Total assets = cash balance + evaluated holdings */
+  /** Total assets = cash balance + evaluated holdings */
   totalAssets: number;
-  /** 관리자 여부 (현재 미사용, 향후 확장용) / Admin flag (currently unused, reserved for future use) */
+  /** Admin flag (currently unused, reserved for future use) */
   isAdmin: boolean;
-  /** Google 로그인 핸들러 / Google login handler */
+  /** Google login handler */
   onLoginGoogle: () => void;
-  /** 게스트 로그인 핸들러 / Guest login handler */
+  /** Guest login handler */
   onLoginGuest: () => void;
-  /** 로그아웃 핸들러 / Logout handler */
+  /** Logout handler */
   onLogout: () => void;
-  /** 포트폴리오 초기화 핸들러 / Portfolio reset handler */
+  /** Portfolio reset handler */
   onReset: () => void;
-  /** Google 계정 연동 핸들러 / Google account linking handler */
+  /** Google account linking handler */
   onLinkGoogle: () => void;
-  /** 초기화 요청 진행 중 여부 / Whether a reset request is in progress */
+  /** Whether a reset request is in progress */
   isResetting: boolean;
-  /** 오늘 남은 초기화 횟수 / Remaining reset count for today */
+  /** Remaining reset count for today */
   remainingResets: number;
-  /** 종목 선택 핸들러 / Stock selection handler */
+  /** Stock selection handler */
   onSelect: (s: Stock) => void;
-  /** 탭 이동 핸들러 / Tab navigation handler */
+  /** Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
   const queryClient = useQueryClient();
   const userGrade = !user?.isAnonymous && portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
-  /** 보유 주식 평가액 (총 자산 - 현금) / Evaluated holdings value (total assets minus cash) */
+  /** Evaluated holdings value (total assets minus cash) */
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
-  /** 누적 체결 주문 수 / Total number of completed orders */
+  /** Total number of completed orders */
   const orderCount = history?.length ?? 0;
-  /** 보유 종목 수 (기본 종목 포함) / Number of held stocks (including defaults) */
+  /** Number of held stocks (including defaults) */
   const { holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
-  /** DB displayName 변경 후 즉시 반영할 오버라이드 이름
-   *  Name override applied immediately after a backend displayName update */
+  /** Name override applied immediately after a backend displayName update */
   const [nameOverride, setNameOverride] = useState<string | null>(null);
-  /** 닉네임 편집 모드 여부 / Whether the nickname edit mode is active */
+  /** Whether the nickname edit mode is active */
   const [isEditingName, setIsEditingName] = useState(false);
-  /** 편집 중인 닉네임 입력값 / Current value of the nickname input */
+  /** Current value of the nickname input */
   const [nameInput, setNameInput] = useState('');
-  /** 닉네임 저장 요청 진행 중 여부 / Whether a nickname save request is in progress */
+  /** Whether a nickname save request is in progress */
   const [nameUpdating, setNameUpdating] = useState(false);
 
-  /** 오버라이드 → DB displayName → 기본값 순으로 표시할 현재 이름
-   *  Display name resolved from: override → backend displayName → default */
+  /** Display name resolved from: override → backend displayName → default */
   const currentName = nameOverride ?? (portfolio?.displayName || '트레이더');
   const nicknameChangeTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
   const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
 
-  /** 닉네임 편집 모드 시작: 현재 이름으로 입력값을 초기화
-   *  Starts nickname edit mode with the current name pre-filled */
+  /** Starts nickname edit mode with the current name pre-filled */
   const startEditName = () => {
     setNameInput(currentName);
     setIsEditingName(true);
   };
 
-  /** 닉네임 편집 취소 및 입력값 초기화
-   *  Cancels nickname editing and clears the input */
+  /** Cancels nickname editing and clears the input */
   const cancelEditName = () => {
     setIsEditingName(false);
     setNameInput('');
   };
 
-  /** 닉네임 저장: 서버에서 잔고 차감 후 DB displayName 변경
-   *  Saves the nickname via the server, which charges the user and updates the DB */
+  /** Saves the nickname via the server, which charges the user and updates the DB */
   const saveEditName = async () => {
     if (!user) return;
     const trimmed = nameInput.trim();
@@ -121,13 +113,12 @@ export const ProfileView = ({
     }
   };
 
-  /** 서버에서 받아온 배당 내역 배열 / Dividend history records fetched from the server */
+  /** Dividend history records fetched from the server */
   const [dividendHistory, setDividendHistory] = useState<any[]>([]);
-  /** 배당 내역 로드 완료 여부 (로딩 스피너 제어용) / Whether dividend history has finished loading */
+  /** Whether dividend history has finished loading */
   const [dividendHistoryLoaded, setDividendHistoryLoaded] = useState(false);
 
-  /** 서버에서 내 배당 내역을 가져와 상태에 반영
-   *  Fetches the user's dividend history from the server and updates state */
+  /** Fetches the user's dividend history from the server and updates state */
   const fetchDividendHistory = () => {
     apiFetch('/api/dividends/my')
       .then(res => res.ok ? res.json() : [])
@@ -135,23 +126,22 @@ export const ProfileView = ({
       .catch(() => setDividendHistoryLoaded(true));
   };
 
-  // 로그인(비익명) 시 배당 내역 초기 로드 / Load dividend history on login (non-anonymous)
+  // Load dividend history on login (non-anonymous)
   useEffect(() => {
     if (!user || user.isAnonymous) return;
     fetchDividendHistory();
   }, [user]);
 
-  // STOMP 구독: 배당 발생 시 목록 갱신
   // STOMP subscriptions: refresh list on any dividend event
   useEffect(() => {
     if (!user || user.isAnonymous) return;
 
-    // ① /topic/dividends: 구·신 백엔드 공통 — 전체 배당 이벤트 시 재조회
+    // ① /topic/dividends: shared across old/new backend — re-fetch on any dividend event
     const subGlobal = subscribeStomp('/topic/dividends', () => {
       fetchDividendHistory();
     });
 
-    // ② /topic/user-dividends/{uid}: 신 백엔드 전용 — 내 배당 데이터를 즉시 목록 선두에 삽입
+    // ② /topic/user-dividends/{uid}: new backend only — immediately prepend the user's dividend entry
     const subPersonal = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
       try {
         const entry = JSON.parse(message.body);
@@ -162,7 +152,7 @@ export const ProfileView = ({
           return [entry, ...prev].slice(0, 50);
         });
       } catch {
-        // parse 실패는 ① 재조회가 커버
+        // parse failures are covered by the ① re-fetch
       }
     });
 
@@ -172,15 +162,15 @@ export const ProfileView = ({
     };
   }, [user]);
 
-  /** 종목 추가 입력 URL / URL input for adding a new stock */
+  /** URL input for adding a new stock */
   const [addUrl, setAddUrl] = useState('');
-  /** 종목 추가 요청 상태 / Stock addition request status */
+  /** Stock addition request status */
   const [addStatus, setAddStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
-  /** 종목 추가 결과 메시지 / Result message for stock addition */
+  /** Result message for stock addition */
   const [addMsg, setAddMsg] = useState('');
 
-  /** 종목 추가 핸들러.
-   *  치지직 URL 또는 채널 ID를 파싱한 뒤 서버 POST /api/stocks 로 전송 */
+  /** Stock addition handler.
+   *  Parses a Chzzk URL or channel ID, then POSTs to /api/stocks */
   const handleAddStock = async () => {
     if (!addUrl.trim()) return;
 
@@ -241,7 +231,7 @@ export const ProfileView = ({
     setTimeout(() => setAddStatus('idle'), 3000);
   };
 
-  // 미로그인 시: 로그인 화면 렌더링 / Not logged in: render login screen
+  // Not logged in: render login screen
   if (!user) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8 text-center">
@@ -277,11 +267,10 @@ export const ProfileView = ({
 
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
-      {/* 프로필 카드: 아바타, 이름 편집, 등급 배지, 로그아웃 버튼
-          Profile card: avatar, name editing, grade badge, logout button */}
+      {/* Profile card: avatar, name editing, grade badge, logout button */}
       <div className="rounded-2xl border p-5 mb-4"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
-        {/* 상단 행: 아바타 + 이름 정보 + 로그아웃 */}
+        {/* Top row: avatar + name info + logout */}
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
             style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
@@ -333,7 +322,7 @@ export const ProfileView = ({
             로그아웃
           </button>
         </div>
-        {/* 닉네임 편집 폼: 카드 전체 너비 사용 */}
+        {/* Nickname edit form: spans the full card width */}
         {!user.isAnonymous && isEditingName && (
           <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
             <input
@@ -360,8 +349,7 @@ export const ProfileView = ({
         )}
       </div>
 
-      {/* Google 계정 미연동 시 연동 유도 배너
-          Prompt banner for linking a Google account when not yet linked */}
+      {/* Prompt banner for linking a Google account when not yet linked */}
       {(user.isAnonymous || !user.providerData.some(p => p.providerId === 'google.com')) && (
         <div className="rounded-2xl border p-4 mb-4 flex items-center gap-3"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
@@ -383,7 +371,7 @@ export const ProfileView = ({
         </div>
       )}
 
-      {/* 보유 주식 바로가기 버튼 / Holdings shortcut button */}
+      {/* Holdings shortcut button */}
       <button
         type="button"
         onClick={() => onNavigate('holdings')}
@@ -410,7 +398,7 @@ export const ProfileView = ({
         </svg>
       </button>
 
-      {/* 모의투자 요약 / Investment summary */}
+      {/* Investment summary */}
       <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
@@ -426,7 +414,7 @@ export const ProfileView = ({
         ))}
       </div>
 
-      {/* 배당 내역 (비익명 사용자만 표시) / Dividend history (non-anonymous users only) */}
+      {/* Dividend history (non-anonymous users only) */}
       {!user.isAnonymous && (
         <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>배당 내역</h3>
@@ -464,7 +452,7 @@ export const ProfileView = ({
         </div>
       )}
 
-      {/* 종목 추가: Google 연동 계정만 허용 / Stock addition: Google-linked accounts only */}
+      {/* Stock addition: Google-linked accounts only */}
       {user.providerData.some(p => p.providerId === 'google.com') ? (
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
@@ -504,7 +492,7 @@ export const ProfileView = ({
           </p>
         </div>
       )}
-      {/* 투자 자금 초기화 버튼 / Fund reset button */}
+      {/* Fund reset button */}
       <button
         type="button"
         onClick={onReset}
@@ -522,7 +510,7 @@ export const ProfileView = ({
         </span>
       </button>
 
-      {/* 지난 공지 바로가기 / Past announcements shortcut */}
+      {/* Past announcements shortcut */}
       <button
         type="button"
         onClick={() => onNavigate('announcements')}

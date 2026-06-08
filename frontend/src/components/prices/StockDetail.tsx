@@ -261,10 +261,10 @@ export const StockDetail = ({
         </div>
       </div>
 
-      {/* PC: 2열×2행 flat grid — row1 높이가 양쪽 stretch로 자동 맞춰짐 */}
+      {/* PC: 2-column × 2-row flat grid — row1 height auto-matched via stretch on both sides */}
       <div className="md:grid md:grid-cols-[minmax(0,1fr)_380px] md:gap-5">
 
-        {/* [row1 col1] 차트 카드 */}
+        {/* [row1 col1] chart card */}
         <div className="rounded-xl border p-4 mb-4 md:mb-0 flex flex-col gap-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid var(--border-card)' }}>
             <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
@@ -304,7 +304,7 @@ export const StockDetail = ({
           />
         </div>
 
-        {/* [row1 col2] 빠른 주문 (PC only) */}
+        {/* [row1 col2] quick order (PC only) */}
         <div className="hidden md:flex flex-col rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-white text-base font-bold mb-4">빠른 주문</h3>
           <OrderForm
@@ -318,7 +318,7 @@ export const StockDetail = ({
           />
         </div>
 
-        {/* [row2 col1] 모바일 버튼 + 모바일 체결내역 + 보유 현황 + 통계 */}
+        {/* [row2 col1] mobile buttons + mobile trade history + holdings + stats */}
         <div className="min-w-0">
           <div className="grid grid-cols-2 gap-2 mb-4 md:hidden">
             <button type="button" onClick={() => onOrder('buy')}

@@ -52,4 +52,5 @@ public class UserShare {
     public void updateOnSell(long newQuantity) {
         this.quantity = newQuantity;
     }
+
 }

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
@@ -46,4 +47,12 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.isBot = false AND u.isGuest = false")
     long countActiveUsers();
+
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE User u SET u.coinBalance = u.coinBalance + :delta WHERE u.id = :userId")
+    int addToBalance(@Param("userId") String userId, @Param("delta") BigDecimal delta);
+
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE User u SET u.realizedProfit = u.realizedProfit + :delta WHERE u.id = :userId")
+    int addToRealizedProfit(@Param("userId") String userId, @Param("delta") BigDecimal delta);
 }

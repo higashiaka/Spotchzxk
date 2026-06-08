@@ -10,8 +10,8 @@ import java.util.List;
 public class OrderBookDto {
     private String streamerId;
     private BigDecimal currentPrice;
-    private List<OrderBookEntry> asks; // 매도 호가 (가격 오름차순)
-    private List<OrderBookEntry> bids; // 매수 호가 (가격 내림차순)
+    private List<OrderBookEntry> asks; // Ask quotes (ascending price order)
+    private List<OrderBookEntry> bids; // Bid quotes (descending price order)
 
     @Getter
     @AllArgsConstructor

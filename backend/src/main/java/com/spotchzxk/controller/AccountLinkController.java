@@ -16,8 +16,8 @@ public class AccountLinkController {
     private final AccountLinkService accountLinkService;
 
     /**
-     * 게스트 계정을 현재 로그인된 Google 계정으로 병합한다.
-     * Firebase linkWithPopup이 auth/credential-already-in-use로 실패했을 때만 호출된다.
+     * Merges a guest account into the currently logged-in Google account.
+     * Only called when Firebase linkWithPopup fails with auth/credential-already-in-use.
      */
     @PostMapping("/link-google")
     public ResponseEntity<Void> linkGoogle(

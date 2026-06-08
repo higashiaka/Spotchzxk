@@ -1,4 +1,4 @@
-// ESLint 설정: TypeScript/React Hooks/React Refresh 규칙을 Vite 프로젝트에 적용합니다.
+// ESLint config: applies TypeScript/React Hooks/React Refresh rules to the Vite project.
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

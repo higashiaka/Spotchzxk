@@ -1,14 +1,14 @@
 -- ================================================================
--- SpotChzxk 데이터 롤백: 2026-05-20 21:00 KST 기준
--- 백업 없이 해당 시점 이후 데이터 역산 삭제
--- V25 (megaphone_posts), V26 (issued_shares) 스키마 반영
+-- SpotChzxk data rollback: as of 2026-05-20 21:00 KST
+-- Reverses and deletes data after that point without a backup
+-- Reflects V25 (megaphone_posts) and V26 (issued_shares) schema
 -- ================================================================
 
 -- 2026-05-20 21:00:00 KST = epoch ms
--- KST(UTC+9) 기준이므로 서버 timezone 무관하게 고정값 사용
+-- Using KST (UTC+9) as reference so the value is fixed regardless of server timezone
 USE spotchzxk;
 
--- serverTimezone=Asia/Seoul 확인됨 → KST 기준 그대로 사용
+-- serverTimezone=Asia/Seoul confirmed → use KST values as-is
 SET @rollback_ts_ms  = 1779278400000;        -- 2026-05-20 12:00:00 UTC (= KST 21:00)
 SET @rollback_dt_kst = '2026-05-20 21:00:00';
 
@@ -16,19 +16,19 @@ SET FOREIGN_KEY_CHECKS = 0;
 START TRANSACTION;
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 1. 유저 잔액 역산
---   삭제 예정인 completed 주문을 먼저 반영:
---   매수 역산 → 지불했던 금액 환불
---   매도 역산 → 받았던 금액 차감
---   배당 역산 → 받았던 배당 차감
+-- STEP 1. Reverse user balances
+--   Apply completed orders that will be deleted:
+--   Reverse buy  → refund the amount paid
+--   Reverse sell → deduct the amount received
+--   Reverse dividend → deduct dividends received
 -- ────────────────────────────────────────────────────────────────
 UPDATE users u
 SET coin_balance = coin_balance
     + COALESCE((
         SELECT SUM(
             CASE
-                WHEN type = 'buy'  THEN  executed_price * quantity   -- 매수 취소 → 환불
-                WHEN type = 'sell' THEN -(executed_price * quantity)  -- 매도 취소 → 차감
+                WHEN type = 'buy'  THEN  executed_price * quantity   -- reverse buy  → refund
+                WHEN type = 'sell' THEN -(executed_price * quantity)  -- reverse sell → deduct
                 ELSE 0
             END
         )
@@ -46,7 +46,7 @@ SET coin_balance = coin_balance
     ), 0)
 WHERE u.id != '__house__';
 
--- dividend_total 역산
+-- Reverse dividend_total
 UPDATE users u
 SET dividend_total = GREATEST(0, dividend_total - COALESCE((
     SELECT SUM(amount)
@@ -57,14 +57,14 @@ SET dividend_total = GREATEST(0, dividend_total - COALESCE((
 WHERE u.id != '__house__';
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 2. 보유 주식 수량 역산
+-- STEP 2. Reverse user share quantities
 -- ────────────────────────────────────────────────────────────────
 UPDATE user_shares us
 SET quantity = quantity + COALESCE((
     SELECT SUM(
         CASE
-            WHEN type = 'buy'  THEN -quantity   -- 매수 역산 → 감소
-            WHEN type = 'sell' THEN  quantity   -- 매도 역산 → 증가
+            WHEN type = 'buy'  THEN -quantity   -- reverse buy  → decrease
+            WHEN type = 'sell' THEN  quantity   -- reverse sell → increase
             ELSE 0
         END
     )
@@ -76,11 +76,11 @@ SET quantity = quantity + COALESCE((
       AND created_at > @rollback_ts_ms
 ), 0);
 
--- 수량 0 이하 행 제거
+-- Remove rows where quantity dropped to 0 or below
 DELETE FROM user_shares WHERE quantity <= 0;
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 3. 주가 복원 — 롤백 시점 직전 마지막 체결가
+-- STEP 3. Restore stock prices — last executed price just before the rollback point
 -- ────────────────────────────────────────────────────────────────
 UPDATE stocks s
 JOIN (
@@ -99,17 +99,17 @@ JOIN (
 SET s.current_price = last_trade.executed_price;
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 4. 롤백 시점 이후 데이터 삭제
+-- STEP 4. Delete data after the rollback point
 -- ────────────────────────────────────────────────────────────────
 DELETE FROM orders         WHERE created_at > @rollback_ts_ms;
 DELETE FROM dividend_logs  WHERE created_at > @rollback_dt_kst;
 DELETE FROM user_dividend_logs WHERE created_at > @rollback_dt_kst;
 
--- megaphone_posts: 테이블 자체가 2026-05-21 생성 → 전체 삭제
+-- megaphone_posts: table was created on 2026-05-21 → truncate entirely
 TRUNCATE TABLE megaphone_posts;
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 5. issued_shares 재계산 (V26 신규 컬럼)
+-- STEP 5. Recalculate issued_shares (new column in V26)
 -- ────────────────────────────────────────────────────────────────
 UPDATE stocks s
 SET issued_shares = (
@@ -120,12 +120,12 @@ SET issued_shares = (
 );
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 6. daily_volume 초기화 (어차피 새 거래로 채워짐)
+-- STEP 6. Reset daily_volume (will be repopulated by new trades anyway)
 -- ────────────────────────────────────────────────────────────────
 UPDATE stocks SET daily_volume = 0;
 
 -- ────────────────────────────────────────────────────────────────
--- STEP 7. 라이브 상태 초기화 (배당 풀, 시작시각 등)
+-- STEP 7. Reset live state (dividend pool, live start time, etc.)
 -- ────────────────────────────────────────────────────────────────
 UPDATE stocks
 SET dividend_pool                = 0,
@@ -134,11 +134,11 @@ SET dividend_pool                = 0,
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- 이상 없으면 커밋, 문제 있으면 ROLLBACK;
+-- COMMIT if everything looks correct, otherwise ROLLBACK;
 COMMIT;
 
 -- ================================================================
--- 실행 후 확인 쿼리
+-- Verification queries to run after execution
 -- ================================================================
 -- SELECT channel_id, streamer_name, current_price, issued_shares FROM stocks;
 -- SELECT u.id, u.coin_balance FROM users u WHERE u.id != '__house__' LIMIT 20;

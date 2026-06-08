@@ -12,6 +12,41 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_split_limit_policy_20260608',
+    title: '매수·배당 제한 해제 및 액면분할 안내',
+    date: '운영 정책 업데이트',
+    summary: '일반 종목 보유 제한과 배당 상한을 해제하고, 고가 종목은 매일 오전 9시 기준으로 10:1 액면분할을 적용합니다.',
+    sections: [
+      {
+        title: '제한 해제',
+        rows: [
+          { label: '매수 제한', value: '종목당 1,000주 보유 제한 해제', tone: 'accent' },
+          { label: '배당 제한', value: '보유 수량 전체 기준으로 배당 지급', tone: 'accent' },
+          { label: '신규 상장', value: '상장 후 24시간 200주 매수 제한은 유지', tone: 'danger' },
+        ],
+        note: '신규 상장 초기 보호 장치는 유지되며, 일반 보유 상한과 배당 상한만 해제됩니다.',
+      },
+      {
+        title: '액면분할 기준',
+        rows: [
+          { label: '실행 시간', value: '매일 오전 9시 KST', tone: 'accent' },
+          { label: '대상', value: '현재가 1,000,000원 초과 종목', tone: 'accent' },
+          { label: '비율', value: '10:1 액면분할', tone: 'accent' },
+        ],
+        note: '상장 후 24시간이 지나지 않은 종목은 신규 상장 제한 보호를 위해 액면분할 대상에서 제외됩니다.',
+      },
+      {
+        title: '분할 반영 방식',
+        rows: [
+          { label: '가격', value: '현재가와 기준가를 1/10로 조정', tone: 'accent' },
+          { label: '수량', value: '보유 수량과 미체결 지정가 주문 수량을 10배로 조정', tone: 'accent' },
+          { label: '차트', value: '분할 전 가격도 현재 기준으로 보정 표시', tone: 'accent' },
+        ],
+        note: '분할된 종목 목록은 당일 공지 팝업으로 안내됩니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_wash_trading_clawback',
     title: '자전거래 부당이득 회수 안내',
     date: '운영 조치',
@@ -45,7 +80,7 @@ export const announcements: AnnouncementItem[] = [
         title: '상장 정보',
         rows: [
           { label: '종목명', value: '궈바오', tone: 'accent' },
-          { label: '상장가', value: '10,000,000 코인', tone: 'accent' },
+          { label: '상장가', value: '10,000,000원', tone: 'accent' },
         ],
       },
       {
@@ -127,15 +162,15 @@ export const announcements: AnnouncementItem[] = [
       {
         title: '확성기 가격 인하',
         rows: [
-          { label: '변경 후', value: '3,000만 코인', tone: 'accent' },
-          { label: '기존', value: '10억 코인', tone: 'danger' },
+          { label: '변경 후', value: '3,000만원', tone: 'accent' },
+          { label: '기존', value: '10억원', tone: 'danger' },
         ],
       },
       {
         title: '종목 추가 티켓 가격 인하',
         rows: [
-          { label: '변경 후', value: '1,000만 코인', tone: 'accent' },
-          { label: '기존', value: '3,000만 코인', tone: 'danger' },
+          { label: '변경 후', value: '1,000만원', tone: 'accent' },
+          { label: '기존', value: '3,000만원', tone: 'danger' },
         ],
       },
       {
@@ -162,12 +197,12 @@ export const announcements: AnnouncementItem[] = [
       },
       {
         title: '닉네임 변경권 출시',
-        rows: [{ label: '비용', value: '1,000,000 코인', tone: 'accent' }],
+        rows: [{ label: '비용', value: '1,000,000원', tone: 'accent' }],
         note: '프로필 화면에서 이름 옆 편집 버튼으로 변경',
       },
       {
         title: '종목 추가 티켓 출시',
-        rows: [{ label: '비용', value: '30,000,000 코인', tone: 'accent' }],
+        rows: [{ label: '비용', value: '30,000,000원', tone: 'accent' }],
         note: '프로필 화면에서 치지직 채널 URL로 종목 추가',
       },
       {

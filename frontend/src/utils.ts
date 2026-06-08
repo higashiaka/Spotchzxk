@@ -1,26 +1,23 @@
-/** 초기 종목 기준가 (원) / Default base price for new stocks in KRW */
+/** Default base price for new stocks in KRW */
 export const BASE_PRICE = 1000;
 
-/** 게임 시작 시 지급되는 초기 투자금 (원) / Initial investment balance given at game start in KRW */
+/** Initial investment balance given at game start in KRW */
 export const INITIAL_BALANCE = 1_000_000;
 
-/** 숫자를 한국어 원화 형식으로 포맷 (1원 미만은 소수 2자리 표시)
- *  Formats a number as Korean KRW string; shows 2 decimal places below 1 KRW */
+/** Formats a number as Korean KRW string; shows 2 decimal places below 1 KRW */
 export const fmt = (value: number): string => {
   if (value < 1) return `${value.toFixed(2)}원`;
   return `${Math.round(value).toLocaleString('ko-KR')}원`;
 };
 
-/** 큰 숫자를 K/M 단위로 축약 (예: 1,200 → 1.2K)
- *  Abbreviates large numbers with K/M suffix (e.g. 1,200 → 1.2K) */
+/** Abbreviates large numbers with K/M suffix (e.g. 1,200 → 1.2K) */
 export const fmtCompact = (n: number): string => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return String(n);
 };
 
-/** 큰 원화 금액을 한국식 단위로 축약 (예: 140,000,000원 → 1.4억)
- *  Abbreviates large KRW amounts with Korean units (e.g. 140,000,000 KRW → 1.4억) */
+/** Abbreviates large KRW amounts with Korean-style short units (e.g. 140,000,000 KRW → "1.4 hundred million") */
 export const fmtCompactWon = (value: number): string => {
   const rounded = Math.round(value);
   if (Math.abs(rounded) >= 100_000_000) {
@@ -32,13 +29,11 @@ export const fmtCompactWon = (value: number): string => {
   return fmt(rounded);
 };
 
-/** 기준가 대비 현재가 등락률(%) 계산
- *  Calculates percentage return relative to the base price */
+/** Calculates percentage return relative to the base price */
 export const changePct = (price: number, basePrice: number = BASE_PRICE) =>
   ((price - basePrice) / basePrice) * 100;
 
-/** 전체 유저 중 상대 순위(rank: 1-indexed)를 기준으로 LoL 티어 라벨과 색상 반환
- *  Returns LoL-style tier label and color based on relative rank among all users */
+/** Returns LoL-style tier label and color based on relative rank among all users */
 export const grade = (rank: number, total: number): { label: string; color: string } => {
   if (total === 0) return { label: '아이언', color: '#6B6B6B' };
   const pct = ((total - rank) / total) * 100;
@@ -54,20 +49,17 @@ export const grade = (rank: number, total: number): { label: string; color: stri
   return { label: '아이언', color: '#6B6B6B' };
 };
 
-/** 등락률에 따른 색상 반환 (상승 빨강, 하락 파랑, 보합 회색)
- *  Returns display color based on price change: red for up, blue for down, gray for flat */
+/** Returns display color based on price change: red for up, blue for down, gray for flat */
 export const priceColor = (pct: number) =>
   pct > 0 ? '#FF5252' : pct < 0 ? '#3D8BFF' : '#888888';
 
-/** 아바타 배경에 사용되는 고정 색상 팔레트
- *  Fixed color palette used for avatar backgrounds */
+/** Fixed color palette used for avatar backgrounds */
 export const AVATAR_COLORS = [
   '#FF5252', '#3D8BFF', '#2F80ED', '#D4A017',
   '#FF9800', '#AB47BC', '#00BCD4', '#F06292',
 ];
 
-/** 이름 문자열을 해시해 팔레트에서 일관된 색상을 선택
- *  Hashes a name string to consistently pick a color from the palette */
+/** Hashes a name string to consistently pick a color from the palette */
 export const avatarColor = (name: string): string => {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;

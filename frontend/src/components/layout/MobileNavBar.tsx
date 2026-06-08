@@ -1,9 +1,6 @@
 import { AppTab } from '../../types';
 
-/** 하단 내비게이션 아이템 정의.
- *  tab: 탭 식별자, label: 표시 텍스트, path: SVG 아이콘 경로 데이터
- *
- *  Bottom navigation item definition.
+/** Bottom navigation item definition.
  *  tab: tab identifier, label: display text, path: SVG icon path data */
 const NAV_ITEMS: { tab: AppTab; label: string; path: string }[] = [
   { tab: 'home',    label: '홈',    path: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -14,18 +11,15 @@ const NAV_ITEMS: { tab: AppTab; label: string; path: string }[] = [
   { tab: 'profile', label: '내 정보', path: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
 ];
 
-/** 모바일 하단 고정 내비게이션 바 컴포넌트 (md 미만에서만 표시).
- *  블러 배경 + 아이콘 + 라벨로 구성된 탭 전환 바
- *
- *  Mobile bottom fixed navigation bar (visible only below md breakpoint).
+/** Mobile bottom fixed navigation bar (visible only below md breakpoint).
  *  Tab switcher with blur backdrop, icons, and labels */
 export const MobileNavBar = ({
   activeTab,
   onNavigate,
 }: {
-  /** 현재 활성 탭 / Currently active tab */
+  /** Currently active tab */
   activeTab: AppTab;
-  /** 탭 전환 핸들러 / Tab switch handler */
+  /** Tab switch handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
   return (
@@ -35,7 +29,7 @@ export const MobileNavBar = ({
         return (
           <button key={tab} type="button" onClick={() => onNavigate(tab)}
             className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${active ? 'mobile-nav-active' : 'mobile-nav-inactive'}`}
-            // 활성 탭은 녹색, 비활성은 희미한 색 / Active tab is green, inactive is dimmed
+            // Active tab is green, inactive is dimmed
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={path} />

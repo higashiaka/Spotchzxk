@@ -9,8 +9,12 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -37,13 +41,28 @@ public class DailyResetService {
 
         int resetUsers = userRepository.resetAllRankingStats();
 
-        // Broadcast the reset stocks list to all clients instantly
-        messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
-        messagingTemplate.convertAndSend("/topic/rankings-reset", java.util.Map.of(
-                "resetAt", java.time.LocalDateTime.now().toString(),
+        String resetAt = LocalDateTime.now().toString();
+        sendAfterCommit(() -> {
+            messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+            messagingTemplate.convertAndSend("/topic/rankings-reset", Map.of(
+                "resetAt", resetAt,
                 "resetUsers", resetUsers
-        ));
+            ));
+        });
         log.info("Daily reset completed successfully. Updated {} stocks and reset {} users ranking stats.",
                 stocks.size(), resetUsers);
+    }
+
+    private void sendAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 }

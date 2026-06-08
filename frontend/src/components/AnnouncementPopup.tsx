@@ -1,29 +1,91 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { latestAnnouncement } from './announcements/announcementData';
+import { apiFetch } from '../lib/api';
+import { subscribeStomp } from '../lib/stompClient';
 
-/** localStorage 키: 사용자가 '다시 보지 않기'를 선택했는지 기록
- *  localStorage key used to track if the user has permanently dismissed the popup */
-const NOTICE_KEY = latestAnnouncement.id;
+interface StockSplitNotice {
+  id: string;
+  splitDate: string;
+  thresholdPrice: number;
+  splitRatio: number;
+  stockCount: number;
+  stockNames: string;
+  createdAt: string;
+}
 
-/** 앱 최초 진입 시 업데이트 사항을 안내하는 팝업 컴포넌트.
- *  localStorage에 해제 기록이 없으면 표시되고,
- *  '다시 보지 않기'를 누르면 영구적으로 숨김 처리
- *
- *  Announcement popup that informs users of update changes on first visit.
- *  Shown unless already dismissed in localStorage;
- *  permanently hidden when the user clicks "Don't show again" */
 export default function AnnouncementPopup() {
-  const [visible, setVisible] = useState(() => localStorage.getItem(NOTICE_KEY) !== 'hidden');
+  const [stockSplitNotice, setStockSplitNotice] = useState<StockSplitNotice | null>(null);
+
+  useEffect(() => {
+    apiFetch('/api/announcements/stock-splits/latest')
+      .then(res => (res.ok ? res.json() : null))
+      .then((notice: StockSplitNotice | null) => {
+        if (notice) setStockSplitNotice(notice);
+      })
+      .catch(() => {});
+
+    const subscription = subscribeStomp('/topic/stock-split-notices', message => {
+      try {
+        setStockSplitNotice(JSON.parse(message.body) as StockSplitNotice);
+      } catch {
+        /* ignore malformed messages */
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const activeAnnouncement = useMemo(() => {
+    if (!stockSplitNotice) return latestAnnouncement;
+
+    const stockNames = stockSplitNotice.stockNames
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean)
+      .join(', ');
+
+    return {
+      id: `stock_split_${stockSplitNotice.id}`,
+      title: '액면분할 안내',
+      date: stockSplitNotice.splitDate,
+      summary: `${stockSplitNotice.stockCount}개 종목이 ${stockSplitNotice.splitRatio}:1 액면분할되었습니다.`,
+      sections: [
+        {
+          title: '분할 종목',
+          rows: [
+            {
+              label: '기준',
+              value: `${stockSplitNotice.thresholdPrice.toLocaleString()}원 초과`,
+              tone: 'accent' as const,
+            },
+            {
+              label: '비율',
+              value: `${stockSplitNotice.splitRatio}:1`,
+              tone: 'accent' as const,
+            },
+            {
+              label: '종목',
+              value: stockNames || '-',
+              tone: 'accent' as const,
+            },
+          ],
+          note: '보유 수량과 미체결 지정가 주문 수량/가격이 같은 비율로 조정되었습니다.',
+        },
+      ],
+    };
+  }, [stockSplitNotice]);
+
+  const noticeKey = activeAnnouncement.id;
+  const [visible, setVisible] = useState(() => localStorage.getItem(latestAnnouncement.id) !== 'hidden');
+
+  useEffect(() => {
+    setVisible(localStorage.getItem(noticeKey) !== 'hidden');
+  }, [noticeKey]);
 
   if (!visible) return null;
 
-  /** 팝업 닫기 함수.
-   *  permanent=true면 localStorage에 기록해 재방문 시에도 표시하지 않음
-   *
-   *  Closes the popup.
-   *  If permanent=true, writes to localStorage so it stays hidden on future visits */
   const dismiss = (permanent: boolean) => {
-    if (permanent) localStorage.setItem(NOTICE_KEY, 'hidden');
+    if (permanent) localStorage.setItem(noticeKey, 'hidden');
     setVisible(false);
   };
 
@@ -36,7 +98,6 @@ export default function AnnouncementPopup() {
         className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel"
         onClick={e => e.stopPropagation()}
       >
-        {/* 닫기 버튼 (이번 세션만) / Close button (this session only) */}
         <button
           className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
           onClick={() => dismiss(false)}
@@ -44,15 +105,13 @@ export default function AnnouncementPopup() {
           X
         </button>
 
-        {/* 공지 제목 / Announcement title */}
         <div className="flex items-center gap-2">
           <span className="text-accent text-xl">$</span>
-          <span className="font-bold text-white text-base">{latestAnnouncement.title}</span>
+          <span className="font-bold text-white text-base">{activeAnnouncement.title}</span>
         </div>
 
-        {/* 변경 내용 설명 / Change description */}
         <div className="text-sm leading-relaxed text-secondary-token flex flex-col gap-3">
-          {latestAnnouncement.sections.map(section => (
+          {activeAnnouncement.sections.map(section => (
             <div key={section.title}>
               <p className="text-white font-semibold mb-1.5">{section.title}</p>
               <div className="rounded-xl p-3 text-sm modal-panel">
@@ -68,16 +127,13 @@ export default function AnnouncementPopup() {
           ))}
         </div>
 
-        {/* 버튼 영역 / Action buttons */}
         <div className="flex flex-col gap-2 mt-1">
-          {/* 확인 (이번 세션만 닫기) / Confirm (close for this session only) */}
           <button
             className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80 accent-button"
             onClick={() => dismiss(false)}
           >
             확인
           </button>
-          {/* 영구 숨김 / Permanently dismiss */}
           <button
             className="w-full py-2.5 rounded-xl text-sm transition-colors text-dim-token border border-[#1E2330]"
             onClick={() => dismiss(true)}

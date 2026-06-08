@@ -2,7 +2,9 @@ package com.spotchzxk.service;
 
 import com.spotchzxk.dto.OhlcCandle;
 import com.spotchzxk.entity.Order;
+import com.spotchzxk.entity.StockSplitEvent;
 import com.spotchzxk.repository.OrderRepository;
+import com.spotchzxk.repository.StockSplitEventRepository;
 import com.spotchzxk.repository.StockRepository;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
@@ -24,11 +26,13 @@ class CandleServiceTest {
 
     private final OrderRepository orderRepository = mock(OrderRepository.class);
     private final StockRepository stockRepository = mock(StockRepository.class);
+    private final StockSplitEventRepository stockSplitEventRepository = mock(StockSplitEventRepository.class);
     private final SimpMessagingTemplate messagingTemplate = mock(SimpMessagingTemplate.class);
 
     private final CandleService service = new CandleService(
             orderRepository,
             stockRepository,
+            stockSplitEventRepository,
             messagingTemplate
     );
 
@@ -61,6 +65,35 @@ class CandleServiceTest {
                         order(stockId, timestamp, 1_000),
                         order(stockId, minuteStart + 60_000, 9_000)
                 ));
+
+        service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
+
+        ArgumentCaptor<Map<String, OhlcCandle>> update = ArgumentCaptor.forClass(Map.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/candles/" + stockId), update.capture());
+
+        OhlcCandle oneMinute = update.getValue().get("1m");
+        assertThat(oneMinute.getOpen()).isEqualTo(1_000);
+        assertThat(oneMinute.getHigh()).isEqualTo(1_000);
+        assertThat(oneMinute.getLow()).isEqualTo(1_000);
+        assertThat(oneMinute.getClose()).isEqualTo(1_000);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void onTradeAdjustsRestoredBucketPricesForLaterStockSplits() {
+        String stockId = "stock-1";
+        long minuteStart = 1_771_000_020_000L;
+        long timestamp = minuteStart + 5_000;
+        when(orderRepository.findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong()))
+                .thenReturn(List.of(order(stockId, timestamp, 10_000)));
+        when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
+                .thenReturn(List.of(StockSplitEvent.builder()
+                        .id("split-1")
+                        .channelId(stockId)
+                        .splitRatio(10)
+                        .executedAt(timestamp + 1)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build()));
 
         service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
 
@@ -133,6 +166,62 @@ class CandleServiceTest {
             assertThat(candle.getHigh()).isEqualTo(900);
             assertThat(candle.getLow()).isEqualTo(900);
             assertThat(candle.getClose()).isEqualTo(900);
+        });
+    }
+
+    @Test
+    void getCandlesAdjustsHistoricalPricesForLaterStockSplits() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long splitAt = base + 120_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of(order(stockId, base + 60_000L, 10_000)));
+        when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
+                .thenReturn(List.of(StockSplitEvent.builder()
+                        .id("split-1")
+                        .channelId(stockId)
+                        .splitRatio(10)
+                        .executedAt(splitAt)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build()));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
+
+        assertThat(candles.get(0).getClose()).isEqualTo(1_000);
+    }
+
+    @Test
+    void getCandlesAdjustsGapFallbackUsingSplitsBetweenPreviousOrderAndWindow() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long previousOrderAt = base - 120_000L;
+        long splitAt = base - 60_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of());
+        when(orderRepository.findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(eq(stockId), anyLong()))
+                .thenReturn(order(stockId, previousOrderAt, 10_000));
+        when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
+                .thenReturn(List.of(StockSplitEvent.builder()
+                        .id("split-1")
+                        .channelId(stockId)
+                        .splitRatio(10)
+                        .executedAt(splitAt)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build()));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
+
+        ArgumentCaptor<Long> splitLookupFrom = ArgumentCaptor.forClass(Long.class);
+        verify(stockSplitEventRepository)
+                .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), splitLookupFrom.capture());
+        assertThat(splitLookupFrom.getValue()).isEqualTo(previousOrderAt);
+        assertThat(candles).allSatisfy(candle -> {
+            assertThat(candle.getOpen()).isEqualTo(1_000);
+            assertThat(candle.getHigh()).isEqualTo(1_000);
+            assertThat(candle.getLow()).isEqualTo(1_000);
+            assertThat(candle.getClose()).isEqualTo(1_000);
         });
     }
 

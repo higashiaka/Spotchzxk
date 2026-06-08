@@ -41,7 +41,7 @@ public class MegaphoneService {
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
         if (user.getCoinBalance().compareTo(MEGAPHONE_PRICE) < 0) {
-            throw new IllegalStateException("잔액이 부족합니다. 확성기 사용에는 3천만 코인이 필요합니다.");
+            throw new IllegalStateException("잔액이 부족합니다. 확성기 사용에는 3천만원이 필요합니다.");
         }
 
         LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();

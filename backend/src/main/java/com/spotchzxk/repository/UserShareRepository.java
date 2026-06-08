@@ -1,7 +1,6 @@
 package com.spotchzxk.repository;
 
 import com.spotchzxk.entity.UserShare;
-import com.spotchzxk.policy.AntiWhalePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,8 +21,8 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
 
     Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
 
-    @Modifying
-    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + (LEAST(s.pre_stream_quantity, " + AntiWhalePolicy.DIVIDEND_CAP + ") * :calculatedRate), u.dividend_total = u.dividend_total + CASE WHEN u.is_guest = 0 THEN (LEAST(s.pre_stream_quantity, " + AntiWhalePolicy.DIVIDEND_CAP + ") * :calculatedRate) ELSE 0 END WHERE s.channel_id = :activeChannelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
+    @Modifying(clearAutomatically = true)
+    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + (s.pre_stream_quantity * :calculatedRate), u.dividend_total = u.dividend_total + CASE WHEN u.is_guest = 0 THEN (s.pre_stream_quantity * :calculatedRate) ELSE 0 END WHERE s.channel_id = :activeChannelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
     int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
 
     @Modifying
@@ -41,6 +40,16 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Query(value = "DELETE FROM user_shares WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") String userId);
 
-    @Query(value = "SELECT COALESCE(SUM(LEAST(pre_stream_quantity, " + AntiWhalePolicy.DIVIDEND_CAP + ")), 0) FROM user_shares WHERE channel_id = :channelId AND pre_stream_quantity > 0 AND user_id != '__house__'", nativeQuery = true)
+    @Query(value = "SELECT COALESCE(SUM(pre_stream_quantity), 0) FROM user_shares WHERE channel_id = :channelId AND pre_stream_quantity > 0 AND user_id != '__house__'", nativeQuery = true)
     long sumPreStreamQuantityByChannel(@Param("channelId") String channelId);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE user_shares
+            SET quantity = quantity * :ratio,
+                pre_stream_quantity = pre_stream_quantity * :ratio,
+                avg_price = CASE WHEN avg_price IS NULL THEN NULL ELSE avg_price / :ratio END
+            WHERE channel_id = :channelId
+            """, nativeQuery = true)
+    int applyStockSplit(@Param("channelId") String channelId, @Param("ratio") int ratio);
 }

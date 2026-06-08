@@ -5,8 +5,7 @@ import './index.css';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-/** 앱 전역 React Query 캐시 클라이언트
- *  Global React Query cache client for the entire app */
+/** Global React Query cache client for the entire app */
 const queryClient = new QueryClient();
 
 const rootElement = document.getElementById('root');

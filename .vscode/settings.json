@@ -1,4 +1,6 @@
 {
+    "files.encoding": "utf8",
+    "files.autoGuessEncoding": false,
     "java.compile.nullAnalysis.mode": "automatic",
     "java.configuration.updateBuildConfiguration": "interactive",
     "java.jdt.ls.java.home": "C:\\Program Files\\Microsoft\\jdk-17.0.18.8-hotspot",

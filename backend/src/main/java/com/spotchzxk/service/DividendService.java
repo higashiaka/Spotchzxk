@@ -4,7 +4,6 @@ import com.spotchzxk.entity.DividendLog;
 import com.spotchzxk.entity.Stock;
 import com.spotchzxk.entity.UserDividendLog;
 import com.spotchzxk.entity.UserShare;
-import com.spotchzxk.policy.AntiWhalePolicy;
 import com.spotchzxk.repository.DividendLogRepository;
 import com.spotchzxk.repository.UserDividendLogRepository;
 import com.spotchzxk.repository.UserShareRepository;
@@ -58,22 +57,21 @@ public class DividendService {
                             && !"__house__".equals(us.getUser().getId())
                             && !us.getUser().isBot())
                     .map(us -> {
-                        long cappedQty = Math.min(us.getPreStreamQuantity(), AntiWhalePolicy.DIVIDEND_CAP);
+                        long dividendQty = us.getPreStreamQuantity();
                         return UserDividendLog.builder()
                                 .userId(us.getUser().getId())
                                 .channelId(stock.getChannelId())
                                 .streamerName(stock.getStreamerName())
                                 .profileImageUrl(stock.getProfileImageUrl())
-                                .quantity(cappedQty)
+                                .quantity(dividendQty)
                                 .ratePerShare(ratePerShare)
-                                .amount(ratePerShare.multiply(BigDecimal.valueOf(cappedQty))
+                                .amount(ratePerShare.multiply(BigDecimal.valueOf(dividendQty))
                                         .setScale(2, RoundingMode.HALF_UP))
                                 .build();
                     })
                     .collect(Collectors.toList());
             userDividendLogRepository.saveAll(logs);
 
-            // 커밋 후 캐시 무효화
             // Evict user caches after transaction commits
             evictUserCachesAfterCommit(logs.stream()
                     .map(UserDividendLog::getUserId)
@@ -92,7 +90,6 @@ public class DividendService {
             log.info("Interval dividend for channel {}: price={}, ratePerShare={}, eligibleShares={}, {} users",
                     stock.getChannelId(), stock.getCurrentPrice(), ratePerShare, eligibleShares, updatedUsers);
 
-            // STOMP 메시지는 트랜잭션 커밋 후에 발송해야 프론트엔드가 REST 조회 시 새 데이터를 볼 수 있음
             // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
             final String now = LocalDateTime.now().toString();
             final Map<String, Object> globalPayload = Map.of(
@@ -103,7 +100,6 @@ public class DividendService {
                     "streamMinutes", 0L,
                     "createdAt", now
             );
-            // 유저별 개인 배당 알림 페이로드 목록
             // Per-user personal dividend notification payloads
             final List<Map<String, Object>> userPayloads = logs.stream()
                     .map(ul -> Map.<String, Object>of(
@@ -121,10 +117,8 @@ public class DividendService {
                     .collect(Collectors.toList());
 
             sendAfterCommit(() -> {
-                // 전체 배당 피드 브로드캐스트
                 // Broadcast to global dividend feed
                 messagingTemplate.convertAndSend("/topic/dividends", globalPayload);
-                // 각 유저에게 개인 배당 내역 실시간 전송
                 // Send personal dividend entry to each user in real-time
                 for (int i = 0; i < userIds.size(); i++) {
                     messagingTemplate.convertAndSend("/topic/user-dividends/" + userIds.get(i), userPayloads.get(i));
@@ -150,8 +144,7 @@ public class DividendService {
         });
     }
 
-    /** 트랜잭션 커밋 후 작업을 실행. 트랜잭션 컨텍스트가 없으면 즉시 실행.
-     *  Runs the given task after the current transaction commits.
+    /** Runs the given task after the current transaction commits.
      *  Falls back to immediate execution if no active transaction. */
     private void sendAfterCommit(Runnable task) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {

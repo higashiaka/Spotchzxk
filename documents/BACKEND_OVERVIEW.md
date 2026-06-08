@@ -64,7 +64,7 @@ backend/src/main/java/com/spotchzxk/
 │   ├── AccountLinkService.java        # 게스트 계정 → Google 계정 데이터 이전 및 병합
 │   ├── GuestService.java              # 게스트 등록 — 디바이스 지문 중복 체크 → User 생성
 │   ├── ProfileService.java            # 닉네임 변경 (티켓 차감), 랭킹 공개 여부 설정
-│   ├── MegaphoneService.java          # 확성기 사용 — 라이브 확인, 코인 차감, 게시글 저장
+│   ├── MegaphoneService.java          # 확성기 사용 — 라이브 확인, 원화 잔액 차감, 게시글 저장
 │   ├── ShopItemService.java           # 상점 아이템 구매 — 닉네임 변경권/종목 추가권
 │   ├── OnlineUserService.java         # 접속자 수 관리 (WebSocket 세션 기반)
 │   ├── EnvResolver.java               # 환경변수/설정값 통합 접근 유틸
@@ -149,7 +149,7 @@ ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
               (due date 오래된 순 — FIFO)
               └─ DividendService.payIntervalDividend(stock)
                     ├─ ratePerShare = currentPrice × 0.007  (0.7%)
-                    ├─ preStreamQuantity > 0 인 보유자에게 코인 지급
+                    ├─ preStreamQuantity > 0 인 보유자에게 원화 지급
                     │     (제외: __house__ 계정, isBot=true)
                     ├─ UserDividendLog 저장
                     ├─ dividendAccumulationCount 증가
@@ -519,7 +519,7 @@ erDiagram
 인증: 필요  
 요청: `{ "channelId": "...", "message": "응원 메시지" }`  
 응답: `MegaphonePost`  
-제약: 가격 1,000,000,000 코인 / 1일 3회 / 라이브 중인 종목만
+제약: 가격 1,000,000,000원 / 1일 3회 / 라이브 중인 종목만
 
 #### `POST /api/shop/items/purchase` — 상점 아이템 구매
 인증: 필요  

@@ -127,4 +127,21 @@ public class Stock {
         this.totalSupply = totalSupply;
         this.issuedShares = 0;
     }
+
+    public void applyStockSplit(int ratio) {
+        if (ratio <= 1) {
+            throw new IllegalArgumentException("Split ratio must be greater than 1.");
+        }
+        this.currentPrice = splitPrice(this.currentPrice, ratio);
+        this.basePrice = splitPrice(this.basePrice, ratio);
+        this.listingPrice = splitPrice(this.listingPrice, ratio);
+        this.totalSupply *= ratio;
+        this.dailyVolume *= ratio;
+        this.issuedShares *= ratio;
+        this.preStreamFloat *= ratio;
+    }
+
+    private int splitPrice(int price, int ratio) {
+        return Math.max(1, Math.round((float) price / ratio));
+    }
 }

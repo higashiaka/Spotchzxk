@@ -37,12 +37,12 @@ public class Order {
     @Column(nullable = false, length = 20)
     private String status; // "completed" | "pending" | "cancelled"
 
-    /** 주문 방식: "market" | "limit" */
+    /** Order mode: "market" | "limit" */
     @Builder.Default
     @Column(name = "order_mode", nullable = false, length = 10)
     private String orderMode = "market";
 
-    /** 지정가 (limit 주문 시에만 설정) */
+    /** Limit price (set only for limit orders) */
     @Column(name = "limit_price", precision = 12, scale = 2)
     private BigDecimal limitPrice;
 
@@ -58,4 +58,5 @@ public class Order {
     public void cancel() {
         this.status = "cancelled";
     }
+
 }

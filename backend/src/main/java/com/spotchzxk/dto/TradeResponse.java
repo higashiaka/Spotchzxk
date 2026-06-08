@@ -12,7 +12,7 @@ public class TradeResponse {
     private BigDecimal executedPrice;
     private BigDecimal newBalance;
     private BigDecimal fee;
-    private String orderId;       // 주문 ID (지정가 취소 시 사용)
+    private String orderId;       // Order ID (used when cancelling a limit order)
     private String orderMode;     // "market" | "limit"
 }
 

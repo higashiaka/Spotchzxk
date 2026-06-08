@@ -349,7 +349,7 @@ public class BotActivityService {
 
     private User ensureBotUser(String userId, User existing) {
         if (existing == null) {
-            // 최초 생성 / First-time creation
+            // First-time creation
             User created = User.builder()
                     .id(userId)
                     .coinBalance(BOT_INITIAL_BALANCE)
@@ -358,7 +358,7 @@ public class BotActivityService {
             User saved = userRepository.save(created);
             return saved == null ? created : saved;
         }
-        // 이미 존재하는 경우: 실제 변경이 있을 때만 저장 / Only save if something needs fixing
+        // Already exists: only save if something needs fixing
         boolean modified = false;
         if (!existing.isBot()) { existing.markAsBot(); modified = true; }
         if (existing.getCoinBalance() == null) { existing.updateBalance(BOT_INITIAL_BALANCE); modified = true; }

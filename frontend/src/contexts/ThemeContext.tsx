@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-/** 지원하는 테마 타입 / Supported theme types */
+/** Supported theme types */
 export type Theme = 'dark' | 'light';
 
 interface ThemeContextValue {
-  /** 현재 테마 / Current theme */
+  /** Current theme */
   theme: Theme;
-  /** 테마 토글 함수 / Theme toggle function */
+  /** Theme toggle function */
   toggleTheme: () => void;
 }
 
@@ -15,11 +15,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   toggleTheme: () => {},
 });
 
-/** 테마 프로바이더 컴포넌트.
- *  localStorage에서 초기값을 읽어 html 요소에 .light-mode 클래스를 토글하고
- *  변경을 localStorage에 저장
- *
- *  Theme provider component.
+/** Theme provider component.
  *  Reads initial value from localStorage, toggles .light-mode on the html element,
  *  and persists changes to localStorage */
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
@@ -48,6 +44,5 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-/** useTheme 훅 — 현재 테마와 토글 함수를 반환
- *  useTheme hook — returns current theme and toggle function */
+/** useTheme hook — returns current theme and toggle function */
 export const useTheme = () => useContext(ThemeContext);

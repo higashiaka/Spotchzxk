@@ -30,7 +30,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
 
-    // Google 연동 완료 확인이 끝난 UID 캐시 — 재시작 전까지 반복 DB 조회 방지
+    // Cache of UIDs that have already been confirmed as Google-linked — prevents repeated DB lookups until restart
     private final Set<String> checkedUids = ConcurrentHashMap.newKeySet();
 
     @Override

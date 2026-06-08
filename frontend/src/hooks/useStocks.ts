@@ -7,8 +7,7 @@ import { LiveTrade } from '../types';
 export type { Stock } from '../data/stocks';
 export { DEFAULT_STOCKS };
 
-/** 백엔드 REST 응답을 클라이언트 Stock 모델로 변환
- *  Maps a raw backend response object to the client-side Stock model */
+/** Maps a raw backend response object to the client-side Stock model */
 function mapRawToStock(r: any): Stock {
   return {
     id: r.channelId || r.id,
@@ -27,17 +26,12 @@ function mapRawToStock(r: any): Stock {
   };
 }
 
-/** 종목 목록을 관리하는 훅.
- *  마운트 시 REST API로 전체 종목을 초기 로드하고,
- *  이후 STOMP /topic/streamers 및 /topic/trades 메시지로 실시간 병합 업데이트
- *
- *  Hook that manages the full list of stocks.
+/** Hook that manages the full list of stocks.
  *  Fetches all stocks via REST on mount, then applies
  *  real-time merge updates from STOMP /topic/streamers and /topic/trades */
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
 
-  // 초기 로드: REST API로 DB 전체 목록 가져오기
   // Initial load: fetch all stocks from the REST API
   useEffect(() => {
     apiFetch('/api/stocks')
@@ -46,10 +40,9 @@ export const useStocks = () => {
         if (!rawStocks || rawStocks.length === 0) return;
         setStocks(rawStocks.map(mapRawToStock));
       })
-      .catch(() => {/* 오프라인일 때는 DEFAULT_STOCKS 유지 / Keep DEFAULT_STOCKS when offline */});
+      .catch(() => {/* Keep DEFAULT_STOCKS when offline */});
   }, []);
 
-  // 실시간 업데이트: STOMP /topic/streamers 구독
   // Real-time update: subscribe to STOMP /topic/streamers
   useEffect(() => {
     const handleMessage = (rawStocks: any[]) => {
@@ -62,7 +55,7 @@ export const useStocks = () => {
           const db = dbMap.get(s.id);
           return db ? { ...s, ...db } : s;
         });
-        // DB에만 있는 새 종목 추가 / Append stocks that exist in DB but not in prev
+        // Append stocks that exist in DB but not in prev
         const prevIds = new Set(prev.map(s => s.id));
         dbStocks.forEach(s => { if (!prevIds.has(s.id)) merged.push(s); });
         return merged;
@@ -80,7 +73,6 @@ export const useStocks = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 체결 이벤트 반영: 가격과 일간 거래량을 즉시 갱신해 차트/랭킹을 실시간 재정렬
   // Apply trade events immediately so chart/ranking views re-sort in real time
   useEffect(() => {
     const subscription = subscribeStomp('/topic/trades', (message) => {

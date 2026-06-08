@@ -44,9 +44,9 @@ public class StockController {
             return ResponseEntity.badRequest().body(Map.of("error", "channelUrl is required"));
         }
 
-        // URL에서 채널 ID 추출
-        // 형식 1: https://chzzk.naver.com/61f73be23ed1d1d650ba24f268570036
-        // 형식 2: https://chzzk.naver.com/live/61f73be23ed1d1d650ba24f268570036
+        // Extract channel ID from URL
+        // Format 1: https://chzzk.naver.com/61f73be23ed1d1d650ba24f268570036
+        // Format 2: https://chzzk.naver.com/live/61f73be23ed1d1d650ba24f268570036
         String channelId = channelUrl;
         if (channelUrl.contains("chzzk.naver.com")) {
             try {

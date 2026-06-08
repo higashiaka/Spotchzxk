@@ -44,7 +44,7 @@ public class GuestService {
             return Map.of("canonicalUid", canonicalUid);
         }
 
-        // 다른 기기에서 같은 fingerprint → 커스텀 토큰 발급해서 재로그인 유도
+        // Same fingerprint from a different device → issue a custom token to prompt re-login
         String customToken = FirebaseAuth.getInstance().createCustomToken(canonicalUid);
         return Map.of("canonicalUid", canonicalUid, "customToken", customToken);
     }

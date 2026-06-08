@@ -114,6 +114,10 @@ public class SystemSellPressureService {
         return true;
     }
 
+    public void evictStockState(String channelId) {
+        states.remove(channelId);
+    }
+
     PressureState stateFor(String channelId, long now) {
         return states.compute(channelId, (ignored, existing) -> {
             if (existing == null || existing.expiresAtMs <= now) {

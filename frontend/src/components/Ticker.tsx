@@ -4,15 +4,11 @@ import { Stock } from '../hooks/useStocks';
 import { LiveTrade } from '../types';
 import { changePct, priceColorClass } from '../utils';
 
-/** 상단 수평 스크롤 티커 컴포넌트.
- *  최근 거래 종목 우선으로 종목 가격과 등락률을 무한 가로 스크롤로 표시.
- *  거래 내역이 부족하면 거래량·등락 절댓값 기준 종목으로 채움
- *
- *  Horizontal infinite-scroll ticker at the top of the screen.
+/** Horizontal infinite-scroll ticker at the top of the screen.
  *  Prioritizes recently traded stocks, falling back to volume/change-sorted stocks
  *  when trade history is insufficient */
 export const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrades: LiveTrade[] }) => {
-  /** 표시할 종목 배열 (무한 루프를 위해 2배 복제) / Stock list doubled for seamless loop */
+  /** Stock list doubled for seamless loop */
   const items = useMemo(() => {
     const recentIds: string[] = [];
     const seen = new Set<string>();
@@ -36,18 +32,18 @@ export const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrad
     return [...list, ...list];
   }, [streamers, liveTrades]);
 
-  /** 종목 수에 비례한 스크롤 애니메이션 duration (초) / Scroll duration proportional to item count */
+  /** Scroll duration proportional to item count */
   const duration = Math.max(20, (items.length / 2) * 4);
 
   if (items.length === 0) return null;
 
   return (
     <div className="relative overflow-hidden shrink-0 surface-sidebar border-bottom-primary">
-      {/* 좌우 그라디언트 페이드 오버레이 / Left and right gradient fade overlays */}
+      {/* Left and right gradient fade overlays */}
       <div className="absolute left-0 top-0 bottom-0 w-10 z-10 pointer-events-none ticker-fade-left" />
       <div className="absolute right-0 top-0 bottom-0 w-10 z-10 pointer-events-none ticker-fade-right" />
 
-      {/* 스크롤 트랙 / Scrolling track */}
+      {/* Scrolling track */}
       <div className="flex py-2 ticker-track" style={{ '--ticker-duration': `${duration}s` } as CSSProperties}>
         {items.map((s, i) => {
           const pct = changePct(s.price, s.basePrice);

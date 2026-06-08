@@ -9,7 +9,7 @@
     "systemArchitecture": {
         "marketDesign": {
             "initialListingPrice": 1000,
-            "currencyUnit": "Coin",
+            "currencyUnit": "KRW",
             "valuationMetrics": {
                 "excluded": [
                     "realtimeViewerCount"

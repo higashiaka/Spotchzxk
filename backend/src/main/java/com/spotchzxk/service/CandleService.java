@@ -3,8 +3,10 @@ package com.spotchzxk.service;
 import com.spotchzxk.dto.OhlcCandle;
 import com.spotchzxk.entity.Order;
 import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.StockSplitEvent;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
+import com.spotchzxk.repository.StockSplitEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -35,11 +37,12 @@ public class CandleService {
 
     private final OrderRepository orderRepository;
     private final StockRepository stockRepository;
+    private final StockSplitEventRepository stockSplitEventRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final Map<Long, Set<String>> tradedStockIdsByMinute = new ConcurrentHashMap<>();
     private final Map<String, OhlcCandle> currentBucketCandles = new ConcurrentHashMap<>();
 
-    // ── REST: DB 주문 기록 → 캔들 목록 반환 ──────────────────────────────────────
+    // ── REST: DB order history → return candle list ──────────────────────────────────────
 
     public List<OhlcCandle> getCandles(String stockId, String interval, int count, long beforeMs, long listedAtMs, double fallback) {
         long bucketMs = INTERVAL_MS.getOrDefault(interval, MS_1M);
@@ -52,18 +55,21 @@ public class CandleService {
                 : List.of();
         Order previousOrder = orderRepository
                 .findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(stockId, from);
+        long splitLookupFrom = previousOrder != null ? Math.min(from, previousOrder.getCreatedAt()) : from;
+        List<StockSplitEvent> splitEvents = stockSplitEventRepository
+                .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, splitLookupFrom);
         double gapFallback = previousOrder != null
-                ? previousOrder.getExecutedPrice().doubleValue()
+                ? adjustForLaterSplits(previousOrder.getExecutedPrice().doubleValue(), previousOrder.getCreatedAt(), splitEvents)
                 : fallback;
 
-        List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs);
+        List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs, splitEvents);
         List<OhlcCandle> result = "1m".equals(interval) ? oneMin : aggregate(oneMin, bucketMs);
 
         result = fillGaps(result, bucketMs, from, safeBeforeMs, gapFallback);
 
         result.removeIf(c -> c.getBucketStart() < listedAtMs);
         result.removeIf(c -> c.getBucketStart() >= safeBeforeMs);
-        // 상장 시각이 현재 버킷 중간이면 removeIf가 flat 캔들까지 제거할 수 있음 → 최소 1개 보장
+        // If the listing time falls mid-bucket, removeIf may strip even the flat candle → guarantee at least one
         if (result.isEmpty()) {
             long currentBucket = (System.currentTimeMillis() / bucketMs) * bucketMs;
             if (safeBeforeMs > currentBucket && currentBucket >= listedAtMs) {
@@ -74,7 +80,7 @@ public class CandleService {
         return new ArrayList<>(result.subList(from2, result.size()));
     }
 
-    // ── 거래 발생 시: 현재 각 봉 재계산 → STOMP 브로드캐스트 ─────────────────────
+    // ── On trade: recompute current buckets for each interval → STOMP broadcast ─────────────────────
 
     public synchronized void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
         long minuteStart = (timestamp / MS_1M) * MS_1M;
@@ -86,7 +92,11 @@ public class CandleService {
         messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
     }
 
-    // ── 1분마다: 라이브 종목 중 거래 없는 종목만 flat 캔들 브로드캐스트 ──────────
+    public synchronized void evictStockCache(String stockId) {
+        currentBucketCandles.keySet().removeIf(key -> key.startsWith(stockId + ":"));
+    }
+
+    // ── Every minute: broadcast flat candles only for live stocks with no recent trades ──────────
 
     @Scheduled(cron = "0 * * * * *")
     public void tick() {
@@ -98,7 +108,7 @@ public class CandleService {
         for (Stock stock : stockRepository.findByIsLiveTrue()) {
             String stockId = stock.getChannelId();
 
-            // 이번 분에 거래가 있었으면 onTrade 에서 이미 브로드캐스트됨 → 스킵
+            // If a trade occurred this minute, it was already broadcast by onTrade → skip
             if (tradedStockIds.contains(stockId)) continue;
 
             double price = stock.getCurrentPrice();
@@ -111,14 +121,14 @@ public class CandleService {
         }
     }
 
-    // ── 내부 유틸 ───────────────────────────────────────────────────────────────
+    // ── Internal utilities ───────────────────────────────────────────────────────────────
 
-    /** 주문 목록 → 1분봉 리스트 (갭 없이 거래 있는 봉만) */
-    private List<OhlcCandle> buildOneMin(List<Order> orders, long listedAtMs) {
+    /** Order list → 1-minute candle list (only candles with trades, no gap-filling) */
+    private List<OhlcCandle> buildOneMin(List<Order> orders, long listedAtMs, List<StockSplitEvent> splitEvents) {
         Map<Long, OhlcCandle> buckets = new LinkedHashMap<>();
         for (Order o : orders) {
             if (o.getCreatedAt() < listedAtMs || o.getExecutedPrice() == null) continue;
-            double price = o.getExecutedPrice().doubleValue();
+            double price = adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.getCreatedAt(), splitEvents);
             long bucket = (o.getCreatedAt() / MS_1M) * MS_1M;
             OhlcCandle c = buckets.get(bucket);
             if (c == null) {
@@ -134,7 +144,20 @@ public class CandleService {
         return new ArrayList<>(buckets.values());
     }
 
-    /** 1분봉 → 상위 interval 집계 */
+    private double adjustForLaterSplits(double price, long timestamp, List<StockSplitEvent> splitEvents) {
+        if (splitEvents == null || splitEvents.isEmpty()) {
+            return Math.max(1.0, price);
+        }
+        double adjusted = price;
+        for (StockSplitEvent event : splitEvents) {
+            if (event.getExecutedAt() > timestamp) {
+                adjusted /= event.getSplitRatio();
+            }
+        }
+        return Math.max(1.0, adjusted);
+    }
+
+    /** 1-minute candles → aggregated to higher interval */
     private List<OhlcCandle> aggregate(List<OhlcCandle> oneMin, long bucketMs) {
         Map<Long, OhlcCandle> buckets = new LinkedHashMap<>();
         for (OhlcCandle c : oneMin) {
@@ -154,8 +177,8 @@ public class CandleService {
     }
 
     /**
-     * 봉 사이 갭과 현재 봉까지 flat 캔들로 채움.
-     * 거래가 전혀 없으면 현재 봉 하나만 반환.
+     * Fills gaps between candles and up to the current bucket with flat candles.
+     * If there are no trades at all, returns a single flat candle for the current bucket.
      */
     private List<OhlcCandle> fillGaps(List<OhlcCandle> candles, long bucketMs, long fromMs, long beforeMs, double fallback) {
         long firstAllowedBucket = (fromMs / bucketMs) * bucketMs;
@@ -184,7 +207,7 @@ public class CandleService {
             filled.add(c);
         }
 
-        // 마지막 봉부터 요청한 before 이전 봉까지 채움
+        // Fill from the last candle up to the bucket just before the requested `before` time
         OhlcCandle last = filled.get(filled.size() - 1);
         for (long b = last.getBucketStart() + bucketMs; b <= lastAllowedBucket; b += bucketMs) {
             filled.add(flat(b, last.getClose()));
@@ -193,7 +216,7 @@ public class CandleService {
         return filled;
     }
 
-    /** 거래 발생 시점 기준으로 각 interval의 현재 봉 계산 */
+    /** Compute the current candle for each interval based on the trade timestamp */
     private Map<String, OhlcCandle> computeCurrentBuckets(String stockId, BigDecimal executedPrice, long timestamp) {
         double price = executedPrice.doubleValue();
         Map<String, OhlcCandle> result = new HashMap<>();
@@ -214,14 +237,16 @@ public class CandleService {
         }
 
         if (!cacheMisses.isEmpty()) {
-            // 캐시 미스 interval 전체를 단일 쿼리로 커버
+            // Cover all cache-miss intervals with a single query
             List<Order> orders = orderRepository
                     .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, minBucketStart);
+            List<StockSplitEvent> splitEvents = stockSplitEventRepository
+                    .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, minBucketStart);
             for (Map.Entry<String, Long> entry : cacheMisses.entrySet()) {
                 String interval = entry.getKey();
                 long bucketStart = entry.getValue();
                 long bucketEnd = bucketStart + INTERVAL_MS.get(interval);
-                OhlcCandle candle = restoreCurrentBucket(orders, bucketStart, bucketEnd, price);
+                OhlcCandle candle = restoreCurrentBucket(orders, bucketStart, bucketEnd, price, splitEvents);
                 currentBucketCandles.put(stockId + ":" + interval, candle);
                 result.put(interval, candle);
             }
@@ -230,7 +255,8 @@ public class CandleService {
         return result;
     }
 
-    private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, double fallbackPrice) {
+    private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, double fallbackPrice,
+                                            List<StockSplitEvent> splitEvents) {
         List<Order> inBucket = orders.stream()
                 .filter(o -> o.getCreatedAt() >= bucketStart
                         && o.getCreatedAt() < bucketEnd
@@ -241,10 +267,13 @@ public class CandleService {
             return flat(bucketStart, fallbackPrice);
         }
 
-        double open = inBucket.get(0).getExecutedPrice().doubleValue();
-        double close = inBucket.get(inBucket.size() - 1).getExecutedPrice().doubleValue();
-        double high = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).max().orElse(open);
-        double low = inBucket.stream().mapToDouble(o -> o.getExecutedPrice().doubleValue()).min().orElse(open);
+        List<Double> prices = inBucket.stream()
+                .map(o -> adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.getCreatedAt(), splitEvents))
+                .collect(Collectors.toList());
+        double open = prices.get(0);
+        double close = prices.get(prices.size() - 1);
+        double high = prices.stream().mapToDouble(Double::doubleValue).max().orElse(open);
+        double low = prices.stream().mapToDouble(Double::doubleValue).min().orElse(open);
 
         OhlcCandle candle = OhlcCandle.builder()
                 .bucketStart(bucketStart)

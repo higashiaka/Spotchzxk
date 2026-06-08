@@ -1,17 +1,23 @@
 package com.spotchzxk.service;
 
+import com.spotchzxk.entity.Stock;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class TradeEnginePricingTest {
 
@@ -54,5 +60,43 @@ class TradeEnginePricingTest {
         TradeEngine.TradePrices sell = tradeEngine.calculateTradePrices(secondBuy.finalPrice(), false, 1_000);
 
         assertThat(sell.finalPrice()).isEqualByComparingTo(BigDecimal.valueOf(10_000));
+    }
+
+    @Test
+    void newListingBuyLimitIncludesPendingBuyQuantityForMarketOrders() {
+        StockRepository stockRepository = mock(StockRepository.class);
+        OrderRepository orderRepository = mock(OrderRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                stockRepository,
+                orderRepository,
+                mock(SimpMessagingTemplate.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class)
+        );
+        String userId = "user-1";
+        String stockId = "stock-1";
+        when(stockRepository.findById(stockId)).thenReturn(Optional.of(Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .listedAt(LocalDateTime.now().minusHours(1))
+                .totalSupply(10_000)
+                .issuedShares(0)
+                .currentPrice(1_000)
+                .build()));
+        when(orderRepository.sumPendingBuyQuantity(userId, stockId)).thenReturn(80L);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                engine,
+                "validateTrade",
+                userId,
+                stockId,
+                true,
+                21,
+                BigDecimal.valueOf(21_000),
+                BigDecimal.valueOf(1_000_000),
+                100L
+        )).isInstanceOf(IllegalStateException.class);
     }
 }

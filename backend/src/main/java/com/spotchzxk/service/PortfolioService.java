@@ -80,6 +80,10 @@ public class PortfolioService {
 
     @Transactional
     public void resetPortfolio(String userId) {
+        tradeEngine.runWithUserLock(userId, () -> resetPortfolioLocked(userId));
+    }
+
+    private void resetPortfolioLocked(String userId) {
         User p = getOrCreate(userId);
 
         List<UserShare> shares = userShareRepository.findByUserId(userId);

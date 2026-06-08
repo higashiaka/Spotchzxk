@@ -1,37 +1,38 @@
 -- =============================================================================
--- Spotchzxk 데이터베이스 초기화 및 기본 세팅 쿼리
--- 파일 위치: documents/init_market.sql
+-- Spotchzxk database initialization and default setup queries
+-- File location: documents/init_market.sql
 -- =============================================================================
--- [주의] 실행 전에 만약의 사태를 대비해 기존 데이터를 반드시 백업하세요.
--- 이 쿼리문은 현재 최신 JPA Entity 구조 및 Flyway Migration(V5) 스키마에 맞춰 작성되었습니다.
+-- [WARNING] Always back up existing data before running this script.
+-- These queries are written to match the current JPA Entity structure and Flyway Migration (V5) schema.
 -- =============================================================================
 
 USE spotchzxk;
 
--- 안전 업데이트 비활성화 및 외래 키 제약 조건 일시 해제 (초기화 작업용)
+-- Disable safe update mode and temporarily disable foreign key checks (for initialization)
 SET SQL_SAFE_UPDATES = 0;
 SET FOREIGN_KEY_CHECKS = 0;
 
 
 -- =============================================================================
--- 방법 1. 기존 가입 유저 및 등록 스트리머 정보를 유지하면서 데이터만 리셋 (추천)
+-- Method 1. Reset data only while keeping registered users and streamer list (recommended)
 -- =============================================================================
--- 이 방식은 가입된 유저 계정(users)과 등록된 스트리머 목록(stocks)은 유지한 채,
--- 보유 주식(user_shares) 및 배당 이력(dividend_logs)을 지우고 잔고와 시세를 초기값으로 되돌립니다.
+-- Keeps registered user accounts (users) and streamer list (stocks) intact,
+-- while clearing holdings (user_shares) and dividend history (dividend_logs)
+-- and resetting balances and prices to their initial values.
 -- =============================================================================
 
--- 1. 보유 주식 내역, 배당 지급 로그, 주문 내역 전체 삭제 (Auto_Increment 리셋 포함)
+-- 1. Delete all holdings, dividend logs, and orders (including Auto_Increment reset)
 TRUNCATE TABLE user_shares;
 TRUNCATE TABLE dividend_logs;
 TRUNCATE TABLE orders;
 
--- 2. 모든 가입 유저의 잔고를 초기 금액인 10,000,000 Coin으로 초기화
--- (PortfolioService.java의 INITIAL_BALANCE = 10,000,000 기준)
+-- 2. Reset all registered users balances to the initial amount of 10,000,000
+-- (based on INITIAL_BALANCE = 10,000,000 in PortfolioService.java)
 UPDATE users
 SET coin_balance = 10000000.00;
 
--- 3. 모든 스트리머 종목(stocks) 처리
--- [선택 A] 기존 등록된 종목 리스트(stocks)를 유지하면서 가격 및 발행량만 초기값으로 리셋
+-- 3. Process all streamer stocks
+-- [Option A] Keep the existing stock list and reset only price and supply to initial values
 UPDATE stocks
 SET current_price = 1000,
     total_supply = 0,
@@ -39,19 +40,19 @@ SET current_price = 1000,
     base_price = 1000,
     is_live = FALSE;
 
--- [선택 B] 등록된 모든 종목 리스트(stocks)를 완전히 삭제하여 빈 상태로 만들기
--- (종목 리스트도 모두 삭제하고 싶은 경우, 위의 [선택 A] 대신 아래 쿼리의 주석을 해제하여 실행하세요)
+-- [Option B] Completely delete all registered stocks to start with an empty list
+-- (If you want to delete the stock list too, uncomment the query below instead of Option A)
 -- TRUNCATE TABLE stocks;
 
--- 4. 게스트 로그인 기기 매핑 정보 초기화 (필요시 아래 주석을 해제하고 실행하세요)
+-- 4. Reset guest login device mapping data (uncomment and run if needed)
 -- TRUNCATE TABLE device_mappings;
 
 
--- 외래 키 제약 조건 및 안전 업데이트 설정 원복
+-- Restore foreign key checks and safe update settings
 SET FOREIGN_KEY_CHECKS = 1;
 SET SQL_SAFE_UPDATES = 1;
 
--- 초기화 상태 확인을 위한 조회
+-- Query to verify the initialization state
 SELECT 'users (유저)' AS table_name, COUNT(*) AS count, MIN(coin_balance) AS min_val, MAX(coin_balance) AS max_val FROM users
 UNION ALL
 SELECT 'stocks (주식)', COUNT(*), MIN(current_price), MAX(current_price) FROM stocks
@@ -62,15 +63,15 @@ SELECT 'dividend_logs (배당로그)', COUNT(*), NULL, NULL FROM dividend_logs;
 
 
 -- =============================================================================
--- 방법 2. 테이블 완전 삭제(Drop) 후 스키마 처음부터 다시 생성 (완전 초기화용)
+-- Method 2. Drop all tables and recreate schema from scratch (full reset)
 -- =============================================================================
--- 데이터베이스 구조가 꼬였거나 완전히 깨끗한 상태에서 새 필드로 시작하고 싶을 때 사용합니다.
--- 실행하려면 아래 주석(/* ... */)을 완전히 해제하고 쿼리를 실행하세요.
+-- Use when the database structure is corrupted or you want to start clean with new fields.
+-- To run, fully uncomment the block below (/* ... */) and execute.
 -- =============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 
--- 기존 테이블 전체 Drop (연관 관계 역순으로 삭제)
+-- Drop all existing tables (in reverse dependency order)
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS dividend_logs;
 DROP TABLE IF EXISTS user_shares;
@@ -78,14 +79,14 @@ DROP TABLE IF EXISTS stocks;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS device_mappings;
 
--- 1. 유저 테이블 생성 (users)
+-- 1. Create users table
 CREATE TABLE users (
     id VARCHAR(128) NOT NULL,
     coin_balance DECIMAL(14,2) NOT NULL DEFAULT 0.00,
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. 스트리머 주식 테이블 생성 (stocks)
+-- 2. Create streamer stocks table (stocks)
 CREATE TABLE stocks (
     channel_id VARCHAR(50) NOT NULL,
     streamer_name VARCHAR(100) NOT NULL,
@@ -101,7 +102,7 @@ CREATE TABLE stocks (
     PRIMARY KEY (channel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. 유저 보유 주식 매핑 테이블 생성 (user_shares)
+-- 3. Create user holdings mapping table (user_shares)
 CREATE TABLE user_shares (
     share_id BIGINT AUTO_INCREMENT NOT NULL,
     user_id VARCHAR(128) NOT NULL,
@@ -114,7 +115,7 @@ CREATE TABLE user_shares (
     UNIQUE KEY uk_user_stock (user_id, channel_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. 배당금 지급 로그 테이블 생성 (dividend_logs)
+-- 4. Create dividend payout log table (dividend_logs)
 CREATE TABLE dividend_logs (
     log_id BIGINT AUTO_INCREMENT NOT NULL,
     channel_id VARCHAR(50) NOT NULL,
@@ -125,7 +126,7 @@ CREATE TABLE dividend_logs (
     CONSTRAINT fk_dl_stock FOREIGN KEY (channel_id) REFERENCES stocks(channel_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. 주문 내역 테이블 생성 (orders)
+-- 5. Create order history table (orders)
 CREATE TABLE orders (
     id              VARCHAR(36)   NOT NULL,
     user_id         VARCHAR(128)  NOT NULL,
@@ -144,7 +145,7 @@ CREATE TABLE orders (
     INDEX idx_orders_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. 게스트 기기 매핑 테이블 생성 (device_mappings)
+-- 6. Create guest device mapping table (device_mappings)
 CREATE TABLE device_mappings (
     fingerprint VARCHAR(128) NOT NULL,
     uid         VARCHAR(128) NOT NULL,
