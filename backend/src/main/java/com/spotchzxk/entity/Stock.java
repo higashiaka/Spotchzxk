@@ -73,7 +73,7 @@ public class Stock {
         if (listingPrice <= 0) listingPrice = Math.max(10_000, currentPrice);
     }
 
-    public void applyTrade(int executedPrice, boolean isBuy, int qty) {
+    public void applyTrade(int executedPrice, boolean isBuy, long qty) {
         this.currentPrice = executedPrice;
         this.dailyVolume += qty;
         if (isBuy) {

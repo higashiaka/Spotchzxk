@@ -93,7 +93,7 @@ class TradeEnginePricingTest {
                 userId,
                 stockId,
                 true,
-                21,
+                21L,
                 BigDecimal.valueOf(21_000),
                 BigDecimal.valueOf(1_000_000),
                 100L

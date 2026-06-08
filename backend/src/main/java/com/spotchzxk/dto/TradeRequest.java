@@ -19,8 +19,7 @@ public class TradeRequest {
     private String type;
 
     @Min(1)
-    @Max(10000)
-    private int quantity;
+    private long quantity;
 
     @NotNull
     @DecimalMin("0.01")

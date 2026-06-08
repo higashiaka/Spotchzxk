@@ -180,7 +180,7 @@ class BotActivityServiceTest {
         assertThat(handled).isTrue();
         assertThat(request.getValue().getType()).isEqualTo("sell");
         assertThat(request.getValue().getStreamerId()).isEqualTo("held");
-        assertThat(request.getValue().getQuantity()).isBetween(1, 8);
+        assertThat(request.getValue().getQuantity()).isBetween(1L, 8L);
     }
 
     @Test

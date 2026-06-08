@@ -26,7 +26,7 @@ public class Order {
     private String type; // "buy" or "sell"
 
     @Column(nullable = false)
-    private int quantity;
+    private long quantity;
 
     @Column(name = "estimated_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal estimatedPrice;
