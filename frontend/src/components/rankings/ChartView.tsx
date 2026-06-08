@@ -5,6 +5,8 @@ import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor } fr
 /** Category types selectable in the chart screen */
 type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
 
+const DIVIDEND_INTERVAL_MS = 60 * 60 * 1000;
+
 /** Chart/ranking screen component.
  *  Sorts and displays stocks in ranking form by category
  *  (volume, value, surge, drop, new listing, dividend) */
@@ -64,7 +66,7 @@ export const ChartView = ({
     const remainingMs = (st: Stock): number => {
       if (!st.isLive || !st.liveStartedAt) return Number.POSITIVE_INFINITY;
       const startMs = new Date(st.liveStartedAt).getTime();
-      const nextMs = ((st.dividendAccumulationCount ?? 0) + 1) * 10 * 60 * 1000;
+      const nextMs = ((st.dividendAccumulationCount ?? 0) + 1) * DIVIDEND_INTERVAL_MS;
       return nextMs - (Date.now() - startMs);
     };
 
@@ -117,7 +119,7 @@ export const ChartView = ({
     if (!s.isLive || !s.liveStartedAt) return -1;
     void tick; // Reference tick to force re-render every second
     const startMs = new Date(s.liveStartedAt).getTime();
-    const nextMs = ((s.dividendAccumulationCount ?? 0) + 1) * 10 * 60 * 1000;
+    const nextMs = ((s.dividendAccumulationCount ?? 0) + 1) * DIVIDEND_INTERVAL_MS;
     return nextMs - (Date.now() - startMs);
   };
 
