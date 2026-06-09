@@ -125,7 +125,7 @@ export function UserRankingView() {
                 >
                   {rankingType === 'donation'
                     ? fmtKorean(entry.value)
-                    : `${entry.value >= 0 ? '+' : ''}${fmt(entry.value)}`}
+                    : `${entry.value >= 0 ? '+' : ''}${fmtKorean(Math.abs(entry.value))}`}
                 </p>
               </div>
             </div>
