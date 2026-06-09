@@ -36,8 +36,10 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/health", "/api/guest/**", "/ws/**", "/api/auth/me", "/error").permitAll()
+                .requestMatchers("/health", "/ws/**", "/api/auth/me", "/error").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stocks", "/api/stocks/*/candles", "/api/orders/recent", "/api/orders/history", "/api/online-count", "/api/rankings", "/api/shop/megaphone/posts", "/api/announcements/stock-splits/latest").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/guest/precheck").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-google").hasRole("GOOGLE")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
                 .anyRequest().authenticated()
             )

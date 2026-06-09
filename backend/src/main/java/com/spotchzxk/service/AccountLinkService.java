@@ -1,7 +1,6 @@
 package com.spotchzxk.service;
 
 import com.spotchzxk.entity.User;
-import com.spotchzxk.repository.DeviceMappingRepository;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
@@ -18,7 +17,6 @@ public class AccountLinkService {
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
     private final OrderRepository orderRepository;
-    private final DeviceMappingRepository deviceMappingRepository;
     private final TradeEngine tradeEngine;
 
     /**
@@ -34,14 +32,14 @@ public class AccountLinkService {
         User guestUser = userRepository.findById(guestUid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게스트 계정을 찾을 수 없습니다."));
 
-        // If the Google account already exists in the users table, remove its existing shares/orders before overwriting
         if (userRepository.existsById(googleUid)) {
-            userShareRepository.deleteByUserId(googleUid);
-            // orders has no CASCADE DELETE, so delete explicitly
-            orderRepository.deleteByUserId(googleUid);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Google account already exists; refusing to overwrite it with guest data."
+            );
         }
 
-        // Create/update Google user (transfer guest balance and reset info as-is)
+        // Create Google user by transferring the guest balance and profile data.
         User googleUser = User.builder()
                 .id(googleUid)
                 .coinBalance(guestUser.getCoinBalance())
@@ -60,7 +58,6 @@ public class AccountLinkService {
         // Bulk-migrate all records that have a FK pointing to the guest over to the Google account
         userShareRepository.updateUserId(guestUid, googleUid);
         orderRepository.updateUserId(guestUid, googleUid);
-        deviceMappingRepository.updateUid(guestUid, googleUid);
 
         // Delete the guest user (user_shares and orders will be removed via ON DELETE CASCADE)
         userRepository.deleteById(guestUid);
