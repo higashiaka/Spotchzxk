@@ -250,7 +250,7 @@ function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         {presets.map((p) => (
           <button
             key={p}
@@ -271,7 +271,7 @@ function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId
 
       <div className="flex gap-2">
         <div
-          className="flex items-center flex-1 rounded-xl px-4"
+          className="flex items-center flex-1 min-w-0 rounded-xl px-4"
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', height: '48px' }}
         >
           <input
@@ -292,7 +292,7 @@ function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId
           type="button"
           disabled={!isValid || pending}
           onClick={handleDonate}
-          className="px-5 rounded-xl text-sm font-bold transition-opacity disabled:opacity-40"
+          className="px-5 shrink-0 rounded-xl text-sm font-bold transition-opacity disabled:opacity-40"
           style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', height: '48px' }}
         >
           {pending ? '...' : '후원'}

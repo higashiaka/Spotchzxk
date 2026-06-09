@@ -18,7 +18,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query(value = "SELECT * FROM users WHERE is_bot = 0 AND is_guest = 0 ORDER BY dividend_total DESC LIMIT 50", nativeQuery = true)
     List<User> findTop50ByIsBotFalseOrderByDividendTotalDesc();
 
-    @Query(value = "SELECT * FROM users WHERE is_bot = 0 AND is_guest = 0 ORDER BY donation_total DESC LIMIT 50", nativeQuery = true)
+    @Query(value = "SELECT * FROM users WHERE is_bot = 0 AND is_guest = 0 AND donation_total > 0 ORDER BY donation_total DESC LIMIT 50", nativeQuery = true)
     List<User> findTop50ByIsBotFalseOrderByDonationTotalDesc();
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
