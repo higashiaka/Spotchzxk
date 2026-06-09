@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { LiveTrade } from '../../types';
-import { changePct, priceColor, avatarColor, fmt, fmtCompact } from '../../utils';
+import { changePct, priceColor, avatarColor, fmt } from '../../utils';
 import { StockDetail } from './StockDetail';
 
 /** Prices screen component.
@@ -83,8 +83,7 @@ export const PricesView = ({
 
       {/* Column headers */}
       <div className="flex items-center text-xs font-bold uppercase tracking-wider px-4 mb-2" style={{ color: 'var(--text-dim)' }}>
-        <span className="flex-1">종목명</span>
-        <span className="w-28 text-right">현재가</span>
+        <span className="flex-1">종목 / 현재가</span>
         <span className="w-16 text-right">등락률</span>
       </div>
 
@@ -117,10 +116,9 @@ export const PricesView = ({
                   )}
                 </div>
                 {/* Volume summary */}
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtCompact(s.totalVolume)}</p>
-              </div>
-              <div className="w-28 text-right">
-                <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+                <div className="flex items-baseline mt-0.5">
+                  <p className="font-mono text-sm font-bold" style={{ color: priceColor(pct) }}>{fmt(s.price)}</p>
+                </div>
               </div>
               <div className="w-16 text-right">
                 <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
