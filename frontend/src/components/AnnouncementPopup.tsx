@@ -95,7 +95,7 @@ export default function AnnouncementPopup() {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
     >
       <div
-        className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel"
+        className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel max-h-[85vh]"
       >
         <button
           className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
@@ -109,7 +109,7 @@ export default function AnnouncementPopup() {
           <span className="font-bold text-white text-base">{activeAnnouncement.title}</span>
         </div>
 
-        <div className="text-sm leading-relaxed text-secondary-token flex flex-col gap-3">
+        <div className="text-sm leading-relaxed text-secondary-token flex flex-col gap-3 overflow-y-auto min-h-0 flex-1">
           {activeAnnouncement.sections.map(section => (
             <div key={section.title}>
               <p className="text-white font-semibold mb-1.5">{section.title}</p>
