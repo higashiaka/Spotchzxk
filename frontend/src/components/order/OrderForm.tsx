@@ -4,7 +4,7 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
+import { avatarColor, fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
@@ -151,9 +151,20 @@ export const OrderForm = ({
       {/* Selected stock display */}
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">선택 종목</p>
-        <div className="rounded-xl border px-3 py-2 surface-card-secondary border-primary-token">
-          <p className="text-white font-bold text-sm">
-            {streamer.name}
+        <div className="rounded-xl border px-3 py-2 flex items-center gap-2 surface-card-secondary border-primary-token">
+          <div className="shrink-0"
+            style={{ padding: 2, borderRadius: '50%', background: streamer.isLive ? '#22C55E' : 'transparent' }}>
+            <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-black"
+              style={{ backgroundColor: streamer.profileImageUrl ? 'transparent' : avatarColor(streamer.name) }}>
+              {streamer.profileImageUrl ? (
+                <img src={streamer.profileImageUrl} alt={streamer.name} className="w-full h-full object-cover" />
+              ) : (
+                streamer.name.slice(0, 2)
+              )}
+            </div>
+          </div>
+          <p className="text-white font-bold text-sm min-w-0">
+            <span className="truncate inline-block max-w-full align-bottom">{streamer.name}</span>
             <span className={`font-mono ml-2 ${priceColorClass(pct)}`}>
               ({fmt(currentPrice)})
             </span>

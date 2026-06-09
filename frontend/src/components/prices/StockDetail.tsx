@@ -7,7 +7,7 @@ import { usePortfolio } from '../../hooks/usePortfolio';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { apiFetch } from '../../lib/api';
 import { LiveTrade } from '../../types';
-import { fmt, fmtCompact, changePct, priceColor } from '../../utils';
+import { avatarColor, fmt, fmtCompact, changePct, priceColor } from '../../utils';
 import { InteractiveChart } from '../chart/InteractiveChart';
 import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
@@ -244,20 +244,40 @@ export const StockDetail = ({
 
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 pb-24 hide-scrollbar touch-pan-y">
-      <div className="mb-4 md:mb-5">
-        <h1 className="text-white text-xl md:text-3xl font-bold">{streamer.name}</h1>
-        <div className="flex items-baseline gap-3 mt-1">
-          <span className="text-2xl md:text-4xl font-black font-mono" style={{ color: priceColor(pct) }}>
-            {fmt(currentPrice)}
-          </span>
-          <span className="text-sm md:text-lg font-bold" style={{ color: priceColor(pct) }}>
-            {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
-          </span>
-          {direction !== 'none' && (
-            <span className="text-xs md:text-sm" style={{ color: priceColor(pct) }}>
-              {direction === 'up' ? '▲' : '▼'}
+      <div className="mb-4 md:mb-5 flex items-center gap-3 md:gap-4">
+        <div className="shrink-0"
+          style={{ padding: 3, borderRadius: '50%', background: streamer.isLive ? '#22C55E' : 'transparent' }}>
+          <div className="w-14 h-14 md:w-20 md:h-20 rounded-full overflow-hidden flex items-center justify-center text-white text-lg md:text-2xl font-black"
+            style={{ backgroundColor: streamer.profileImageUrl ? 'transparent' : avatarColor(streamer.name) }}>
+            {streamer.profileImageUrl ? (
+              <img src={streamer.profileImageUrl} alt={streamer.name} className="w-full h-full object-cover" />
+            ) : (
+              streamer.name.slice(0, 2)
+            )}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-white text-xl md:text-3xl font-bold truncate">{streamer.name}</h1>
+            {streamer.isLive && (
+              <span className="shrink-0 text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#FF3B3B26', color: '#FF3B3B' }}>
+                LIVE
+              </span>
+            )}
+          </div>
+          <div className="flex items-baseline gap-3 mt-1">
+            <span className="text-2xl md:text-4xl font-black font-mono" style={{ color: priceColor(pct) }}>
+              {fmt(currentPrice)}
             </span>
-          )}
+            <span className="text-sm md:text-lg font-bold" style={{ color: priceColor(pct) }}>
+              {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+            </span>
+            {direction !== 'none' && (
+              <span className="text-xs md:text-sm" style={{ color: priceColor(pct) }}>
+                {direction === 'up' ? '▲' : '▼'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
