@@ -29,6 +29,16 @@ export const fmtCompactWon = (value: number): string => {
   return fmt(rounded);
 };
 
+/** Formats a KRW amount with Korean units: 억 / 천만 / 만 (e.g. 123,456,789 → "1.23억원") */
+export const fmtKorean = (value: number): string => {
+  const abs = Math.abs(Math.round(value));
+  const trim = (s: string) => s.replace(/\.?0+$/, '');
+  if (abs >= 100_000_000) return `${trim((value / 100_000_000).toFixed(2))}억원`;
+  if (abs >= 10_000_000)  return `${trim((value / 10_000_000).toFixed(2))}천만원`;
+  if (abs >= 10_000)      return `${trim((value / 10_000).toFixed(1))}만원`;
+  return fmt(value);
+};
+
 /** Calculates percentage return relative to the base price */
 export const changePct = (price: number, basePrice: number = BASE_PRICE) =>
   ((price - basePrice) / basePrice) * 100;

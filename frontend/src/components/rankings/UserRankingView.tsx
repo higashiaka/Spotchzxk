@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
-import { avatarColor, fmt, priceColor } from '../../utils';
+import { avatarColor, fmt, fmtKorean, priceColor } from '../../utils';
 
 type RankingType = 'realized' | 'dividend' | 'donation';
 
@@ -124,7 +124,7 @@ export function UserRankingView() {
                   style={{ color: rankingType === 'donation' ? 'var(--text-secondary)' : priceColor(entry.value) }}
                 >
                   {rankingType === 'donation'
-                    ? fmt(entry.value)
+                    ? fmtKorean(entry.value)
                     : `${entry.value >= 0 ? '+' : ''}${fmt(entry.value)}`}
                 </p>
               </div>
