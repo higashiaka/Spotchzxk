@@ -92,11 +92,9 @@ export default function AnnouncementPopup() {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
-      onClick={() => dismiss(false)}
     >
       <div
         className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel"
-        onClick={e => e.stopPropagation()}
       >
         <button
           className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
