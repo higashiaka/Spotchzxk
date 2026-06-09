@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { UIEvent, useEffect, useMemo, useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor } from '../../utils';
 
 /** Category types selectable in the chart screen */
 type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
 
+const PAGE_SIZE = 30;
 const DIVIDEND_INTERVAL_MS = 60 * 60 * 1000;
 
 const dividendRemainingMsFor = (s: Stock): number => {
@@ -37,6 +38,10 @@ export const ChartView = ({
   const [volumeAsc, setVolumeAsc] = useState(false);
   /** Value sort direction */
   const [valueAsc, setValueAsc] = useState(false);
+  /** Price movement toggle direction (true=surge, false=drop) */
+  const [surgeAsc, setSurgeAsc] = useState(false);
+  /** Number of ranking rows currently visible */
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   /** 1-second tick for updating dividend countdown */
   const [tick, setTick] = useState(0);
 
@@ -49,31 +54,45 @@ export const ChartView = ({
 
   /** Category button click handler.
    *  Toggles sort direction when the same category is clicked again */
-  const handleCategoryClick = (key: ChartCategory) => {
+  const handleCategoryClick = (key: ChartCategory | 'price') => {
     if (key === 'volume' && category === 'volume') {
       setVolumeAsc(v => !v);
     } else if (key === 'value' && category === 'value') {
       setValueAsc(v => !v);
+    } else if (key === 'price') {
+      if (category === 'surge' || category === 'drop') {
+        setSurgeAsc(v => {
+          const next = !v;
+          setCategory(next ? 'surge' : 'drop');
+          return next;
+        });
+      } else {
+        setCategory(surgeAsc ? 'surge' : 'drop');
+      }
     } else {
       setCategory(key);
     }
   };
 
-  const volumeLabel = `거래량 ${volumeAsc ? '오름' : '내림'}`;
-  const valueLabel = `거래대금 ${valueAsc ? '오름' : '내림'}`;
+  const volumeLabel = `거래량 ${volumeAsc ? '↑' : '↓'}`;
+  const valueLabel = `거래대금 ${valueAsc ? '↑' : '↓'}`;
+  const priceLabel = `급${surgeAsc ? '상승' : '하락'}`;
 
   /** Category button definitions */
-  const CATEGORIES: { key: ChartCategory; label: string }[] = [
+  const CATEGORIES: { key: ChartCategory | 'price'; label: string }[] = [
     { key: 'volume',   label: volumeLabel },
     { key: 'value',    label: valueLabel },
-    { key: 'surge',    label: '급상승' },
-    { key: 'drop',     label: '급하락' },
+    { key: 'price',    label: priceLabel },
     { key: 'new',      label: '신규상장' },
     { key: 'dividend', label: '배당' },
   ];
 
-  /** Up to 30 stocks filtered and sorted by the selected category */
-  const list = useMemo(() => {
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [category, volumeAsc, valueAsc, surgeAsc]);
+
+  /** All stocks filtered and sorted by the selected category */
+  const rankedList = useMemo(() => {
     const s = [...streamers];
     const remainingMs = (st: Stock): number => {
       const ms = dividendRemainingMsFor(st);
@@ -84,22 +103,20 @@ export const ChartView = ({
     switch (category) {
       case 'volume':
         return volumeAsc
-          ? s.sort((a, b) => a.totalVolume - b.totalVolume).slice(0, 30)
-          : s.sort((a, b) => b.totalVolume - a.totalVolume).slice(0, 30);
+          ? s.sort((a, b) => a.totalVolume - b.totalVolume)
+          : s.sort((a, b) => b.totalVolume - a.totalVolume);
       case 'value':
         return valueAsc
-          ? s.sort((a, b) => a.dailyTradingValue - b.dailyTradingValue).slice(0, 30)
-          : s.sort((a, b) => b.dailyTradingValue - a.dailyTradingValue).slice(0, 30);
+          ? s.sort((a, b) => a.dailyTradingValue - b.dailyTradingValue)
+          : s.sort((a, b) => b.dailyTradingValue - a.dailyTradingValue);
       case 'surge':
         return s
           .filter(st => changePct(st.price, st.basePrice) > 0)
-          .sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice))
-          .slice(0, 30);
+          .sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice));
       case 'drop':
         return s
           .filter(st => changePct(st.price, st.basePrice) < 0)
-          .sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice))
-          .slice(0, 30);
+          .sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice));
       case 'new': {
         // Filter only stocks listed today
         const today = new Date();
@@ -110,15 +127,26 @@ export const ChartView = ({
             const ld = new Date(st.listedAt);
             return ld.getFullYear() === y && ld.getMonth() === m && ld.getDate() === d;
           })
-          .slice(0, 30);
       }
       case 'dividend':
         // Show live stocks sorted by remaining time until next dividend ascending
         return s.filter(st => st.isLive).sort((a, b) => remainingMs(a) - remainingMs(b));
       default:
-        return s.slice(0, 30);
+        return s;
     }
   }, [streamers, category, volumeAsc, valueAsc, tick]);
+
+  const list = useMemo(() => rankedList.slice(0, visibleCount), [rankedList, visibleCount]);
+  const hasMore = visibleCount < rankedList.length;
+
+  const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (!hasMore) return;
+    const target = event.currentTarget;
+    const remaining = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (remaining < 160) {
+      setVisibleCount(count => Math.min(count + PAGE_SIZE, rankedList.length));
+    }
+  };
 
   /** Right column header label based on current category */
   const colLabel = category === 'value' ? '거래대금' : category === 'dividend' ? '다음 배당' : '거래량';
@@ -153,22 +181,25 @@ export const ChartView = ({
         className="flex gap-2 md:gap-3 px-4 py-3 md:px-8 md:py-5 shrink-0 overflow-x-auto hide-scrollbar"
         style={{ borderBottom: '1px solid var(--border-primary)' }}
       >
-        {CATEGORIES.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => handleCategoryClick(key)}
-            className="shrink-0 px-3 py-1.5 md:px-5 md:py-3 rounded-full text-xs md:text-sm font-bold transition-colors"
-            style={{
-              background: category === key ? 'var(--accent)' : 'var(--bg-card-secondary)',
-              color: category === key ? 'var(--accent-foreground)' : 'var(--text-muted)',
-              border: '1px solid',
-              borderColor: category === key ? 'var(--accent)' : 'var(--border-primary)',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        {CATEGORIES.map(({ key, label }) => {
+          const active = key === 'price' ? category === 'surge' || category === 'drop' : category === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handleCategoryClick(key)}
+              className="shrink-0 px-3 py-1.5 md:px-5 md:py-3 rounded-full text-xs md:text-sm font-bold transition-colors"
+              style={{
+                background: active ? 'var(--accent)' : 'var(--bg-card-secondary)',
+                color: active ? 'var(--accent-foreground)' : 'var(--text-muted)',
+                border: '1px solid',
+                borderColor: active ? 'var(--accent)' : 'var(--border-primary)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Column headers */}
@@ -184,7 +215,7 @@ export const ChartView = ({
       </div>
 
       {/* Stock ranking row list */}
-      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y">
+      <div className="flex-1 overflow-y-auto pb-24 hide-scrollbar touch-pan-y" onScroll={handleListScroll}>
         {list.length === 0 ? (
           <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-dim)' }}>
             데이터가 없습니다
