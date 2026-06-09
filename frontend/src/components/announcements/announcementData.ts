@@ -12,6 +12,22 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_dividend_suspension_20260610',
+    title: '배당 지급 일시 중지 안내',
+    date: '운영 조치 (2026-06-10)',
+    summary: '운영 정책 검토를 위해 배당 지급을 일시 중지합니다. 재개 시 별도 공지를 통해 안내드리겠습니다.',
+    sections: [
+      {
+        title: '조치 내용',
+        rows: [
+          { label: '배당 지급', value: '즉시 중지', tone: 'danger' },
+          { label: '적용 시점', value: '2026-06-10부터', tone: 'danger' },
+        ],
+        note: '배당 지급 재개 일정은 추후 공지를 통해 안내드릴 예정입니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_schedule_update_20260608',
     title: '배당 지급 및 액면분할 주기 변경 안내',
     date: '운영 정책 업데이트',
