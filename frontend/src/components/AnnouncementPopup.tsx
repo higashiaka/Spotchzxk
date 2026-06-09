@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { latestAnnouncement } from './announcements/announcementData';
+import { latestAnnouncement, type AnnouncementItem } from './announcements/announcementData';
 import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
 
@@ -15,6 +15,7 @@ interface StockSplitNotice {
 
 export default function AnnouncementPopup() {
   const [stockSplitNotice, setStockSplitNotice] = useState<StockSplitNotice | null>(null);
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     apiFetch('/api/announcements/stock-splits/latest')
@@ -35,8 +36,8 @@ export default function AnnouncementPopup() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const activeAnnouncement = useMemo(() => {
-    if (!stockSplitNotice) return latestAnnouncement;
+  const stockSplitAnnouncement = useMemo<AnnouncementItem | null>(() => {
+    if (!stockSplitNotice) return null;
 
     const stockNames = stockSplitNotice.stockNames
       .split(',')
@@ -75,15 +76,15 @@ export default function AnnouncementPopup() {
     };
   }, [stockSplitNotice]);
 
+  const activeAnnouncement = useMemo(() => {
+    const candidates = stockSplitAnnouncement ? [stockSplitAnnouncement, latestAnnouncement] : [latestAnnouncement];
+
+    return candidates.find(announcement => localStorage.getItem(announcement.id) !== 'hidden') ?? null;
+  }, [stockSplitAnnouncement]);
+
+  if (!visible || !activeAnnouncement) return null;
+
   const noticeKey = activeAnnouncement.id;
-  const [visible, setVisible] = useState(() => localStorage.getItem(latestAnnouncement.id) !== 'hidden');
-
-  useEffect(() => {
-    setVisible(localStorage.getItem(noticeKey) !== 'hidden');
-  }, [noticeKey]);
-
-  if (!visible) return null;
-
   const dismiss = (permanent: boolean) => {
     if (permanent) localStorage.setItem(noticeKey, 'hidden');
     setVisible(false);
