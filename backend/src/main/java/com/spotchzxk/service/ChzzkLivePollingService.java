@@ -80,7 +80,7 @@ public class ChzzkLivePollingService {
         return false;
     }
 
-    // @Scheduled(fixedDelay = 1_000) -- 배당 지급 일시 중지
+    @Scheduled(fixedDelay = 1_000)
     public void payDueIntervalDividends() {
         int paidCount = 0;
         List<Stock> dueStocks = stockRepository.findByIsLiveTrue().stream()

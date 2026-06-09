@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN donation_total DECIMAL(20, 2) NOT NULL DEFAULT 0.00;

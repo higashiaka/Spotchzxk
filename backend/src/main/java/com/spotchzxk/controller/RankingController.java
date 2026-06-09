@@ -24,10 +24,11 @@ public class RankingController {
     public ResponseEntity<List<Map<String, Object>>> getRankings(
             @RequestParam(defaultValue = "realized") String type
     ) {
-        boolean dividendRanking = "dividend".equals(type);
-        var users = dividendRanking
-                ? userRepository.findTop50ByIsBotFalseOrderByDividendTotalDesc()
-                : userRepository.findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+        var users = switch (type) {
+            case "dividend" -> userRepository.findTop50ByIsBotFalseOrderByDividendTotalDesc();
+            case "donation" -> userRepository.findTop50ByIsBotFalseOrderByDonationTotalDesc();
+            default -> userRepository.findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+        };
 
         List<Map<String, Object>> rankings = new ArrayList<>();
         for (int i = 0; i < users.size(); i++) {
@@ -37,19 +38,23 @@ public class RankingController {
                             ? "트레이더"
                             : user.getDisplayName())
                     : "비공개";
-            BigDecimal realizedProfit = user.getRealizedProfit() != null
-                    ? user.getRealizedProfit()
-                    : BigDecimal.ZERO;
-            BigDecimal dividendTotal = user.getDividendTotal() != null
-                    ? user.getDividendTotal()
-                    : BigDecimal.ZERO;
+            BigDecimal realizedProfit = user.getRealizedProfit() != null ? user.getRealizedProfit() : BigDecimal.ZERO;
+            BigDecimal dividendTotal = user.getDividendTotal() != null ? user.getDividendTotal() : BigDecimal.ZERO;
+            BigDecimal donationTotal = user.getDonationTotal() != null ? user.getDonationTotal() : BigDecimal.ZERO;
+
+            BigDecimal value = switch (type) {
+                case "dividend" -> dividendTotal;
+                case "donation" -> donationTotal;
+                default -> realizedProfit;
+            };
 
             rankings.add(Map.of(
                     "rank", i + 1,
                     "displayName", displayName,
-                    "value", dividendRanking ? dividendTotal : realizedProfit,
+                    "value", value,
                     "realizedProfit", realizedProfit,
-                    "dividendTotal", dividendTotal
+                    "dividendTotal", dividendTotal,
+                    "donationTotal", donationTotal
             ));
         }
         return ResponseEntity.ok(rankings);

@@ -68,6 +68,7 @@ public class PortfolioService {
         response.put("shares", shares);
         response.put("avgPrices", avgPrices);
         response.put("dividendTotal", p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO);
+        response.put("donationTotal", p.getDonationTotal() != null ? p.getDonationTotal() : BigDecimal.ZERO);
         response.put("displayName", p.getDisplayName());
         response.put("realizedProfit", p.getRealizedProfit() != null ? p.getRealizedProfit() : BigDecimal.ZERO);
         response.put("rankingNicknamePublic", p.isRankingNicknamePublic());

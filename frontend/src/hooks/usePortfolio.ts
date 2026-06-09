@@ -11,6 +11,8 @@ export interface Portfolio {
   avgPrices: Record<string, number>;
   /** Total dividends received to date */
   dividendTotal: number;
+  /** Total amount donated (for 후원왕 ranking) */
+  donationTotal?: number;
   displayName?: string | null;
   realizedProfit?: number;
   rankingNicknamePublic?: boolean;

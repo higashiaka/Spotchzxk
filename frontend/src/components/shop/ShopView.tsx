@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { User } from 'firebase/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
@@ -13,7 +13,7 @@ const MEGAPHONE_PRICE = 30_000_000;
 const NICKNAME_TICKET_PRICE = 1_000_000;
 const STOCK_ADD_TICKET_PRICE = 10_000_000;
 /** Max megaphone uses per day */
-const DAILY_LIMIT = 3;
+const DAILY_LIMIT = 5;
 
 /** Formats a number with Korean locale comma separators */
 function formatPrice(n: number) {
@@ -184,6 +184,131 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
   );
 }
 
+function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId: string | undefined; isLoggedIn: boolean }) {
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [amount, setAmount] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const parsedAmount = parseInt(amount.replace(/,/g, '') || '0', 10);
+  const isValid = parsedAmount >= 1_000 && parsedAmount <= balance;
+
+  const presets = [10_000, 100_000, 1_000_000, 10_000_000];
+
+  function handleAmountChange(raw: string) {
+    const digits = raw.replace(/[^0-9]/g, '');
+    const num = parseInt(digits || '0', 10);
+    setAmount(num > 0 ? num.toLocaleString('ko-KR') : '');
+    setError('');
+    setSuccessMsg('');
+  }
+
+  async function handleDonate() {
+    if (!isValid || pending) return;
+    setPending(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await apiFetch('/api/donate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: parsedAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? '후원에 실패했습니다.');
+        return;
+      }
+      queryClient.setQueryData(['portfolio', userId], (old: any) =>
+        old ? { ...old, balance: data.balance, donationTotal: data.donationTotal } : old
+      );
+      queryClient.invalidateQueries({ queryKey: ['rankings', 'donation'] });
+      setAmount('');
+      setSuccessMsg(`${parsedAmount.toLocaleString('ko-KR')}원 후원 완료!`);
+      inputRef.current?.blur();
+    } catch {
+      setError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl p-5 md:p-7 mb-8 md:mb-10" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
+      <div className="flex items-start gap-4 md:gap-6 mb-4 md:mb-6">
+        <div className="w-14 h-14 md:w-20 md:h-20 rounded-xl flex items-center justify-center text-3xl md:text-5xl shrink-0"
+          style={{ background: 'var(--bg-card)' }}>
+          🎁
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-base md:text-2xl font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>후원하기</p>
+          <p className="text-xs md:text-sm" style={{ color: 'var(--text-dim)' }}>
+            잔고에서 금액을 차감해 후원왕 랭킹에 반영합니다. 매일 자정에 초기화됩니다.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        {presets.map((p) => (
+          <button
+            key={p}
+            type="button"
+            disabled={!isLoggedIn}
+            onClick={() => { setAmount(p.toLocaleString('ko-KR')); setError(''); setSuccessMsg(''); }}
+            className="h-9 rounded-lg text-xs font-bold transition-colors disabled:opacity-40"
+            style={{
+              background: parsedAmount === p ? 'var(--accent)' : 'var(--bg-card)',
+              color: parsedAmount === p ? 'var(--accent-foreground)' : 'var(--text-muted)',
+              border: '1px solid var(--border-primary)',
+            }}
+          >
+            {p >= 1_000_000 ? `${p / 1_000_000}백만` : `${p / 10_000}만`}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <div
+          className="flex items-center flex-1 rounded-xl px-4"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', height: '48px' }}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            placeholder={isLoggedIn ? '금액 입력 (최소 1,000원)' : '로그인 필요'}
+            disabled={!isLoggedIn}
+            value={amount}
+            onChange={(e) => handleAmountChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleDonate(); }}
+            className="flex-1 bg-transparent text-sm font-bold outline-none disabled:opacity-40"
+            style={{ color: 'var(--text-secondary)' }}
+          />
+          <span className="text-xs ml-2 shrink-0" style={{ color: 'var(--text-dim)' }}>원</span>
+        </div>
+        <button
+          type="button"
+          disabled={!isValid || pending}
+          onClick={handleDonate}
+          className="px-5 rounded-xl text-sm font-bold transition-opacity disabled:opacity-40"
+          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', height: '48px' }}
+        >
+          {pending ? '...' : '후원'}
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-xs mt-2 font-bold" style={{ color: '#FF5252' }}>{error}</p>
+      )}
+      {successMsg && (
+        <p className="text-xs mt-2 font-bold" style={{ color: 'var(--accent)' }}>{successMsg}</p>
+      )}
+    </div>
+  );
+}
+
 /** Shop screen props */
 interface Props {
   /** Full list of stocks */
@@ -342,6 +467,8 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
           </span>
         </div>
       </div>
+
+      <DonationCard balance={balance} userId={user?.uid} isLoggedIn={isLoggedIn} />
     </div>
   );
 };

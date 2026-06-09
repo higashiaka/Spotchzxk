@@ -48,7 +48,7 @@ public class StockSplitService {
     private final CandleService candleService;
     private final SystemSellPressureService systemSellPressureService;
 
-    @Scheduled(cron = "0 0 0/3 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyStockSplit() {
         LocalDateTime now = LocalDateTime.now(KST);

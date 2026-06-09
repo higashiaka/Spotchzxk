@@ -12,18 +12,49 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
-    id: 'notice_dividend_suspension_20260610',
-    title: '배당 지급 일시 중지 안내',
-    date: '운영 조치 (2026-06-10)',
-    summary: '운영 정책 검토를 위해 배당 지급을 일시 중지합니다. 재개 시 별도 공지를 통해 안내드리겠습니다.',
+    id: 'notice_update_20260610',
+    title: '후원왕 랭킹 추가 및 운영 정책 변경 안내',
+    date: '운영 정책 업데이트',
+    summary: '후원왕 랭킹이 추가되었고, 배당 지급률·액면분할 주기·확성기 횟수 제한이 조정됩니다.',
     sections: [
       {
-        title: '조치 내용',
+        title: '후원왕 랭킹 추가',
         rows: [
-          { label: '배당 지급', value: '즉시 중지', tone: 'danger' },
-          { label: '적용 시점', value: '2026-06-10부터', tone: 'danger' },
+          { label: '기능', value: '상점 탭에서 원하는 금액을 후원할 수 있습니다', tone: 'accent' },
+          { label: '반영', value: '후원 금액은 잔고에서 차감되고 후원왕 랭킹에 누적', tone: 'accent' },
+          { label: '초기화', value: '매일 자정 랭킹 초기화', tone: 'accent' },
         ],
-        note: '배당 지급 재개 일정은 추후 공지를 통해 안내드릴 예정입니다.',
+        note: '유저 랭킹 탭에서 실현손익·배당수익·후원왕 세 가지 랭킹을 확인할 수 있습니다.',
+      },
+      {
+        title: '배당 지급률 조정',
+        rows: [
+          { label: '변경 후', value: '주당 현재가의 0.01% 지급', tone: 'accent' },
+          { label: '기존', value: '주당 현재가의 0.7% 지급', tone: 'danger' },
+        ],
+        note: '지급 주기(1시간)와 대상 기준은 동일합니다.',
+      },
+      {
+        title: '액면분할 주기 조정',
+        rows: [
+          { label: '변경 후', value: '6시간마다 정각 실행', tone: 'accent' },
+          { label: '실행 시간', value: '00시, 06시, 12시, 18시 KST', tone: 'accent' },
+          { label: '기존', value: '3시간마다 정각 실행', tone: 'danger' },
+        ],
+      },
+      {
+        title: '확성기 일일 횟수 제한 변경',
+        rows: [
+          { label: '변경 후', value: '1일 5회', tone: 'accent' },
+          { label: '기존', value: '1일 3회', tone: 'danger' },
+        ],
+      },
+      {
+        title: '비로그인 시세 열람 허용',
+        rows: [
+          { label: '변경', value: '로그인 없이도 종목 시세·차트 확인 가능', tone: 'accent' },
+        ],
+        note: '매수·매도 등 거래 기능은 로그인 후 이용할 수 있습니다.',
       },
     ],
   },

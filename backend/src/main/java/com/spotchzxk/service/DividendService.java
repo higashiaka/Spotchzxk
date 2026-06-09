@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
-    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.007");
+    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.0001");
 
     private final UserShareRepository userShareRepository;
     private final UserDividendLogRepository userDividendLogRepository;

@@ -4,7 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { subscribeStomp } from '../../lib/stompClient';
 import { avatarColor, fmt, priceColor } from '../../utils';
 
-type RankingType = 'realized' | 'dividend';
+type RankingType = 'realized' | 'dividend' | 'donation';
 
 interface UserRankingEntry {
   rank: number;
@@ -12,11 +12,13 @@ interface UserRankingEntry {
   value: number;
   realizedProfit?: number;
   dividendTotal?: number;
+  donationTotal?: number;
 }
 
 export function UserRankingView() {
   const [rankingType, setRankingType] = useState<RankingType>('realized');
   const queryClient = useQueryClient();
+
   const {
     data: rankings = [],
     isLoading,
@@ -30,10 +32,11 @@ export function UserRankingView() {
     refetchInterval: 60_000,
   });
 
-  const valueLabel = rankingType === 'dividend' ? '배당수익' : '실현손익';
+  const valueLabel = rankingType === 'dividend' ? '배당수익' : rankingType === 'donation' ? '후원금액' : '실현손익';
   const categories: { key: RankingType; label: string }[] = [
     { key: 'realized', label: '실현손익' },
     { key: 'dividend', label: '배당수익' },
+    { key: 'donation', label: '후원랭킹' },
   ];
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export function UserRankingView() {
       </div>
 
       <div
-        className="grid grid-cols-2 gap-2 px-4 py-3 md:px-8 md:py-4 shrink-0"
+        className="grid grid-cols-3 gap-2 px-4 py-3 md:px-8 md:py-4 shrink-0"
         style={{ borderTop: '1px solid var(--border-primary)', borderBottom: '1px solid var(--border-primary)' }}
       >
         {categories.map(({ key, label }) => (
@@ -118,9 +121,11 @@ export function UserRankingView() {
               <div className="w-32 md:w-48 text-right shrink-0">
                 <p
                   className="text-sm md:text-lg font-bold font-mono"
-                  style={{ color: priceColor(entry.value) }}
+                  style={{ color: rankingType === 'donation' ? 'var(--text-secondary)' : priceColor(entry.value) }}
                 >
-                  {entry.value >= 0 ? '+' : ''}{fmt(entry.value)}
+                  {rankingType === 'donation'
+                    ? fmt(entry.value)
+                    : `${entry.value >= 0 ? '+' : ''}${fmt(entry.value)}`}
                 </p>
               </div>
             </div>

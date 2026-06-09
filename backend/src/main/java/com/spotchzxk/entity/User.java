@@ -51,6 +51,10 @@ public class User {
     @Builder.Default
     private BigDecimal dividendTotal = BigDecimal.ZERO;
 
+    @Column(name = "donation_total", nullable = false, precision = 20, scale = 2)
+    @Builder.Default
+    private BigDecimal donationTotal = BigDecimal.ZERO;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean isBot = false;
@@ -121,5 +125,10 @@ public class User {
 
     public void markAsBot() {
         this.isBot = true;
+    }
+
+    public void addDonation(BigDecimal amount) {
+        this.coinBalance = this.coinBalance.subtract(amount);
+        this.donationTotal = this.donationTotal.add(amount);
     }
 }
