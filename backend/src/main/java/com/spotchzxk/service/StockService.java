@@ -110,7 +110,7 @@ public class StockService {
         }
         tradeEngine.evictUserCache(userId);
 
-        int listingPrice = calcListingPrice(stock.getFollowerCount());
+        long listingPrice = calcListingPrice(stock.getFollowerCount());
         stock.finalizeListing(listingPrice, 100_000L);
 
         int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());

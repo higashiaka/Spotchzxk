@@ -138,7 +138,7 @@ public class StockSplitService {
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
                 .splitHour(splitHour)
-                .thresholdPrice(SPLIT_THRESHOLD_PRICE)
+                .thresholdPrice((int) SPLIT_THRESHOLD_PRICE)
                 .splitRatio(SPLIT_RATIO)
                 .stockCount(targets.size())
                 .stockNames(stockNames)
