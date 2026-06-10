@@ -35,6 +35,7 @@ type ScreenSnapshot = { tab: AppTab; streamerId: string | null };
 type GuestLimitNotice = { retryAtMs: number };
 const APP_HISTORY_KEY = 'spotchzxk-screen';
 const HAS_LINKED_ACCOUNT_KEY = 'has_linked_account';
+const GUEST_SOFT_LOGGED_OUT_KEY = 'guest_soft_logged_out';
 
 const toBrowserHistoryState = (screen: ScreenSnapshot) => ({
   [APP_HISTORY_KEY]: true,
@@ -72,6 +73,7 @@ function App() {
   const [authChecking, setAuthChecking] = useState(true);
   /** Full stock list (updated in real time) */
   const streamers = useStocks();
+  const queryClient = useQueryClient();
   /** Currently active tab */
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [screenHistory, setScreenHistory] = useState<ScreenSnapshot[]>([]);
@@ -240,7 +242,9 @@ function App() {
   // Subscribe to Firebase auth state: detect login/logout and handle guest merge
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async u => {
-      setUser(u);
+      const isSoftLoggedOutGuest =
+        !!u && u.isAnonymous && localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true';
+      setUser(isSoftLoggedOutGuest ? null : u);
       setAuthChecking(false);
 
       // After guest-to-Google linking, request server-side data merge
@@ -268,7 +272,13 @@ function App() {
 
   /** Handles Google sign-in via popup */
   const handleGoogleLogin = async () => {
-    try { await signInWithPopup(auth, googleProvider); }
+    try {
+      if (auth.currentUser?.isAnonymous && localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true') {
+        await signOut(auth);
+      }
+      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
+      await signInWithPopup(auth, googleProvider);
+    }
     catch (err) { console.error(err); alert('Google 로그인에 실패했습니다.'); }
   };
 
@@ -283,6 +293,7 @@ function App() {
         await handleGoogleLogin();
         return;
       }
+      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
 
       if (!auth.currentUser) {
         const FP = await import('@fingerprintjs/fingerprintjs');
@@ -307,6 +318,8 @@ function App() {
           ? precheckBody.precheckToken
           : undefined;
         await signInAnonymously(auth);
+      } else {
+        setUser(auth.currentUser);
       }
 
       const res = await apiFetch('/api/guest/register', {
@@ -335,7 +348,17 @@ function App() {
   };
 
   /** Logout handler */
-  const handleLogout = async () => { await signOut(auth); };
+  const handleLogout = async () => {
+    if (auth.currentUser?.isAnonymous) {
+      localStorage.setItem(GUEST_SOFT_LOGGED_OUT_KEY, 'true');
+      setUser(null);
+      queryClient.removeQueries({ queryKey: ['portfolio'] });
+      queryClient.removeQueries({ queryKey: ['history'] });
+      return;
+    }
+    localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
+    await signOut(auth);
+  };
 
   /** Google account linking handler.
    *  If the credential is already used by another account,
@@ -376,9 +399,6 @@ function App() {
       alert('Google 연동에 실패했습니다: ' + (err.message ?? ''));
     }
   };
-
-  const queryClient = useQueryClient();
-
   /** Current user's portfolio data */
   const { data: portfolio } = usePortfolio(user?.uid);
   /** Current user's transaction history */
