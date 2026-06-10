@@ -36,15 +36,22 @@ public class AmmMigrationService implements ApplicationRunner {
     public void migrateAll() {
         List<Stock> stocks = stockRepository.findAll();
         int migrated = 0;
+        int synced = 0;
         for (Stock stock : stocks) {
             if (stock.getCoinReserve() > 0) {
-                log.info("Skipping already migrated stock: {}", stock.getChannelId());
+                // AMM 풀은 있지만 issuedShares가 실보유량과 다를 수 있으므로 동기화
+                long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
+                if (stock.getIssuedShares() != totalHeld) {
+                    stock.syncIssuedShares(totalHeld);
+                    stockRepository.save(stock);
+                    synced++;
+                }
                 continue;
             }
             migrateStock(stock);
             migrated++;
         }
-        log.info("AMM migration complete: {} stocks migrated.", migrated);
+        log.info("AMM migration complete: {} stocks migrated, {} issuedShares synced.", migrated, synced);
     }
 
     private void migrateStock(Stock stock) {
@@ -59,12 +66,14 @@ public class AmmMigrationService implements ApplicationRunner {
         long coinReserve = currentPrice * shareReserve;
 
         stock.initAmmPool(coinReserve, shareReserve, tier);
+        // issuedShares가 user_shares 실보유량과 달라질 수 있으므로 마이그레이션 시 동기화
+        stock.syncIssuedShares(totalHeld);
         stockRepository.save(stock);
         String channelId = stock.getChannelId();
         registerAfterCommit(() -> tradeEngine.evictStockCache(channelId));
 
-        log.info("Migrated {}: price={}, shareReserve={}, coinReserve={}, tier={}",
-                stock.getStreamerName(), currentPrice, shareReserve, coinReserve, tier);
+        log.info("Migrated {}: price={}, issuedShares={}, shareReserve={}, coinReserve={}, tier={}",
+                stock.getStreamerName(), currentPrice, totalHeld, shareReserve, coinReserve, tier);
     }
 
     public static int calcLiquidityTier(int followerCount) {

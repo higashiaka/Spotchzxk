@@ -154,6 +154,10 @@ public class Stock {
         this.currentPrice = clampPrice(coinReserve / shareReserve);
     }
 
+    public void syncIssuedShares(long totalHeld) {
+        this.issuedShares = Math.max(0, totalHeld);
+    }
+
     public void applyAmmTrade(long newCoinReserve, long newShareReserve, long fee) {
         // Issue #10: BigDecimal 나눗셈으로 반올림 처리 — long 정수 나눗셈은 소수점 버림으로 AMM 실제 가격과 불일치
         this.currentPrice = clampPrice(java.math.BigDecimal.valueOf(newCoinReserve)
