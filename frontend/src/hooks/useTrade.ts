@@ -49,9 +49,9 @@ export const useTrade = (userId: string) => {
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
         const cost = (newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * newTrade.quantity;
-        const state = old || { balance: 1000000, shares: {} };
+        const state = old || { balance: 10000000, shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
-        let newBalance = state.balance ?? 1000000;
+        let newBalance = state.balance ?? 10000000;
 
         if (newTrade.type === 'buy') {
           newBalance -= cost;
@@ -65,6 +65,15 @@ export const useTrade = (userId: string) => {
       });
 
       return { previousPortfolio };
+    },
+
+    /** Applies the server's actual balance immediately after a successful trade */
+    onSuccess: (data) => {
+      if (data?.newBalance !== undefined) {
+        queryClient.setQueryData<Portfolio>(['portfolio', userId], (old) =>
+          old ? { ...old, balance: Number(data.newBalance) } : old
+        );
+      }
     },
 
     /** Rolls back the optimistic update and alerts the user on error */

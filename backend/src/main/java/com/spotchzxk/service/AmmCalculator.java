@@ -20,6 +20,7 @@ public final class AmmCalculator {
      * cost = coinReserve * qty / (shareReserve - qty)
      */
     public static long buyCost(long coinReserve, long shareReserve, long qty) {
+        if (coinReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         if (qty <= 0) throw new IllegalStateException("Quantity must be positive.");
         if (qty >= shareReserve) throw new IllegalStateException("Order quantity exceeds pool depth.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
@@ -35,6 +36,7 @@ public final class AmmCalculator {
      * revenue = coinReserve * qty / (shareReserve + qty)
      */
     public static long sellRevenue(long coinReserve, long shareReserve, long qty) {
+        if (coinReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         if (qty <= 0) throw new IllegalStateException("Quantity must be positive.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve + qty);

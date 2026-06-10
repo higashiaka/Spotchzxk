@@ -8,9 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
@@ -26,30 +27,35 @@ public class AmmMigrationService implements ApplicationRunner {
     private final StockRepository stockRepository;
     private final UserShareRepository userShareRepository;
     private final TradeEngine tradeEngine;
+    private final PlatformTransactionManager txManager;
 
     @Override
     public void run(ApplicationArguments args) {
         migrateAll();
     }
 
-    @Transactional
     public void migrateAll() {
         List<Stock> stocks = stockRepository.findAll();
         int migrated = 0;
         int synced = 0;
         for (Stock stock : stocks) {
-            if (stock.getCoinReserve() > 0) {
-                // AMM 풀은 있지만 issuedShares가 실보유량과 다를 수 있으므로 동기화
-                long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
-                if (stock.getIssuedShares() != totalHeld) {
-                    stock.syncIssuedShares(totalHeld);
-                    stockRepository.save(stock);
-                    synced++;
+            try {
+                if (stock.getCoinReserve() > 0) {
+                    long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
+                    if (stock.getIssuedShares() != totalHeld) {
+                        new TransactionTemplate(txManager).executeWithoutResult(s -> {
+                            stock.syncIssuedShares(totalHeld);
+                            stockRepository.save(stock);
+                        });
+                        synced++;
+                    }
+                    continue;
                 }
-                continue;
+                new TransactionTemplate(txManager).executeWithoutResult(s -> migrateStock(stock));
+                migrated++;
+            } catch (Exception e) {
+                log.error("AMM migration failed for {}: {}", stock.getChannelId(), e.getMessage(), e);
             }
-            migrateStock(stock);
-            migrated++;
         }
         log.info("AMM migration complete: {} stocks migrated, {} issuedShares synced.", migrated, synced);
     }
