@@ -8,6 +8,9 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -16,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +30,10 @@ public class GuestAbuseProtectionService {
 
     private final GuestAbuseProperties properties;
     private final StringRedisTemplate redisTemplate;
-    private final Map<String, LocalCounter> localCounters = new ConcurrentHashMap<>();
+    // Issue #22: Caffeine TTL 캐시로 교체 — ConcurrentHashMap은 만료 항목이 자동 제거되지 않아 Redis 장애 시 메모리 누수
+    private final Cache<String, LocalCounter> localCounters = Caffeine.newBuilder()
+            .expireAfterAccess(1, TimeUnit.HOURS)
+            .build();
     private final Map<String, LocalPermit> localPermits = new ConcurrentHashMap<>();
 
     public AbuseCheckResult checkAndRecord(HttpServletRequest request, String fingerprintHash) {
@@ -103,7 +110,8 @@ public class GuestAbuseProtectionService {
 
     private AbuseCheckResult checkAndRecordLocally(String key) {
         long now = Instant.now().getEpochSecond();
-        LocalCounter counter = localCounters.compute(key, (counterKey, current) -> {
+        // Issue #22: Caffeine 캐시 사용 — get+put 대신 asMap().compute로 원자적 갱신
+        LocalCounter counter = localCounters.asMap().compute(key, (counterKey, current) -> {
             if (current == null || current.expiresAt <= now) {
                 return new LocalCounter(1, now + properties.windowSeconds());
             }
@@ -122,7 +130,14 @@ public class GuestAbuseProtectionService {
         if (isTrustedProxy(remoteAddr)) {
             String forwardedFor = request.getHeader("X-Forwarded-For");
             if (forwardedFor != null && !forwardedFor.isBlank()) {
-                return forwardedFor.split(",")[0].trim();
+                // Issue #13: rightmost non-trusted-proxy IP 사용 — leftmost는 클라이언트가 임의 헤더 주입으로 스푸핑 가능
+                String[] ips = forwardedFor.split(",");
+                for (int i = ips.length - 1; i >= 0; i--) {
+                    String ip = ips[i].trim();
+                    if (!isTrustedProxy(ip)) {
+                        return ip;
+                    }
+                }
             }
             String realIp = request.getHeader("X-Real-IP");
             if (realIp != null && !realIp.isBlank()) {

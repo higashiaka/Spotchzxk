@@ -2,11 +2,10 @@ package com.spotchzxk.service;
 
 import com.spotchzxk.entity.User;
 import com.spotchzxk.entity.UserShare;
-import com.spotchzxk.entity.Order;
 import com.spotchzxk.exception.ResetLimitExceededException;
+import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
-import com.spotchzxk.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +24,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioService {
 
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
+    // Issue #4: 초기 잔액 10,000,000원 (기존 1,000,000은 확성기/종목추가권 구매 불가 수준)
+    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int MAX_DAILY_RESETS = 3;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final long RANK_CACHE_TTL_MS = 3 * 60 * 1000L;
@@ -113,9 +113,7 @@ public class PortfolioService {
         userShareRepository.deleteAll(shares);
         tradeEngine.evictUserCache(userId);
         rankCache.remove(userId);
-
-        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        orderRepository.deleteAll(orders);
+        // Issue #24: 완료된 주문 기록은 삭제하지 않음 — 거래 히스토리 보존
     }
 
     private long cachedLeagueRank(String userId) {

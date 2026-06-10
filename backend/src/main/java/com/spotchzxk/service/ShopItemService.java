@@ -32,9 +32,10 @@ public class ShopItemService {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("User not found."));
 
+        // Issue #16: API 명세(nickname_ticket, stock_ticket)와 내부 키(nickname-change-ticket, stock-add-ticket) 모두 허용
         BigDecimal price = switch (item) {
-            case "nickname-change-ticket" -> NICKNAME_TICKET_PRICE;
-            case "stock-add-ticket" -> STOCK_ADD_TICKET_PRICE;
+            case "nickname-change-ticket", "nickname_ticket" -> NICKNAME_TICKET_PRICE;
+            case "stock-add-ticket", "stock_ticket" -> STOCK_ADD_TICKET_PRICE;
             default -> throw new IllegalArgumentException("Unknown item.");
         };
 
@@ -46,7 +47,8 @@ public class ShopItemService {
             throw new IllegalStateException("User not found.");
         }
 
-        if ("nickname-change-ticket".equals(item)) {
+        boolean isNicknameTicket = "nickname-change-ticket".equals(item) || "nickname_ticket".equals(item);
+        if (isNicknameTicket) {
             if (userRepository.addNicknameTicket(uid) != 1) {
                 throw new IllegalStateException("User not found.");
             }

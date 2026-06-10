@@ -42,7 +42,7 @@ class CandleServiceTest {
         long timestamp = 1_771_000_000_000L;
         long oneWeekMs = 604_800_000L;
         long expectedFrom = (timestamp / oneWeekMs) * oneWeekMs;
-        when(orderRepository.findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong()))
+        when(orderRepository.findByStreamerIdTradedAtGreaterThanEqual(eq(stockId), anyLong()))
                 .thenReturn(List.of());
 
         service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
@@ -50,7 +50,7 @@ class CandleServiceTest {
 
         ArgumentCaptor<Long> fromMs = ArgumentCaptor.forClass(Long.class);
         verify(orderRepository, times(1))
-                .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), fromMs.capture());
+                .findByStreamerIdTradedAtGreaterThanEqual(eq(stockId), fromMs.capture());
         assertThat(fromMs.getValue()).isEqualTo(expectedFrom);
     }
 
@@ -60,7 +60,7 @@ class CandleServiceTest {
         String stockId = "stock-1";
         long minuteStart = 1_771_000_020_000L;
         long timestamp = minuteStart + 5_000;
-        when(orderRepository.findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong()))
+        when(orderRepository.findByStreamerIdTradedAtGreaterThanEqual(eq(stockId), anyLong()))
                 .thenReturn(List.of(
                         order(stockId, timestamp, 1_000),
                         order(stockId, minuteStart + 60_000, 9_000)
@@ -84,7 +84,7 @@ class CandleServiceTest {
         String stockId = "stock-1";
         long minuteStart = 1_771_000_020_000L;
         long timestamp = minuteStart + 5_000;
-        when(orderRepository.findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(eq(stockId), anyLong()))
+        when(orderRepository.findByStreamerIdTradedAtGreaterThanEqual(eq(stockId), anyLong()))
                 .thenReturn(List.of(order(stockId, timestamp, 10_000)));
         when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
                 .thenReturn(List.of(StockSplitEvent.builder()
@@ -112,7 +112,7 @@ class CandleServiceTest {
         String stockId = "stock-1";
         long base = 1_771_000_020_000L;
         long before = base + 180_000L;
-        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
                 .thenReturn(List.of(order(stockId, base + 60_000L, 1_100)));
 
         List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
@@ -120,7 +120,7 @@ class CandleServiceTest {
         ArgumentCaptor<Long> fromMs = ArgumentCaptor.forClass(Long.class);
         ArgumentCaptor<Long> toMs = ArgumentCaptor.forClass(Long.class);
         verify(orderRepository)
-                .findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), fromMs.capture(), toMs.capture());
+                .findByStreamerIdAndTradedAtBetween(eq(stockId), fromMs.capture(), toMs.capture());
 
         assertThat(fromMs.getValue()).isEqualTo(base + 60_000L);
         assertThat(toMs.getValue()).isEqualTo(before - 1);
@@ -133,7 +133,7 @@ class CandleServiceTest {
         String stockId = "stock-1";
         long base = 1_771_000_020_000L;
         long before = base + 180_000L;
-        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
                 .thenReturn(List.of());
 
         List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
@@ -153,9 +153,9 @@ class CandleServiceTest {
         String stockId = "stock-1";
         long base = 1_771_000_020_000L;
         long before = base + 180_000L;
-        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
                 .thenReturn(List.of());
-        when(orderRepository.findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(eq(stockId), anyLong()))
+        when(orderRepository.findTopByStreamerIdTradedBeforeWithPrice(eq(stockId), anyLong()))
                 .thenReturn(order(stockId, base - 60_000L, 900));
 
         List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
@@ -175,7 +175,7 @@ class CandleServiceTest {
         long base = 1_771_000_020_000L;
         long splitAt = base + 120_000L;
         long before = base + 180_000L;
-        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
                 .thenReturn(List.of(order(stockId, base + 60_000L, 10_000)));
         when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
                 .thenReturn(List.of(StockSplitEvent.builder()
@@ -198,9 +198,9 @@ class CandleServiceTest {
         long previousOrderAt = base - 120_000L;
         long splitAt = base - 60_000L;
         long before = base + 180_000L;
-        when(orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(eq(stockId), anyLong(), anyLong()))
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
                 .thenReturn(List.of());
-        when(orderRepository.findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(eq(stockId), anyLong()))
+        when(orderRepository.findTopByStreamerIdTradedBeforeWithPrice(eq(stockId), anyLong()))
                 .thenReturn(order(stockId, previousOrderAt, 10_000));
         when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
                 .thenReturn(List.of(StockSplitEvent.builder()

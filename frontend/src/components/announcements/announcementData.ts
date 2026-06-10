@@ -12,6 +12,51 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_official_launch_20260701',
+    title: '베타 서비스 종료 및 정식 서비스 전환 안내',
+    date: '정식 서비스 전환',
+    summary: '6월 30일 베타 서비스가 종료되고 7월 1일부터 정식 서비스가 시작됩니다. 거래 로직이 개선되며, 정식 서비스 전환 시 상장 종목과 전체 자산이 초기화됩니다.',
+    sections: [
+      {
+        title: '베타 서비스 종료 일정',
+        rows: [
+          { label: '베타 종료', value: '2026년 6월 30일 (월)', tone: 'danger' },
+          { label: '정식 서비스 시작', value: '2026년 7월 1일 (화)', tone: 'accent' },
+        ],
+        note: '베타 서비스 기간 동안 참여해주신 모든 분들께 감사드립니다.',
+      },
+      {
+        title: '정식 서비스 전환 시 초기화 항목',
+        rows: [
+          { label: '상장 종목', value: '전체 상장 종목 초기화', tone: 'danger' },
+          { label: '보유 주식', value: '전체 보유 수량 초기화', tone: 'danger' },
+          { label: '잔고', value: '코인 잔고 초기화', tone: 'danger' },
+          { label: '거래 내역', value: '기존 체결 내역 초기화', tone: 'danger' },
+        ],
+        note: '초기화는 7월 1일 정식 서비스 시작 전 일괄 처리됩니다.',
+      },
+      {
+        title: '베타 참여자 혜택',
+        rows: [
+          { label: '대상', value: '베타 서비스 참여 이용자 전원', tone: 'accent' },
+          { label: '혜택 내용', value: '추후 별도 공지 예정', tone: 'accent' },
+        ],
+        note: '혜택 세부 내용은 정식 서비스 시작 전 공지를 통해 안내드릴 예정입니다.',
+      },
+      {
+        title: '거래 로직 변경',
+        rows: [
+          { label: 'AMM 가격 결정', value: 'x×y=k 유동성 풀 기반 가격 결정 방식 정식 적용', tone: 'accent' },
+          { label: '슬리피지 보호', value: '대량 주문 시 예상 체결가 범위를 초과하면 주문 거부', tone: 'accent' },
+          { label: '수수료', value: '거래 수수료 1.5% 적용 (기존과 동일)', tone: 'accent' },
+          { label: '평균 체결가', value: '수수료 포함 실제 지불 금액 기준으로 평균가 산출', tone: 'accent' },
+          { label: '초기 잔고', value: '신규 계정 지급 금액 1,000만원으로 조정', tone: 'accent' },
+        ],
+        note: '지정가 예약 주문 기능은 기존과 동일하게 유지됩니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_update_20260610',
     title: '후원왕 랭킹 추가 및 운영 정책 변경 안내',
     date: '운영 정책 업데이트',

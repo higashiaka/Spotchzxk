@@ -127,6 +127,8 @@ public class User {
         this.isBot = true;
     }
 
+    // Issue #33: DonationController는 userRepository.addToBalance/addToDonationTotal을 직접 호출 — 이 메서드는 미사용
+    @Deprecated
     public void addDonation(BigDecimal amount) {
         this.coinBalance = this.coinBalance.subtract(amount);
         this.donationTotal = this.donationTotal.add(amount);

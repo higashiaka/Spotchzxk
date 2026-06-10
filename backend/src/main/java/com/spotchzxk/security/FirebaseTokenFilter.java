@@ -1,9 +1,12 @@
 package com.spotchzxk.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import com.spotchzxk.repository.UserRepository;
+import com.spotchzxk.service.AccountLinkService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,17 +24,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @RequiredArgsConstructor
 public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
+    private final AccountLinkService accountLinkService;
 
-    // Cache of UIDs that have already been confirmed as Google-linked — prevents repeated DB lookups until restart
-    private final Set<String> checkedUids = ConcurrentHashMap.newKeySet();
+    // Issue #32: Caffeine TTL 캐시로 교체 — ConcurrentHashMap은 JVM 재시작 전까지 무한 증가
+    // 30분 TTL: 게스트→등록 전환 후 재확인을 허용하면서 메모리 누수 방지
+    private final Cache<String, Boolean> checkedUids = Caffeine.newBuilder()
+            .expireAfterWrite(30, TimeUnit.MINUTES)
+            .build();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -60,7 +66,8 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                     }
                 }
 
-                if (isGoogle && !checkedUids.contains(uid)) {
+                // Issue #28: AccountLinkService.upgradeGuest(@Transactional)로 위임 — 직접 save()는 트랜잭션 AOP 미적용
+                if (isGoogle && checkedUids.getIfPresent(uid) == null) {
                     tryUpgradeGuestToRegistered(uid);
                 }
 
@@ -76,14 +83,14 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private void tryUpgradeGuestToRegistered(String uid) {
         try {
+            // Issue #28: @Transactional AccountLinkService 메서드 사용 — 필터 레이어에서 직접 save()는 트랜잭션 AOP 미적용
             userRepository.findById(uid).ifPresent(user -> {
                 if (user.isGuest()) {
-                    user.markAsRegistered();
-                    userRepository.save(user);
+                    accountLinkService.upgradeGuest(uid);
                     log.info("Auto-upgraded guest to registered: uid={}", uid);
                 }
             });
-            checkedUids.add(uid);
+            checkedUids.put(uid, Boolean.TRUE);
         } catch (Exception e) {
             log.warn("Failed to auto-upgrade guest for uid={}: {}", uid, e.getMessage());
         }

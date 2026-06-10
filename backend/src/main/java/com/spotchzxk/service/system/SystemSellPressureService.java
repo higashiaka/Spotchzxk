@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -83,7 +84,7 @@ public class SystemSellPressureService {
         }
         if (state.active && baseGainPercent <= state.stopGainPercent) {
             state.active = false;
-            state.consecutiveSells = 0;
+            state.consecutiveSells.set(0);
             state.nextRunAtMs = now + randomDelayMs(properties.getWeak());
             return false;
         }
@@ -102,10 +103,10 @@ public class SystemSellPressureService {
 
         ensureSystemHoldings(stock, quantity);
         submitSystemSell(stock, quantity);
-        state.soldToday += quantity;
-        state.consecutiveSells++;
-        if (state.consecutiveSells >= state.maxConsecutiveSells) {
-            state.consecutiveSells = 0;
+        state.soldToday.addAndGet(quantity);
+        int consecutiveSells = state.consecutiveSells.incrementAndGet();
+        if (consecutiveSells >= state.maxConsecutiveSells) {
+            state.consecutiveSells.set(0);
             state.maxConsecutiveSells = randomInt(properties.getMaxConsecutiveSellMin(), properties.getMaxConsecutiveSellMax());
             state.nextRunAtMs = now + randomSeconds(properties.getCooldownMinSeconds(), properties.getCooldownMaxSeconds()) * 1_000L;
         } else {
@@ -174,7 +175,7 @@ public class SystemSellPressureService {
     int pickQuantity(Stock stock, int gainPercent, PressureState state) {
         SystemSellPressureProperties.Tier tier = tierFor(gainPercent, state);
         int quantity = randomInt(tier.getQuantityMin(), tier.getQuantityMax());
-        int dailyRemaining = Math.max(0, state.dailySellLimit - state.soldToday);
+        int dailyRemaining = Math.max(0, state.dailySellLimit - state.soldToday.get());
         int maxPerOrder = Math.max(1, properties.getMaxQuantityPerOrder());
         return Math.max(0, Math.min(quantity, Math.min(maxPerOrder, dailyRemaining)));
     }
@@ -286,7 +287,7 @@ public class SystemSellPressureService {
         }
         dailyLimitDate = today;
         states.values().forEach(state -> {
-            state.soldToday = 0;
+            state.soldToday.set(0);
             state.dailySellLimit = randomInt(properties.getDailySellLimitMin(), properties.getDailySellLimitMax());
         });
     }
@@ -314,20 +315,21 @@ public class SystemSellPressureService {
         return Math.max(0, Math.min(100, value));
     }
 
+    // Issue #12: volatile/AtomicInteger로 필드 접근 안전성 보장
     static class PressureState {
-        int startGainPercent;
-        int stopGainPercent;
-        long nextRunAtMs;
-        long expiresAtMs;
-        boolean active;
-        int consecutiveSells;
-        int maxConsecutiveSells;
-        int soldToday;
-        int dailySellLimit;
-        int highPriceTriggerPrice;
-        int highPriceStopPrice;
-        int highPriceReferenceDivisor;
-        boolean highPriceActive;
-        int dailyReferenceRatioPercent;
+        volatile int startGainPercent;
+        volatile int stopGainPercent;
+        volatile long nextRunAtMs;
+        volatile long expiresAtMs;
+        volatile boolean active;
+        final AtomicInteger consecutiveSells = new AtomicInteger(0);
+        volatile int maxConsecutiveSells;
+        final AtomicInteger soldToday = new AtomicInteger(0);
+        volatile int dailySellLimit;
+        volatile int highPriceTriggerPrice;
+        volatile int highPriceStopPrice;
+        volatile int highPriceReferenceDivisor;
+        volatile boolean highPriceActive;
+        volatile int dailyReferenceRatioPercent;
     }
 }

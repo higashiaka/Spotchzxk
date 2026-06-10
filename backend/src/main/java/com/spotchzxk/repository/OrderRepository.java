@@ -32,10 +32,19 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findTop50BotCompletedByOrderByCreatedAtDesc();
 
     List<Order> findTop200ByStreamerIdOrderByCreatedAtDesc(String streamerId);
-    List<Order> findTop200ByStreamerIdAndStatusOrderByCreatedAtDesc(String streamerId, String status);
-    List<Order> findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(String streamerId, long fromMs);
-    List<Order> findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(String streamerId, long fromMs, long toMs);
-    Order findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(String streamerId, long beforeMs);
+
+    // 체결 내역은 체결 시각(executedAt) 기준 정렬 — 지정가 주문이 나중에 체결돼도 올바른 순서로 표시됨
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND status = :status ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 200", nativeQuery = true)
+    List<Order> findTop200ByStreamerIdAndStatusOrderByTradedAtDesc(@Param("streamerId") String streamerId, @Param("status") String status);
+    // 캔들 서비스용: COALESCE(executed_at, created_at)을 실거래 시각으로 사용
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) >= :fromMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
+    List<Order> findByStreamerIdTradedAtGreaterThanEqual(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs);
+
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) BETWEEN :fromMs AND :toMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
+    List<Order> findByStreamerIdAndTradedAtBetween(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs, @Param("toMs") long toMs);
+
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) < :beforeMs AND executed_price IS NOT NULL ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 1", nativeQuery = true)
+    Order findTopByStreamerIdTradedBeforeWithPrice(@Param("streamerId") String streamerId, @Param("beforeMs") long beforeMs);
 
     // Limit order lookup
     List<Order> findByStreamerIdAndStatusOrderByCreatedAtAsc(String streamerId, String status);

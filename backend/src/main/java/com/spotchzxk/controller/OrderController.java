@@ -1,5 +1,6 @@
 package com.spotchzxk.controller;
 
+import com.spotchzxk.dto.PublicOrderResponse;
 import com.spotchzxk.entity.Order;
 import com.spotchzxk.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,17 +28,20 @@ public class OrderController {
     }
 
     @GetMapping("/api/orders/recent")
-    public ResponseEntity<List<Order>> getRecentOrders() {
-        List<Order> orders = orderRepository.findTop50ByOrderByCreatedAtDesc();
+    public ResponseEntity<List<PublicOrderResponse>> getRecentOrders() {
+        List<PublicOrderResponse> orders = orderRepository.findTop50ByOrderByCreatedAtDesc()
+                .stream().map(PublicOrderResponse::from).toList();
         return ResponseEntity.ok(orders);
     }
 
     @GetMapping("/api/orders/history")
-    public ResponseEntity<List<Order>> getStockHistory(@RequestParam("streamerId") String streamerId) {
+    public ResponseEntity<List<PublicOrderResponse>> getStockHistory(@RequestParam("streamerId") String streamerId) {
         if (streamerId == null || streamerId.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        List<Order> orders = orderRepository.findTop200ByStreamerIdAndStatusOrderByCreatedAtDesc(streamerId, "completed");
+        List<PublicOrderResponse> orders = orderRepository
+                .findTop200ByStreamerIdAndStatusOrderByTradedAtDesc(streamerId, "completed")
+                .stream().map(PublicOrderResponse::from).toList();
         return ResponseEntity.ok(orders);
     }
 }

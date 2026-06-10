@@ -51,15 +51,14 @@ public class CandleService {
         long from = Math.max(listedAtMs, safeBeforeMs - bucketMs * limit);
 
         List<Order> orders = from < safeBeforeMs
-                ? orderRepository.findByStreamerIdAndCreatedAtBetweenOrderByCreatedAtAsc(stockId, from, safeBeforeMs - 1)
+                ? orderRepository.findByStreamerIdAndTradedAtBetween(stockId, from, safeBeforeMs - 1)
                 : List.of();
-        Order previousOrder = orderRepository
-                .findTopByStreamerIdAndCreatedAtLessThanAndExecutedPriceIsNotNullOrderByCreatedAtDesc(stockId, from);
-        long splitLookupFrom = previousOrder != null ? Math.min(from, previousOrder.getCreatedAt()) : from;
+        Order previousOrder = orderRepository.findTopByStreamerIdTradedBeforeWithPrice(stockId, from);
+        long splitLookupFrom = previousOrder != null ? Math.min(from, previousOrder.tradeAt()) : from;
         List<StockSplitEvent> splitEvents = stockSplitEventRepository
                 .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, splitLookupFrom);
         double gapFallback = previousOrder != null
-                ? adjustForLaterSplits(previousOrder.getExecutedPrice().doubleValue(), previousOrder.getCreatedAt(), splitEvents)
+                ? adjustForLaterSplits(previousOrder.getExecutedPrice().doubleValue(), previousOrder.tradeAt(), splitEvents)
                 : fallback;
 
         List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs, splitEvents);
@@ -127,18 +126,21 @@ public class CandleService {
     private List<OhlcCandle> buildOneMin(List<Order> orders, long listedAtMs, List<StockSplitEvent> splitEvents) {
         Map<Long, OhlcCandle> buckets = new LinkedHashMap<>();
         for (Order o : orders) {
-            if (o.getCreatedAt() < listedAtMs || o.getExecutedPrice() == null) continue;
-            double price = adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.getCreatedAt(), splitEvents);
-            long bucket = (o.getCreatedAt() / MS_1M) * MS_1M;
+            if (o.tradeAt() < listedAtMs || o.getExecutedPrice() == null) continue;
+            double price = adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.tradeAt(), splitEvents);
+            long bucket = (o.tradeAt() / MS_1M) * MS_1M;
             OhlcCandle c = buckets.get(bucket);
             if (c == null) {
                 buckets.put(bucket, OhlcCandle.builder()
                         .bucketStart(bucket)
                         .open(price).high(price).low(price).close(price).build());
             } else {
-                if (price > c.getHigh()) c.setHigh(price);
-                if (price < c.getLow())  c.setLow(price);
-                c.setClose(price);
+                buckets.put(bucket, OhlcCandle.builder()
+                        .bucketStart(bucket)
+                        .open(c.getOpen())
+                        .high(Math.max(c.getHigh(), price))
+                        .low(Math.min(c.getLow(), price))
+                        .close(price).build());
             }
         }
         return new ArrayList<>(buckets.values());
@@ -168,9 +170,12 @@ public class CandleService {
                         .bucketStart(bucket)
                         .open(c.getOpen()).high(c.getHigh()).low(c.getLow()).close(c.getClose()).build());
             } else {
-                if (c.getHigh() > agg.getHigh()) agg.setHigh(c.getHigh());
-                if (c.getLow()  < agg.getLow())  agg.setLow(c.getLow());
-                agg.setClose(c.getClose());
+                buckets.put(bucket, OhlcCandle.builder()
+                        .bucketStart(bucket)
+                        .open(agg.getOpen())
+                        .high(Math.max(agg.getHigh(), c.getHigh()))
+                        .low(Math.min(agg.getLow(), c.getLow()))
+                        .close(c.getClose()).build());
             }
         }
         return new ArrayList<>(buckets.values());
@@ -239,7 +244,7 @@ public class CandleService {
         if (!cacheMisses.isEmpty()) {
             // Cover all cache-miss intervals with a single query
             List<Order> orders = orderRepository
-                    .findByStreamerIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAsc(stockId, minBucketStart);
+                    .findByStreamerIdTradedAtGreaterThanEqual(stockId, minBucketStart);
             List<StockSplitEvent> splitEvents = stockSplitEventRepository
                     .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, minBucketStart);
             for (Map.Entry<String, Long> entry : cacheMisses.entrySet()) {
@@ -258,8 +263,8 @@ public class CandleService {
     private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, double fallbackPrice,
                                             List<StockSplitEvent> splitEvents) {
         List<Order> inBucket = orders.stream()
-                .filter(o -> o.getCreatedAt() >= bucketStart
-                        && o.getCreatedAt() < bucketEnd
+                .filter(o -> o.tradeAt() >= bucketStart
+                        && o.tradeAt() < bucketEnd
                         && o.getExecutedPrice() != null)
                 .collect(Collectors.toList());
 
@@ -268,7 +273,7 @@ public class CandleService {
         }
 
         List<Double> prices = inBucket.stream()
-                .map(o -> adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.getCreatedAt(), splitEvents))
+                .map(o -> adjustForLaterSplits(o.getExecutedPrice().doubleValue(), o.tradeAt(), splitEvents))
                 .collect(Collectors.toList());
         double open = prices.get(0);
         double close = prices.get(prices.size() - 1);

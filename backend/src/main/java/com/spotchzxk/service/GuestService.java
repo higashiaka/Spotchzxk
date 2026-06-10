@@ -13,7 +13,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GuestService {
 
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(1_000_000);
+    // Issue #4: 초기 잔액 10,000,000원 (기존 1,000,000은 확성기/종목추가권 구매 불가 수준)
+    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
 
     private final UserRepository userRepository;
 

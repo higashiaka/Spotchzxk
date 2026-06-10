@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -44,8 +45,9 @@ public class BotActivityService {
     private final ConcurrentHashMap<String, Long> botNextRunAtMs = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Boolean> botLiquidating = new ConcurrentHashMap<>();
 
-    private volatile Map<String, Long> botTradeCountsCache;
-    private volatile long botTradeCountsCacheExpiry;
+    // Issue #23: volatile 두 필드 패턴은 두 값의 원자성이 보장되지 않음 — AtomicReference<CachedResult>로 교체
+    private record CachedResult(Map<String, Long> counts, long expiry) {}
+    private final AtomicReference<CachedResult> botTradeCountsRef = new AtomicReference<>();
 
     @Scheduled(fixedDelay = 1_000)
     public void tick() {
@@ -333,13 +335,13 @@ public class BotActivityService {
     }
 
     private Map<String, Long> recentBotTradeCounts() {
-        if (botTradeCountsCache != null && System.currentTimeMillis() < botTradeCountsCacheExpiry) {
-            return botTradeCountsCache;
+        CachedResult cached = botTradeCountsRef.get();
+        if (cached != null && System.currentTimeMillis() < cached.expiry()) {
+            return cached.counts();
         }
         Map<String, Long> counts = orderRepository.findTop50BotCompletedByOrderByCreatedAtDesc().stream()
                 .collect(Collectors.groupingBy(Order::getStreamerId, Collectors.counting()));
-        botTradeCountsCache = counts;
-        botTradeCountsCacheExpiry = System.currentTimeMillis() + BOT_COUNTS_CACHE_TTL_MS;
+        botTradeCountsRef.set(new CachedResult(counts, System.currentTimeMillis() + BOT_COUNTS_CACHE_TTL_MS));
         return counts;
     }
 

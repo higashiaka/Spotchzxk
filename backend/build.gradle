@@ -33,6 +33,7 @@ dependencies {
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'
 	implementation 'com.google.firebase:firebase-admin:9.4.3'
+	implementation 'com.github.ben-manes.caffeine:caffeine'
 	implementation 'com.microsoft.playwright:playwright:1.49.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'

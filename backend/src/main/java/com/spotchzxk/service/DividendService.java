@@ -29,7 +29,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
-    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.0001");
+    // Issue #7: BACKEND_OVERVIEW.md 기준 0.7% — 기존 0.0001(0.01%)은 문서 대비 1/70 수준
+    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.007");
 
     private final UserShareRepository userShareRepository;
     private final UserDividendLogRepository userDividendLogRepository;

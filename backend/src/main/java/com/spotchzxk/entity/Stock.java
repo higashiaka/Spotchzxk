@@ -65,6 +65,18 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long preStreamFloat;
 
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long coinReserve;
+
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long shareReserve;
+
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long feePool;
+
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 1")
+    private int liquidityTier;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
@@ -135,6 +147,31 @@ public class Stock {
         this.issuedShares = 0;
     }
 
+    public void initAmmPool(long coinReserve, long shareReserve, int liquidityTier) {
+        this.coinReserve = coinReserve;
+        this.shareReserve = shareReserve;
+        this.liquidityTier = liquidityTier;
+        this.currentPrice = clampPrice(coinReserve / shareReserve);
+    }
+
+    public void applyAmmTrade(long newCoinReserve, long newShareReserve, long fee) {
+        // Issue #10: BigDecimal 나눗셈으로 반올림 처리 — long 정수 나눗셈은 소수점 버림으로 AMM 실제 가격과 불일치
+        this.currentPrice = clampPrice(java.math.BigDecimal.valueOf(newCoinReserve)
+                .divide(java.math.BigDecimal.valueOf(newShareReserve), 0, java.math.RoundingMode.HALF_UP)
+                .longValue());
+        this.coinReserve = newCoinReserve;
+        this.shareReserve = newShareReserve;
+        this.feePool += fee;
+    }
+
+    private static int clampPrice(long raw) {
+        return (int) Math.min(raw, Integer.MAX_VALUE);
+    }
+
+    public void drainFeePool(long amount) {
+        this.feePool = Math.max(0, this.feePool - amount);
+    }
+
     public void applyStockSplit(int ratio) {
         if (ratio <= 1) {
             throw new IllegalArgumentException("Split ratio must be greater than 1.");
@@ -146,6 +183,8 @@ public class Stock {
         this.dailyVolume *= ratio;
         this.issuedShares *= ratio;
         this.preStreamFloat *= ratio;
+        // AMM: more shares at lower price — coinReserve unchanged so price halves naturally
+        this.shareReserve *= ratio;
     }
 
     private int splitPrice(int price, int ratio) {

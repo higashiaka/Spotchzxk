@@ -2,6 +2,7 @@ package com.spotchzxk.config;
 
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.security.FirebaseTokenFilter;
+import com.spotchzxk.service.AccountLinkService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,8 +26,8 @@ public class SecurityConfig {
     private String corsOrigin;
 
     @Bean
-    public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository) {
-        return new FirebaseTokenFilter(userRepository);
+    public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService) {
+        return new FirebaseTokenFilter(userRepository, accountLinkService);
     }
 
     @Bean
@@ -41,6 +42,8 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/guest/precheck").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-google").hasRole("GOOGLE")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
+                // Issue #27/#20: /api/admin/** 는 Google 인증 필수 — anyRequest().authenticated()만으로는 게스트도 접근 가능
+                .requestMatchers("/api/admin/**").hasRole("GOOGLE")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);

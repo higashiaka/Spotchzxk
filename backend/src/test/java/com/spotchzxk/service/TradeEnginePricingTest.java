@@ -14,52 +14,57 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TradeEnginePricingTest {
 
-    private final TradeEngine tradeEngine = new TradeEngine(
-            mock(UserRepository.class),
-            mock(UserShareRepository.class),
-            mock(StockRepository.class),
-            mock(OrderRepository.class),
-            mock(SimpMessagingTemplate.class),
-            mock(PlatformTransactionManager.class),
-            mock(CandleService.class)
-    );
+    // 테스트용 풀: price = 10,000원, shareReserve = 10,000주
+    private static final long COIN_RESERVE  = 100_000_000L; // 1억
+    private static final long SHARE_RESERVE = 10_000L;
 
     @Test
-    void marketOrderSettlesAtAverageImpactPriceAndStoresFinalPrice() {
-        TradeEngine.TradePrices prices = tradeEngine.calculateTradePrices(BigDecimal.valueOf(10_000), true, 700);
+    void buySlippage_avgPriceExceedsInitialPrice() {
+        AmmCalculator.AmmResult result = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
 
-        assertThat(prices.executionPrice()).isGreaterThan(BigDecimal.valueOf(10_000));
-        assertThat(prices.executionPrice()).isLessThan(prices.finalPrice());
-        assertThat(prices.finalPrice()).isEqualByComparingTo(BigDecimal.valueOf(14_189));
+        // 평균 체결가 > 초기가 (슬리피지)
+        assertThat(result.avgPrice()).isGreaterThan(BigDecimal.valueOf(10_000));
+        // 거래 후 가격 > 평균 체결가
+        assertThat(result.newPrice()).isGreaterThan(result.avgPrice());
+        // 유저 지불액 > AMM 코인 (수수료 포함)
+        assertThat(result.userNetAmount()).isGreaterThan(result.ammAmount());
     }
 
     @Test
-    void pumpThenDumpIsNotProfitableWithAverageImpactSettlement() {
-        TradeEngine.TradePrices firstBuy = tradeEngine.calculateTradePrices(BigDecimal.valueOf(10_000), true, 700);
-        TradeEngine.TradePrices secondBuy = tradeEngine.calculateTradePrices(firstBuy.finalPrice(), true, 300);
-        TradeEngine.TradePrices sell = tradeEngine.calculateTradePrices(secondBuy.finalPrice(), false, 1_000);
+    void pumpThenDump_notProfitableDueToFeeAndSlippage() {
+        // 700주 매수
+        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
+        long[] poolAfterBuy = buy.newPool();
 
-        BigDecimal buyCost = firstBuy.executionPrice().multiply(BigDecimal.valueOf(700))
-                .add(secondBuy.executionPrice().multiply(BigDecimal.valueOf(300)));
-        BigDecimal sellProceeds = sell.executionPrice().multiply(BigDecimal.valueOf(1_000));
+        // 700주 매도
+        AmmCalculator.AmmResult sell = AmmCalculator.calcSell(poolAfterBuy[0], poolAfterBuy[1], 700);
 
-        assertThat(sellProceeds).isLessThan(buyCost);
+        // 매도 수령액 < 매수 지불액 (수수료 + 슬리피지 손실)
+        assertThat(sell.userNetAmount()).isLessThan(buy.userNetAmount());
     }
 
     @Test
-    void splitBuyThenSingleSellReturnsPriceToStartingLevel() {
-        TradeEngine.TradePrices firstBuy = tradeEngine.calculateTradePrices(BigDecimal.valueOf(10_000), true, 700);
-        TradeEngine.TradePrices secondBuy = tradeEngine.calculateTradePrices(firstBuy.finalPrice(), true, 300);
-        TradeEngine.TradePrices sell = tradeEngine.calculateTradePrices(secondBuy.finalPrice(), false, 1_000);
+    void kConstant_maintainedAfterBuyWithCeilingRounding() {
+        long k = COIN_RESERVE * SHARE_RESERVE;
+        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
+        long[] pool = buy.newPool();
 
-        assertThat(sell.finalPrice()).isEqualByComparingTo(BigDecimal.valueOf(10_000));
+        // 올림 처리로 k는 약간 증가할 수 있음 (≥ 원본 k)
+        assertThat(pool[0] * pool[1]).isGreaterThanOrEqualTo(k);
+    }
+
+    @Test
+    void poolDepthLimit_throwsWhenQtyExceedsShareReserve() {
+        assertThatThrownBy(() -> AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, SHARE_RESERVE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pool depth");
     }
 
     @Test
@@ -84,9 +89,12 @@ class TradeEnginePricingTest {
                 .totalSupply(10_000)
                 .issuedShares(0)
                 .currentPrice(1_000)
+                .coinReserve(10_000_000L)
+                .shareReserve(10_000L)
                 .build()));
         when(orderRepository.sumPendingBuyQuantity(userId, stockId)).thenReturn(80L);
 
+        // heldQty(100) + pendingBuyQty(80) + qty(21) = 201 > 200 → 예외
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
                 engine,
                 "validateTrade",

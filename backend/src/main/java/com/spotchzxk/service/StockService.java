@@ -77,14 +77,7 @@ public class StockService {
                 .listedAt(java.time.LocalDateTime.now())
                 .build();
 
-        if (!chzzkApiClient.populateChannelInfo(stock)) {
-            throw new ChannelNotFoundException(channelId);
-        }
-
-        if (stock.getFollowerCount() < MIN_FOLLOWER_COUNT) {
-            throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
-        }
-
+        // Issue #21: Chzzk API 호출은 잠금 내부의 두 번째 existsById 검사 이후로 이동 (TOCTOU)
         AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
         tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
                 addStockIfNewLocked(userId, channelId, stock))));
@@ -99,6 +92,14 @@ public class StockService {
             return Optional.empty();
         }
 
+        // Issue #21: Chzzk API는 두 번째 existsById 이후 — 이미 등록된 채널에 네트워크 요청을 낭비하지 않음
+        if (!chzzkApiClient.populateChannelInfo(stock)) {
+            throw new ChannelNotFoundException(channelId);
+        }
+        if (stock.getFollowerCount() < MIN_FOLLOWER_COUNT) {
+            throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("User not found."));
         if (user.getStockAddTickets() <= 0) {
@@ -111,6 +112,12 @@ public class StockService {
 
         int listingPrice = calcListingPrice(stock.getFollowerCount());
         stock.finalizeListing(listingPrice, 100_000L);
+
+        int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());
+        long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount(), listingPrice);
+        long coinReserve = (long) listingPrice * shareReserve;
+        stock.initAmmPool(coinReserve, shareReserve, tier);
+
         stockRepository.save(stock);
 
         return Optional.of(stockRepository.findById(channelId).orElseThrow());

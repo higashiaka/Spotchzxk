@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +22,8 @@ import java.util.List;
 public class ChzzkLivePollingService {
 
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
-    private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
+    // Issue #8: BACKEND_OVERVIEW.md 기준 10분 주기 (기존 60분은 배당 6배 간격)
+    private static final long DIVIDEND_INTERVAL_MINUTES = 10L;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
@@ -37,28 +39,29 @@ public class ChzzkLivePollingService {
             return;
         }
 
+        // Issue #15: CompletableFuture로 병렬 API 호출 — 순차 호출은 종목 수 증가 시 폴링 간격 초과
         List<Stock> pollingOrder = stocks.stream()
                 .filter(stock -> !isEventStock(stock))
                 .sorted(Comparator.comparing(Stock::isLive).reversed())
                 .toList();
-        for (Stock stock : pollingOrder) {
-            String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-            if (status == null) {
-                continue;
-            }
-
-            try {
-                boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
-                        handleLiveTransition(stock, status)));
-                if (changed) {
-                    stockRepository.findById(stock.getChannelId()).ifPresent(s ->
-                            messagingTemplate.convertAndSend("/topic/streamers", List.of(s)));
-                }
-            } catch (Exception e) {
-                log.error("Failed to handle live transition for channel {}: {}",
-                        stock.getChannelId(), e.getMessage(), e);
-            }
-        }
+        List<CompletableFuture<Void>> futures = pollingOrder.stream()
+                .map(stock -> CompletableFuture.runAsync(() -> {
+                    String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                    if (status == null) return;
+                    try {
+                        boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
+                                handleLiveTransition(stock, status)));
+                        if (changed) {
+                            stockRepository.findById(stock.getChannelId()).ifPresent(s ->
+                                    messagingTemplate.convertAndSend("/topic/streamers", List.of(s)));
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to handle live transition for channel {}: {}",
+                                stock.getChannelId(), e.getMessage(), e);
+                    }
+                }))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     }
 
     private boolean handleLiveTransition(Stock stock, String status) {

@@ -73,16 +73,22 @@ public class StockSplitService {
         StockSplitNotice notice = createNotice(today, splitHour, targets);
         stockSplitNoticeRepository.saveAndFlush(notice);
 
+        List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
         for (Stock stock : targets) {
             stock.applyStockSplit(SPLIT_RATIO);
             userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
             orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
-            tradeEngine.evictStockCache(stock.getChannelId());
-            candleService.evictStockCache(stock.getChannelId());
-            systemSellPressureService.evictStockState(stock.getChannelId());
         }
         stockRepository.saveAll(targets);
-        tradeEngine.evictAllPortfolioCaches();
+        // 캐시 무효화는 커밋 후에 실행 — 트랜잭션 내 무효화 시 다른 스레드가 구버전을 재캐싱하는 문제 방지
+        registerAfterCommit(() -> {
+            splitChannelIds.forEach(id -> {
+                tradeEngine.evictStockCache(id);
+                candleService.evictStockCache(id);
+                systemSellPressureService.evictStockState(id);
+            });
+            tradeEngine.evictAllPortfolioCaches();
+        });
 
         long executedAt = System.currentTimeMillis();
         LocalDateTime createdAt = now;
@@ -103,7 +109,7 @@ public class StockSplitService {
                         "price", stock.getCurrentPrice()
                 ))
                 .toList();
-        sendAfterCommit(() -> {
+        registerAfterCommit(() -> {
             messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
             for (Map<String, Object> priceUpdate : priceUpdates) {
                 String channelId = (String) priceUpdate.get("channelId");
@@ -144,7 +150,7 @@ public class StockSplitService {
         return stock.getChannelId() != null && stock.getChannelId().startsWith(EVENT_CHANNEL_PREFIX);
     }
 
-    private void sendAfterCommit(Runnable task) {
+    private void registerAfterCommit(Runnable task) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             task.run();
             return;

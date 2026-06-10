@@ -49,10 +49,30 @@ public class Order {
     @Column(name = "created_at", nullable = false)
     private long createdAt; // epoch milliseconds
 
+    @Column(name = "executed_at")
+    private Long executedAt; // epoch milliseconds, null until filled
+
+    // Issue #6: V49 마이그레이션 스키마 일치 — 부분 체결 지원 필드 (처리 로직은 미구현)
+    @Builder.Default
+    @Column(name = "filled_quantity", nullable = false)
+    private long filledQuantity = 0L;
+
+    @Builder.Default
+    @Column(name = "allow_partial", nullable = false)
+    private boolean allowPartial = false;
+
+    @Column(name = "expires_at")
+    private java.time.LocalDateTime expiresAt;
+
     public void complete(BigDecimal executedPrice, long executedAt) {
         this.executedPrice = executedPrice;
         this.status = "completed";
-        this.createdAt = executedAt;
+        this.executedAt = executedAt;
+    }
+
+    /** 실제 거래 발생 시각. 즉시 체결은 createdAt, 지정가 나중 체결은 executedAt. */
+    public long tradeAt() {
+        return executedAt != null ? executedAt : createdAt;
     }
 
     public void cancel() {

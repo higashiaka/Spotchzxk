@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -52,6 +54,7 @@ public class AccountLinkService {
                 .resetCount(guestUser.getResetCount())
                 .lastResetDate(guestUser.getLastResetDate())
                 .dividendTotal(guestUser.getDividendTotal())
+                .donationTotal(guestUser.getDonationTotal())
                 .build();
         userRepository.save(googleUser);
 
@@ -59,11 +62,14 @@ public class AccountLinkService {
         userShareRepository.updateUserId(guestUid, googleUid);
         orderRepository.updateUserId(guestUid, googleUid);
 
-        // Delete the guest user (user_shares and orders will be removed via ON DELETE CASCADE)
+        // Issue #14: 게스트의 user_shares와 orders는 이미 googleUid로 이전됐으므로 게스트 User 레코드만 삭제됨 (CASCADE 없음)
         userRepository.deleteById(guestUid);
 
-        tradeEngine.evictUserCache(guestUid);
-        tradeEngine.evictUserCache(googleUid);
+        // 캐시 무효화는 커밋 후에 실행 — 커밋 전 무효화 시 다른 스레드가 구버전을 재캐싱하는 문제 방지
+        registerAfterCommit(() -> {
+            tradeEngine.evictUserCache(guestUid);
+            tradeEngine.evictUserCache(googleUid);
+        });
     }
 
     @Transactional
@@ -71,6 +77,19 @@ public class AccountLinkService {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found."));
         user.markAsRegistered();
-        tradeEngine.evictUserCache(uid);
+        registerAfterCommit(() -> tradeEngine.evictUserCache(uid));
+    }
+
+    private void registerAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 }

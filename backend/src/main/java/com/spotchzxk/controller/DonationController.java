@@ -3,14 +3,18 @@ package com.spotchzxk.controller;
 import com.spotchzxk.entity.User;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.service.PortfolioService;
+import com.spotchzxk.service.TradeEngine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 @RestController
 @RequestMapping("/api/donate")
@@ -22,9 +26,10 @@ public class DonationController {
 
     private final PortfolioService portfolioService;
     private final UserRepository userRepository;
+    private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
 
     @PostMapping
-    @Transactional
     public ResponseEntity<?> donate(
             @RequestBody Map<String, Object> body,
             @AuthenticationPrincipal String uid) {
@@ -32,9 +37,14 @@ public class DonationController {
             return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
         }
 
+        // Issue #29: body.get("amount")가 null이면 NullPointerException 발생 — 명시적 null 체크
+        Object amountObj = body.get("amount");
+        if (amountObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "올바른 금액을 입력해주세요."));
+        }
         BigDecimal amount;
         try {
-            amount = new BigDecimal(body.get("amount").toString());
+            amount = new BigDecimal(amountObj.toString());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", "올바른 금액을 입력해주세요."));
         }
@@ -46,17 +56,43 @@ public class DonationController {
             return ResponseEntity.badRequest().body(Map.of("error", "최대 후원 금액은 1억원입니다."));
         }
 
+        AtomicReference<Map<String, Object>> result = new AtomicReference<>();
+        final BigDecimal finalAmount = amount;
+        try {
+            tradeEngine.runWithUserLock(uid, () -> result.set(transactionTemplate.execute(status ->
+                    donateLocked(uid, finalAmount))));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(result.get());
+    }
+
+    private Map<String, Object> donateLocked(String uid, BigDecimal amount) {
         User user = portfolioService.getOrCreate(uid);
         if (user.getCoinBalance().compareTo(amount) < 0) {
-            return ResponseEntity.badRequest().body(Map.of("error", "잔고가 부족합니다."));
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
-        user.addDonation(amount);
-        userRepository.save(user);
+        if (userRepository.addToBalance(uid, amount.negate()) != 1) {
+            throw new IllegalStateException("사용자를 찾을 수 없습니다.");
+        }
+        if (userRepository.addToDonationTotal(uid, amount) != 1) {
+            throw new IllegalStateException("사용자를 찾을 수 없습니다.");
+        }
 
-        return ResponseEntity.ok(Map.of(
-                "balance", user.getCoinBalance(),
-                "donationTotal", user.getDonationTotal()
-        ));
+        // 커밋 후 캐시 무효화
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                tradeEngine.evictUserCache(uid);
+            }
+        });
+
+        User updated = userRepository.findById(uid)
+                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
+        return Map.of(
+                "balance", updated.getCoinBalance(),
+                "donationTotal", updated.getDonationTotal()
+        );
     }
 }
