@@ -353,7 +353,7 @@ public class TradeEngine {
 
     private void updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
-        stock.applyTrade(amm.newPrice().intValue(), isBuy, qty, userNet.longValue());
+        stock.applyTrade(amm.newPrice().longValue(), isBuy, qty, userNet.longValue());
         stockRepository.save(stock);
     }
 

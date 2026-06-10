@@ -40,14 +40,14 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long dailyTradingValue;
 
-    @Column(nullable = false)
-    private int basePrice;
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private long basePrice;
 
-    @Column(nullable = false, columnDefinition = "INT DEFAULT 10000")
-    private int listingPrice;
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 10000")
+    private long listingPrice;
 
-    @Column
-    private int currentPrice;
+    @Column(columnDefinition = "BIGINT DEFAULT 0")
+    private long currentPrice;
 
     @Column
     @com.fasterxml.jackson.annotation.JsonProperty("isLive")
@@ -90,7 +90,7 @@ public class Stock {
         if (listingPrice <= 0) listingPrice = Math.max(10_000, currentPrice);
     }
 
-    public void applyTrade(int executedPrice, boolean isBuy, long qty, long tradingValue) {
+    public void applyTrade(long executedPrice, boolean isBuy, long qty, long tradingValue) {
         this.currentPrice = executedPrice;
         this.dailyVolume += qty;
         this.dailyTradingValue += tradingValue;
@@ -139,7 +139,7 @@ public class Stock {
         this.followerCount = followerCount;
     }
 
-    public void finalizeListing(int listingPrice, long totalSupply) {
+    public void finalizeListing(long listingPrice, long totalSupply) {
         this.currentPrice = listingPrice;
         this.basePrice = listingPrice;
         this.listingPrice = listingPrice;
@@ -151,9 +151,9 @@ public class Stock {
         this.coinReserve = coinReserve;
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;
-        this.currentPrice = clampPrice(Math.max(1L, java.math.BigDecimal.valueOf(coinReserve)
+        this.currentPrice = Math.max(1L, java.math.BigDecimal.valueOf(coinReserve)
                 .divide(java.math.BigDecimal.valueOf(shareReserve), 0, java.math.RoundingMode.HALF_UP)
-                .longValue()));
+                .longValue());
     }
 
     public void syncIssuedShares(long totalHeld) {
@@ -161,17 +161,12 @@ public class Stock {
     }
 
     public void applyAmmTrade(long newCoinReserve, long newShareReserve, long fee) {
-        // Issue #10: BigDecimal 나눗셈으로 반올림 처리 — long 정수 나눗셈은 소수점 버림으로 AMM 실제 가격과 불일치
-        this.currentPrice = clampPrice(java.math.BigDecimal.valueOf(newCoinReserve)
+        this.currentPrice = java.math.BigDecimal.valueOf(newCoinReserve)
                 .divide(java.math.BigDecimal.valueOf(newShareReserve), 0, java.math.RoundingMode.HALF_UP)
-                .longValue());
+                .longValue();
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
         this.feePool += fee;
-    }
-
-    private static int clampPrice(long raw) {
-        return (int) Math.min(raw, Integer.MAX_VALUE);
     }
 
     public void drainFeePool(long amount) {
@@ -193,7 +188,7 @@ public class Stock {
         this.shareReserve *= ratio;
     }
 
-    private int splitPrice(int price, int ratio) {
-        return Math.max(1, Math.round((float) price / ratio));
+    private long splitPrice(long price, int ratio) {
+        return Math.max(1L, Math.round((double) price / ratio));
     }
 }

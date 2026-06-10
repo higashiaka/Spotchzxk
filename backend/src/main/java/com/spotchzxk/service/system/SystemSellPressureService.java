@@ -133,28 +133,28 @@ public class SystemSellPressureService {
     }
 
     int gainPercent(Stock stock, PressureState state) {
-        int basePrice = Math.max(1, referencePrice(stock, state));
-        int currentPrice = Math.max(1, stock.getCurrentPrice());
+        long basePrice = Math.max(1L, referencePrice(stock, state));
+        long currentPrice = Math.max(1L, stock.getCurrentPrice());
         return BigDecimal.valueOf(currentPrice - basePrice)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(basePrice), 0, RoundingMode.DOWN)
                 .intValue();
     }
 
-    int referencePrice(Stock stock, PressureState state) {
-        int listingPrice = stock.getListingPrice() > 0 ? stock.getListingPrice() : stock.getBasePrice();
+    long referencePrice(Stock stock, PressureState state) {
+        long listingPrice = stock.getListingPrice() > 0 ? stock.getListingPrice() : stock.getBasePrice();
         long dailyAdjustedPrice = stock.getBasePrice() <= 0
                 ? 0
-                : (long) stock.getBasePrice() * Math.max(0, state.dailyReferenceRatioPercent) / 100;
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(listingPrice, dailyAdjustedPrice));
+                : stock.getBasePrice() * Math.max(0, state.dailyReferenceRatioPercent) / 100;
+        return Math.max(listingPrice, dailyAdjustedPrice);
     }
 
     int effectiveGainPercent(Stock stock, PressureState state, int baseGainPercent) {
         if (!state.highPriceActive) {
             return baseGainPercent;
         }
-        int currentPrice = Math.max(1, stock.getCurrentPrice());
-        int referencePrice = Math.max(1, currentPrice / Math.max(1, state.highPriceReferenceDivisor));
+        long currentPrice = Math.max(1L, stock.getCurrentPrice());
+        long referencePrice = Math.max(1L, currentPrice / Math.max(1, state.highPriceReferenceDivisor));
         return BigDecimal.valueOf(currentPrice - referencePrice)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(referencePrice), 0, RoundingMode.DOWN)
@@ -162,7 +162,7 @@ public class SystemSellPressureService {
     }
 
     private void refreshHighPricePressure(Stock stock, PressureState state) {
-        int currentPrice = Math.max(1, stock.getCurrentPrice());
+        long currentPrice = Math.max(1L, stock.getCurrentPrice());
         if (currentPrice >= state.highPriceTriggerPrice) {
             state.highPriceActive = true;
             return;
@@ -326,8 +326,8 @@ public class SystemSellPressureService {
         volatile int maxConsecutiveSells;
         final AtomicInteger soldToday = new AtomicInteger(0);
         volatile int dailySellLimit;
-        volatile int highPriceTriggerPrice;
-        volatile int highPriceStopPrice;
+        volatile long highPriceTriggerPrice;
+        volatile long highPriceStopPrice;
         volatile int highPriceReferenceDivisor;
         volatile boolean highPriceActive;
         volatile int dailyReferenceRatioPercent;

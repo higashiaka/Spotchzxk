@@ -9,5 +9,5 @@ import java.util.List;
 @Repository
 public interface StockRepository extends JpaRepository<Stock, String> {
     List<Stock> findByIsLiveTrue();
-    List<Stock> findByCurrentPriceGreaterThan(int currentPrice);
+    List<Stock> findByCurrentPriceGreaterThan(long currentPrice);
 }

@@ -123,12 +123,12 @@ public class StockService {
         return Optional.of(stockRepository.findById(channelId).orElseThrow());
     }
 
-    private static int calcListingPrice(int followerCount) {
+    private static long calcListingPrice(int followerCount) {
         if (followerCount <= 0) {
-            return 10_000;
+            return 10_000L;
         }
-        int raw = (int) (Math.sqrt(followerCount) * 300);
-        int rounded = (raw / 1_000) * 1_000;
-        return Math.max(10_000, Math.min(300_000, rounded));
+        long raw = (long) (Math.sqrt(followerCount) * 300);
+        long rounded = (raw / 1_000) * 1_000;
+        return Math.max(10_000L, Math.min(300_000L, rounded));
     }
 }

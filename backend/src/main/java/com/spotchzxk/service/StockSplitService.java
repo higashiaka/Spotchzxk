@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public class StockSplitService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final int SPLIT_THRESHOLD_PRICE = 1_000_000;
+    private static final long SPLIT_THRESHOLD_PRICE = 1_000_000L;
     private static final int SPLIT_RATIO = 10;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
