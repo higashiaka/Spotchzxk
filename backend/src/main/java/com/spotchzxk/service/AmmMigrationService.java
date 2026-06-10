@@ -5,6 +5,8 @@ import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -19,11 +21,16 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AmmMigrationService {
+public class AmmMigrationService implements ApplicationRunner {
 
     private final StockRepository stockRepository;
     private final UserShareRepository userShareRepository;
     private final TradeEngine tradeEngine;
+
+    @Override
+    public void run(ApplicationArguments args) {
+        migrateAll();
+    }
 
     @Transactional
     public void migrateAll() {
