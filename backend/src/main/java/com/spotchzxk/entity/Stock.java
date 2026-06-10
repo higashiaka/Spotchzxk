@@ -151,7 +151,9 @@ public class Stock {
         this.coinReserve = coinReserve;
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;
-        this.currentPrice = clampPrice(coinReserve / shareReserve);
+        this.currentPrice = clampPrice(Math.max(1L, java.math.BigDecimal.valueOf(coinReserve)
+                .divide(java.math.BigDecimal.valueOf(shareReserve), 0, java.math.RoundingMode.HALF_UP)
+                .longValue()));
     }
 
     public void syncIssuedShares(long totalHeld) {
