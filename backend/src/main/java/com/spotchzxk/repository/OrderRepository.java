@@ -21,16 +21,6 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") String id);
 
-    @Query(value = """
-            SELECT o.* FROM orders o
-            JOIN users u ON u.id = o.user_id
-            WHERE u.is_bot = 1
-              AND o.status = 'completed'
-            ORDER BY o.created_at DESC
-            LIMIT 50
-            """, nativeQuery = true)
-    List<Order> findTop50BotCompletedByOrderByCreatedAtDesc();
-
     List<Order> findTop200ByStreamerIdOrderByCreatedAtDesc(String streamerId);
 
     // 체결 내역은 체결 시각(executedAt) 기준 정렬 — 지정가 주문이 나중에 체결돼도 올바른 순서로 표시됨
