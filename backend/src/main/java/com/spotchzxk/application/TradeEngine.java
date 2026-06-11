@@ -161,10 +161,10 @@ public class TradeEngine {
         long userNetAmount = amm.userNetAmount();
 
         if (isBuy && maxCoinIn != null && userNetAmount > maxCoinIn) {
-            throw new IllegalStateException("?щ━?쇱? 珥덇낵: ?덉긽 鍮꾩슜 " + userNetAmount + " > maxCoinIn " + maxCoinIn);
+            throw new IllegalStateException("슬리피지 초과: 실제 비용 " + userNetAmount + " > 최대허용 " + maxCoinIn);
         }
         if (!isBuy && minCoinOut != null && userNetAmount < minCoinOut) {
-            throw new IllegalStateException("?щ━?쇱? 珥덇낵: ?덉긽 ?섎졊 " + userNetAmount + " < minCoinOut " + minCoinOut);
+            throw new IllegalStateException("슬리피지 초과: 실제 수령 " + userNetAmount + " < 최소허용 " + minCoinOut);
         }
 
         BigDecimal userNet = BigDecimal.valueOf(userNetAmount);
