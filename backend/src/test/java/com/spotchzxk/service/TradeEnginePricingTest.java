@@ -1,6 +1,8 @@
 package com.spotchzxk.service;
 
 import com.spotchzxk.entity.Stock;
+import com.spotchzxk.entity.Order;
+import com.spotchzxk.entity.User;
 import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.StockRepository;
 import com.spotchzxk.repository.UserRepository;
@@ -12,9 +14,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -106,5 +110,92 @@ class TradeEnginePricingTest {
                 BigDecimal.valueOf(1_000_000),
                 100L
         )).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void processPendingLimitOrdersDoesNotPropagateSingleOrderFailure() {
+        StockRepository stockRepository = mock(StockRepository.class);
+        OrderRepository orderRepository = mock(OrderRepository.class);
+        PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                stockRepository,
+                orderRepository,
+                mock(SimpMessagingTemplate.class),
+                txManager,
+                mock(CandleService.class)
+        );
+        String stockId = "stock-1";
+        Order pendingOrder = Order.builder()
+                .id("order-1")
+                .userId("user-1")
+                .streamerId(stockId)
+                .type("buy")
+                .quantity(1)
+                .orderMode("limit")
+                .limitPrice(BigDecimal.valueOf(10_000))
+                .status("pending")
+                .createdAt(System.currentTimeMillis())
+                .build();
+
+        when(stockRepository.findById(stockId)).thenReturn(Optional.of(Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .currentPrice(10_000)
+                .coinReserve(COIN_RESERVE)
+                .shareReserve(SHARE_RESERVE)
+                .build()));
+        when(orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(stockId, "pending"))
+                .thenReturn(List.of(pendingOrder));
+
+        assertThatCode(() -> ReflectionTestUtils.invokeMethod(
+                engine,
+                "processPendingLimitOrders",
+                stockId
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
+    void sellWithMissingDbHoldingThrowsBusinessError() {
+        UserShareRepository userShareRepository = mock(UserShareRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                userShareRepository,
+                mock(StockRepository.class),
+                mock(OrderRepository.class),
+                mock(SimpMessagingTemplate.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class)
+        );
+        String userId = "user-1";
+        String stockId = "stock-1";
+        User user = User.builder()
+                .id(userId)
+                .coinBalance(BigDecimal.valueOf(1_000_000))
+                .build();
+        Stock stock = Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .currentPrice(10_000)
+                .coinReserve(COIN_RESERVE)
+                .shareReserve(SHARE_RESERVE)
+                .build();
+
+        when(userShareRepository.findByUserIdAndStockChannelId(userId, stockId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                engine,
+                "updateUserShareAndCalculateProfit",
+                user,
+                stock,
+                stockId,
+                false,
+                1L,
+                BigDecimal.valueOf(10_000)
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("보유 주식이 부족합니다.");
     }
 }

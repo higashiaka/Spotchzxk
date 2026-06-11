@@ -68,12 +68,18 @@ public class TradeEngine {
             loadPortfolioIfAbsent(userId);
             stockLock.lock();
             try {
-                if ("limit".equals(req.getOrderMode())) {
-                    return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice());
+                try {
+                    if ("limit".equals(req.getOrderMode())) {
+                        return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice());
+                    }
+                    // Issue #5: 슬리피지 보호 파라미터를 executeMarketOrder에 전달
+                    return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
+                            req.getMaxCoinIn(), req.getMinCoinOut());
+                } catch (RuntimeException e) {
+                    evictUserCache(userId);
+                    evictStockCache(channelId);
+                    throw e;
                 }
-                // Issue #5: 슬리피지 보호 파라미터를 executeMarketOrder에 전달
-                return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
-                        req.getMaxCoinIn(), req.getMinCoinOut());
             } finally {
                 stockLock.unlock();
             }
@@ -132,7 +138,7 @@ public class TradeEngine {
 
             BigDecimal refund = BigDecimal.ZERO;
             if ("buy".equals(order.getType())) {
-                refund = order.getLimitPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+                refund = limitReservationAmount(order.getLimitPrice(), order.getQuantity(), true);
             }
 
             order.cancel();
@@ -208,7 +214,7 @@ public class TradeEngine {
     private AmmCalculator.AmmResult calcAmmTradeForLimit(String channelId, boolean isBuy, long qty,
                                                           BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calculateAmmTrade(channelId, isBuy, qty);
-        BigDecimal reservation = limitPrice.multiply(BigDecimal.valueOf(qty));
+        BigDecimal reservation = limitReservationAmount(limitPrice, qty, isBuy);
         if (isBuy && BigDecimal.valueOf(amm.userNetAmount()).compareTo(reservation) > 0) {
             return null; // 슬리피지로 예약금 초과
         }
@@ -243,7 +249,7 @@ public class TradeEngine {
 
     private TradeResponse createPendingLimitOrder(String userId, String channelId, boolean isBuy, long qty,
                                                   BigDecimal fallbackPrice, BigDecimal limitPrice) {
-        BigDecimal reserveAmount = limitPrice.multiply(BigDecimal.valueOf(qty));
+        BigDecimal reserveAmount = limitReservationAmount(limitPrice, qty, isBuy);
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
         Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
         long heldQty = shares.getOrDefault(channelId, 0L);
@@ -258,6 +264,14 @@ public class TradeEngine {
         }
 
         return new TradeResponse("pending", BigDecimal.ZERO, newBalance, BigDecimal.ZERO, orderId, "limit");
+    }
+
+    private BigDecimal limitReservationAmount(BigDecimal limitPrice, long qty, boolean isBuy) {
+        BigDecimal gross = limitPrice.multiply(BigDecimal.valueOf(qty)).setScale(0, RoundingMode.CEILING);
+        long grossAmount = gross.longValueExact();
+        long[] fee = AmmCalculator.fee(grossAmount);
+        long totalFee = fee[0] + fee[1];
+        return BigDecimal.valueOf(isBuy ? grossAmount + totalFee : Math.max(0L, grossAmount - totalFee));
     }
 
     private BigDecimal loadPrice(String channelId, BigDecimal fallbackPrice) {
@@ -333,7 +347,8 @@ public class TradeEngine {
                                 String orderId, String orderMode, BigDecimal limitPrice) {
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
         return new TransactionTemplate(txManager).execute(status -> {
-            Stock stock = stockRepository.findById(channelId).orElseThrow();
+            Stock stock = stockRepository.findById(channelId)
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             User user = getOrCreateUser(userId);
 
             updateStock(stock, isBuy, qty, amm, userNet);
@@ -361,18 +376,22 @@ public class TradeEngine {
 
     private BigDecimal updateUserShareAndCalculateProfit(User user, Stock stock, String channelId, boolean isBuy,
                                                          long qty, BigDecimal cost) {
-        UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
-                .orElseGet(() -> UserShare.builder()
-                        .user(user)
-                        .stock(stock)
-                        .quantity(0L)
-                        .avgPrice(BigDecimal.ZERO)
-                        .build());
-
         if (isBuy) {
+            UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
+                    .orElseGet(() -> UserShare.builder()
+                            .user(user)
+                            .stock(stock)
+                            .quantity(0L)
+                            .avgPrice(BigDecimal.ZERO)
+                            .build());
             updateBoughtShare(share, qty, cost);
             return BigDecimal.ZERO;
         } else {
+            UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
+                    .orElseThrow(() -> new IllegalStateException("보유 주식이 부족합니다."));
+            if (share.getQuantity() < qty) {
+                throw new IllegalStateException("보유 주식이 부족합니다.");
+            }
             BigDecimal profit = calculateRealizedProfit(share, qty, cost);
             updateSoldShare(share, qty);
             return profit;
@@ -477,14 +496,26 @@ public class TradeEngine {
 
     // Issue #11: 각 주문 체결 사이에 최신 AMM 가격 로드 (캐시는 이전 체결 직후 갱신됨)
     private void processPendingLimitOrders(String channelId) {
-        for (Order order : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")) {
-            BigDecimal currentPrice = loadPrice(channelId, BigDecimal.valueOf(1));
-            boolean isBuy = "buy".equals(order.getType());
-            BigDecimal limitPrice = order.getLimitPrice();
-            if (limitPrice == null || !isLimitMarketable(currentPrice, isBuy, limitPrice)) {
-                continue;
+        try {
+            for (Order order : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")) {
+                try {
+                    BigDecimal currentPrice = loadPrice(channelId, BigDecimal.valueOf(1));
+                    boolean isBuy = "buy".equals(order.getType());
+                    BigDecimal limitPrice = order.getLimitPrice();
+                    if (limitPrice == null || !isLimitMarketable(currentPrice, isBuy, limitPrice)) {
+                        continue;
+                    }
+                    executePendingLimitOrder(order);
+                } catch (RuntimeException e) {
+                    log.warn("Pending limit order processing failed: orderId={}, user={}, stock={}",
+                            order.getId(), order.getUserId(), order.getStreamerId(), e);
+                    evictUserCache(order.getUserId());
+                    evictStockCache(order.getStreamerId());
+                }
             }
-            executePendingLimitOrder(order);
+        } catch (RuntimeException e) {
+            log.warn("Pending limit order scan failed: stock={}", channelId, e);
+            evictStockCache(channelId);
         }
     }
 
@@ -518,14 +549,13 @@ public class TradeEngine {
             if (freshIsBuy) {
                 if (stock.getTotalSupply() > 0
                         && stock.getIssuedShares() + freshOrder.getQuantity() > stock.getTotalSupply()) {
-                    BigDecimal refund = freshOrder.getLimitPrice()
-                            .multiply(BigDecimal.valueOf(freshOrder.getQuantity()));
+                    BigDecimal refund = limitReservationAmount(freshOrder.getLimitPrice(), freshOrder.getQuantity(), true);
                     freshOrder.cancel();
                     orderRepository.save(freshOrder);
                     addToUserBalance(freshOrder.getUserId(), refund);
                     return;
                 }
-                BigDecimal reserved = freshOrder.getLimitPrice().multiply(BigDecimal.valueOf(freshOrder.getQuantity()));
+                BigDecimal reserved = limitReservationAmount(freshOrder.getLimitPrice(), freshOrder.getQuantity(), true);
                 BigDecimal refund = reserved.subtract(userNet).max(BigDecimal.ZERO);
                 updateUserShareAndCalculateProfit(user, stock, freshOrder.getStreamerId(), true,
                         freshOrder.getQuantity(), userNet);
