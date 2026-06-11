@@ -64,7 +64,7 @@ class TradeEnginePricingTest {
     void poolDepthLimit_throwsWhenQtyExceedsShareReserve() {
         assertThatThrownBy(() -> AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, SHARE_RESERVE))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("pool depth");
+                .hasMessageContaining("AMM 풀의 유동성");
     }
 
     @Test

@@ -27,7 +27,7 @@ public class CandleController {
             @RequestParam(required = false) Long before) {
 
         Stock stock = stockRepository.findById(stockId).orElse(null);
-        long listedAtMs = stock != null
+        long listedAtMs = stock != null && stock.getListedAt() != null
                 ? stock.getListedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 : 0L;
         double fallbackPrice = stock != null ? (double) stock.getCurrentPrice() : 1000.0;

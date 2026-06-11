@@ -82,15 +82,18 @@ class MegaphoneServiceTest {
     }
 
     @Test
-    void useMegaphoneStoresBlankMessageAsNull() {
+    void useMegaphoneRejectsBlankMessageBeforeCharging() {
         User user = user("user-1", "40000000");
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
         when(stockRepository.findById("channel-1")).thenReturn(Optional.of(liveStock("channel-1")));
-        when(userRepository.addToBalance(eq("user-1"), any(BigDecimal.class))).thenReturn(1);
 
-        MegaphonePost post = service.useMegaphone("user-1", "channel-1", "   ");
+        assertThatThrownBy(() -> service.useMegaphone("user-1", "channel-1", "   "))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("확성기 메시지를 입력해주세요.");
 
-        assertThat(post.getMessage()).isNull();
+        verify(userRepository, never()).addToBalance(eq("user-1"), any(BigDecimal.class));
+        verify(megaphonePostRepository, never()).save(any());
+        verify(messagingTemplate, never()).convertAndSend(eq("/topic/megaphone"), any(MegaphonePost.class));
     }
 
     @Test

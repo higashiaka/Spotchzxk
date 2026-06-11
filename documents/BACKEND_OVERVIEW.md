@@ -1,6 +1,6 @@
 # Spotchzxk 백엔드 구조 발표 자료
 
-작성일: 2026-06-08  
+작성일: 2026-06-08 / 최종 업데이트: 2026-06-10  
 기준 코드: `backend/src/main/java/com/spotchzxk`
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 프로젝트 개요
 
 치지직(Chzzk) 스트리머를 주식처럼 사고 파는 모의 주식 거래 시뮬레이터.  
-스트리머가 라이브 중일 때 10분마다 배당을 지급하고, 팔로워 수 기반 지수 가격 모델로 주가를 계산한다.
+스트리머가 라이브 중일 때 10분마다 배당을 지급하고, CPAMM(Constant Product AMM) 모델로 주가를 결정한다.
 
 **Tech Stack**
 
@@ -51,16 +51,19 @@ backend/src/main/java/com/spotchzxk/
 │   ├── ProfileController.java         # POST /api/profile/nickname, /ranking-nickname-public
 │   ├── ShopController.java            # GET/POST /api/shop/megaphone, POST /api/shop/items/purchase
 │   ├── AnnouncementController.java    # GET /api/announcements/stock-splits/latest — 주식 분할 공지
+│   ├── DonationController.java        # POST /api/donate — 코인 소각(응원) 기록 및 후원왕 랭킹 기여
+│   ├── AdminController.java           # POST /api/admin/amm/migrate — AMM 풀 수동 마이그레이션 (API Key 인증)
 │   └── OnlineController.java          # GET /api/online-count — 현재 접속자 수
 │
 ├── service/                           # 비즈니스 로직
 │   ├── TradeEngine.java               # 거래 핵심 엔진 — 잔고 검증, 체결, 가격 갱신, WebSocket 발행
 │   ├── StockService.java              # 종목 등록 — Chzzk API 조회 → DB 저장, 티켓 차감
-│   ├── StockSplitService.java         # 주식 분할 — 매일 09:00 KST, 1,000,000원 초과 종목 10:1 분할
+│   ├── StockSplitService.java         # 주식 분할 — 00/06/12/18시 KST (6시간마다), 1,000,000원 초과 종목 10:1 분할
 │   ├── CandleService.java             # 주문 이력에서 OHLC 캔들 집계 (1m/5m/1h/1d/1w)
-│   ├── DividendService.java           # 10분 인터벌 배당 지급 — preStreamQuantity 스냅샷 기준
+│   ├── DividendService.java           # 1시간 인터벌 배당 지급 — preStreamQuantity 스냅샷 기준, 0.01%/주
 │   ├── ChzzkApiClient.java            # Chzzk OpenAPI HTTP 클라이언트 (채널 정보/팔로워 수 조회)
-│   ├── ChzzkLivePollingService.java   # 60초 간격 라이브 상태 폴링 + 1초 간격 배당 지급 tick
+│   ├── ChzzkLivePollingService.java   # 60초 간격 라이브 상태 폴링 + 1초 간격 배당 tick (60분 주기)
+│   ├── AmmMigrationService.java       # AMM 풀 초기화/마이그레이션 — 기존 종목에 CPAMM 풀 설정
 │   ├── DailyResetService.java         # 매일 자정 KST — 일일 거래량 초기화, 가격 보정, 랭킹 초기화
 │   ├── PortfolioService.java          # 포트폴리오 조회 및 초기화 (하루 3회 제한)
 │   ├── AccountLinkService.java        # 게스트 계정 → Google 계정 데이터 이전 및 병합
@@ -101,7 +104,7 @@ backend/src/main/java/com/spotchzxk/
 │   ├── UserDividendLogRepository.java # 사용자별 배당 수령 내역 최근 50건 조회
 │   ├── DeviceMappingRepository.java   # 디바이스 지문 ↔ UID 매핑, 계정 병합 시 UID 일괄 갱신
 │   ├── MegaphonePostRepository.java   # 오늘 사용 횟수 카운트, 라이브 채널 최신 게시글 페이지 조회
-│   ├── StockSplitNoticeRepository.java # 날짜 기준 분할 공지 존재 여부 확인 및 단건 조회 (중복 방지)
+│   ├── StockSplitNoticeRepository.java # (날짜+시간) 기준 분할 공지 존재 여부 확인 및 단건 조회 (중복 방지)
 │   └── StockSplitEventRepository.java  # 특정 종목의 분할 실행 이력 조회 (캔들 보정용)
 │
 ├── dto/                               # 요청/응답 데이터 전송 객체
@@ -133,8 +136,10 @@ backend/src/main/java/com/spotchzxk/
         └─ TradeController
               └─ TradeEngine.submitTrade()
                     ├─ 잔고/보유량 검증
-                    ├─ 지수 가격 모델로 체결가 계산
-                    │     executedPrice = currentPrice × (1 ± 0.0005)^qty
+                    ├─ CPAMM 가격 모델로 체결가 계산
+                    │     price = coinReserve / shareReserve  (constant product: x*y=k)
+                    │     매수: coinReserve 증가, shareReserve 감소
+                    │     매도: shareReserve 증가, coinReserve 감소
                     ├─ AntiWhalePolicy — 신규 상장 24h 내 200주 매수 상한
                     ├─ User 잔고 차감/증가
                     ├─ UserShare 수량/평균단가 갱신
@@ -158,10 +163,10 @@ ChzzkLivePollingService (@Scheduled fixedDelay=60_000)
 
 ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
   └─ payDueIntervalDividends()
-        └─ 라이브 중인 종목 중 경과시간/10 > dividendAccumulationCount 인 것 처리
-              (due date 오래된 순 — FIFO)
+        └─ 라이브 중인 종목 중 경과시간/60분 > dividendAccumulationCount 인 것 처리
+              (DIVIDEND_INTERVAL_MINUTES=60, due date 오래된 순 — FIFO, 틱당 최대 1종목)
               └─ DividendService.payIntervalDividend(stock)
-                    ├─ ratePerShare = currentPrice × 0.007  (0.7%)
+                    ├─ ratePerShare = currentPrice × 0.0001  (0.01%/시간)
                     ├─ preStreamQuantity > 0 인 보유자에게 원화 지급
                     │     (제외: __house__ 계정, isBot=true)
                     ├─ UserDividendLog 저장
@@ -175,19 +180,22 @@ ChzzkLivePollingService (@Scheduled fixedDelay=1_000)
 ### 주식 분할 흐름
 
 ```
-StockSplitService (@Scheduled cron="0 0 9 * * *" KST)
-  └─ 오늘 분할 공지가 없는 경우에만 실행
+StockSplitService (@Scheduled cron="0 0 0/6 * * *" KST — 00/06/12/18시)
+  └─ 해당 (날짜, 시간) 분할 공지가 없는 경우에만 실행 (하루 최대 4회 독립 실행)
         └─ currentPrice > 1,000,000 인 종목 필터
               ├─ event- 종목 제외
-              └─ 상장 24h 미경과 종목 제외 (AntiWhalePolicy.NEW_LISTING_HOURS)
+              └─ 상장 24h 미경과 종목 제외 (AntiWhalePolicy.NEW_LISTING_HOURS=24)
                     └─ 대상 종목 10:1 분할
-                          ├─ stock.applyStockSplit(10)   — currentPrice/10, totalSupply×10
-                          ├─ userShare 수량 ×10, avgPrice /10
-                          ├─ 미체결 지정가 주문 수량 ×10, limitPrice /10
-                          ├─ StockSplitNotice 저장 (일별 1건)
+                          ├─ stock.applyStockSplit(10)
+                          │     currentPrice/10, basePrice/10, listingPrice/10
+                          │     totalSupply×10, issuedShares×10, dailyVolume×10
+                          │     shareReserve×10  (coinReserve 불변 — AMM 가격 자동 조정)
+                          ├─ userShare 수량 ×10, preStreamQuantity ×10, avgPrice /10
+                          ├─ 미체결 지정가 주문 수량 ×10, limitPrice /10, estimatedPrice /10
+                          ├─ StockSplitNotice 저장 (날짜+시간 단위 1건)
                           ├─ StockSplitEvent 저장 (종목별)
-                          ├─ TradeEngine/CandleService/SystemSellPressure 캐시 무효화
-                          └─ WebSocket 발행
+                          ├─ 트랜잭션 커밋 후: TradeEngine/CandleService/SystemSellPressure 캐시 무효화
+                          └─ 트랜잭션 커밋 후: WebSocket 발행
                                 ├─ /topic/streamers
                                 ├─ /topic/prices/{channelId}
                                 └─ /topic/stock-split-notices
@@ -239,6 +247,7 @@ erDiagram
         INT           resetCount
         DATE          lastResetDate
         DECIMAL(20_2) dividendTotal
+        DECIMAL(20_2) donationTotal
         BOOLEAN       isBot
         BOOLEAN       is_guest
     }
@@ -251,14 +260,19 @@ erDiagram
         INT          baseBroadcastHours
         BIGINT       totalSupply
         BIGINT       dailyVolume
-        INT          basePrice
-        INT          listingPrice
-        INT          currentPrice
+        BIGINT       dailyTradingValue
+        BIGINT       basePrice
+        BIGINT       listingPrice
+        BIGINT       currentPrice
         BOOLEAN      isLive
         DATETIME     liveStartedAt
         BIGINT       dividendAccumulationCount
         BIGINT       issuedShares
         BIGINT       preStreamFloat
+        BIGINT       coinReserve
+        BIGINT       shareReserve
+        BIGINT       feePool
+        INT          liquidityTier
         DATETIME     createdAt
         DATETIME     listedAt
     }
@@ -269,12 +283,16 @@ erDiagram
         VARCHAR(50)   streamer_id FK
         VARCHAR(10)   type
         BIGINT        quantity
+        BIGINT        filled_quantity
         DECIMAL(12_2) estimated_price
         DECIMAL(12_2) executed_price
         VARCHAR(20)   status
         VARCHAR(10)   order_mode
         DECIMAL(12_2) limit_price
+        BOOLEAN       allow_partial
+        DATETIME      expires_at
         BIGINT        created_at
+        BIGINT        executed_at
     }
 
     user_shares {
@@ -308,9 +326,19 @@ erDiagram
         DATETIME      createdAt
     }
 
-    device_mappings {
-        VARCHAR(128) fingerprint PK
-        VARCHAR(128) uid FK
+    titles {
+        BIGINT      id PK
+        VARCHAR(255) user_id FK
+        VARCHAR(50)  stock_id FK
+        VARCHAR(50)  title_type
+        DATETIME     granted_at
+    }
+
+    cheer_logs {
+        BIGINT      id PK
+        VARCHAR(255) user_id FK
+        VARCHAR(50)  stock_id FK
+        BIGINT       burned_coins
         DATETIME     created_at
     }
 
@@ -328,6 +356,7 @@ erDiagram
     stock_split_notices {
         VARCHAR(36) id PK
         DATE        splitDate
+        INT         splitHour
         INT         thresholdPrice
         INT         splitRatio
         INT         stockCount
@@ -350,10 +379,13 @@ erDiagram
     stocks ||--o{ dividend_logs : "channel_id"
     users ||--o{ user_dividend_logs : "userId"
     stocks ||--o{ user_dividend_logs : "channelId"
-    users ||--o{ device_mappings : "uid"
     users ||--o{ megaphone_posts : "userId"
     stocks ||--o{ megaphone_posts : "channelId"
     stocks ||--o{ stock_split_events : "channelId"
+    users ||--o{ titles : "user_id"
+    stocks ||--o{ titles : "stock_id"
+    users ||--o{ cheer_logs : "user_id"
+    stocks ||--o{ cheer_logs : "stock_id"
 ```
 
 ---
@@ -552,6 +584,7 @@ erDiagram
 |------|------|
 | `realized` (기본) | 실현 손익 순위 |
 | `dividend` | 배당 수령 합계 순위 |
+| `donation` | 후원(코인 소각) 합계 순위 |
 
 응답:
 ```json
@@ -612,7 +645,8 @@ erDiagram
   "splitRatio": 10,
   "stockCount": 2,
   "stockNames": "스트리머A, 스트리머B",
-  "createdAt": "2026-06-08T09:00:00"
+  "splitHour": 0,
+  "createdAt": "2026-06-08T00:00:00"
 }
 ```
 
@@ -649,7 +683,7 @@ Simple Broker: `/topic`
 
 ## 6. DB 마이그레이션 이력 (Flyway)
 
-`backend/src/main/resources/db/migration/` — 총 44개
+`backend/src/main/resources/db/migration/` — 총 52개 (V1–V52)
 
 | 버전 | 주요 내용 |
 |------|---------|
@@ -675,3 +709,11 @@ Simple Broker: `/topic`
 | V42 | stock_split_events 테이블 생성 (종목별 분할 실행 이력) |
 | V43 | orders.quantity를 BIGINT로 확장 |
 | V44 | 일반 종목의 total_supply 제한 해제 (event- 종목 제외) |
+| V45 | stocks에 daily_trading_value(BIGINT) 추가 |
+| V46 | stock_split_notices에 split_hour 컬럼 추가, unique index (split_date, split_hour)로 변경 |
+| V47 | device_mappings 테이블 삭제 |
+| V48 | users에 donation_total(DECIMAL) 추가 |
+| V49 | AMM 풀 필드 추가 (coin_reserve, share_reserve, fee_pool, liquidity_tier), 지정가 확장 필드 (filled_quantity, allow_partial, expires_at), titles/cheer_logs 테이블 생성 |
+| V50 | orders에 executed_at(BIGINT) 추가 — 지정가 나중 체결 시각 기록 |
+| V51 | stocks.current_price, base_price, listing_price를 INT → BIGINT로 확장 (2.1B 오버플로우 방지) |
+| V52 | 오버플로우로 음수가 된 current_price/base_price를 AMM 풀(coin_reserve/share_reserve)로 복구 |

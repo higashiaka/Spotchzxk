@@ -17,24 +17,24 @@ public class ProfileService {
     public void changeNickname(String uid, String displayName) {
         String trimmed = displayName == null ? "" : displayName.trim();
         if (trimmed.isBlank()) {
-            throw new IllegalArgumentException("Display name is required.");
+            throw new IllegalArgumentException("닉네임을 입력해주세요.");
         }
         if (trimmed.length() > 8) {
-            throw new IllegalArgumentException("Display name can be at most 8 characters.");
+            throw new IllegalArgumentException("닉네임은 최대 8자까지 입력할 수 있습니다.");
         }
         // Issue #31: 허용 문자 화이트리스트 — 한글·영문·숫자 외 특수문자/이모지 차단
         if (!trimmed.matches("[\\p{IsHangul}a-zA-Z0-9]+")) {
-            throw new IllegalArgumentException("Display name can only contain Korean, English letters, and numbers.");
+            throw new IllegalArgumentException("닉네임은 한글, 영문, 숫자만 사용할 수 있습니다.");
         }
 
         tradeEngine.runWithUserLock(uid, () -> transactionTemplate.executeWithoutResult(status -> {
             User user = userRepository.findById(uid)
-                    .orElseThrow(() -> new IllegalStateException("User not found."));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
             if (user.getNicknameChangeTickets() <= 0) {
-                throw new IllegalStateException("No nickname-change ticket available.");
+                throw new IllegalStateException("닉네임 변경권이 없습니다.");
             }
             if (userRepository.changeDisplayNameAndUseNicknameTicket(uid, trimmed) != 1) {
-                throw new IllegalStateException("No nickname-change ticket available.");
+                throw new IllegalStateException("닉네임 변경권이 없습니다.");
             }
             tradeEngine.evictUserCache(uid);
         }));
@@ -43,7 +43,7 @@ public class ProfileService {
     public void updateRankingNicknamePublic(String uid, boolean isPublic) {
         transactionTemplate.executeWithoutResult(status -> {
             if (userRepository.updateRankingNicknamePublic(uid, isPublic) != 1) {
-                throw new IllegalStateException("User not found.");
+                throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
             }
         });
     }

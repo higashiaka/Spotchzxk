@@ -28,6 +28,10 @@ export interface Stock {
   dividendAccumulationCount?: number;
   /** Float supply before live started */
   preStreamFloat?: number;
+  /** AMM coin reserve used for client-side market order estimates */
+  coinReserve?: number;
+  /** AMM share reserve used for client-side market order estimates */
+  shareReserve?: number;
   /** Listing date in ISO 8601 */
   listedAt?: string;
 }

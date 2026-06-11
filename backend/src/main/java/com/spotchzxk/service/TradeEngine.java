@@ -122,12 +122,12 @@ public class TradeEngine {
     private BigDecimal cancelLimitOrderLocked(String userId, String orderId) {
         return new TransactionTemplate(txManager).execute(status -> {
             Order order = orderRepository.findByIdForUpdate(orderId)
-                    .orElseThrow(() -> new IllegalStateException("Order not found."));
+                    .orElseThrow(() -> new IllegalStateException("존재하지 않는 주문입니다."));
             if (!userId.equals(order.getUserId())) {
-                throw new IllegalStateException("Order not found.");
+                throw new IllegalStateException("존재하지 않는 주문입니다.");
             }
             if (!"pending".equals(order.getStatus())) {
-                throw new IllegalStateException("Order is not pending.");
+                throw new IllegalStateException("이미 체결되었거나 취소된 주문입니다.");
             }
 
             BigDecimal refund = BigDecimal.ZERO;
@@ -140,7 +140,7 @@ public class TradeEngine {
             addToUserBalance(userId, refund);
             return userRepository.findById(userId)
                     .map(User::getCoinBalance)
-                    .orElseThrow(() -> new IllegalStateException("User not found."));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         });
     }
 
@@ -175,7 +175,8 @@ public class TradeEngine {
         String orderId = UUID.randomUUID().toString();
         String streamerName = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice, executedAt, orderId, "market", null);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, currentBalance, shares, heldQty);
-        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet);
+        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet,
+                amm.newPool()[0], amm.newPool()[1]);
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -187,7 +188,7 @@ public class TradeEngine {
     private TradeResponse submitLimitOrder(String userId, String channelId, boolean isBuy, long qty,
                                            BigDecimal fallbackPrice, BigDecimal limitPrice) {
         if (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("Limit price is required.");
+            throw new IllegalStateException("지정가 주문에는 가격을 입력해야 합니다.");
         }
 
         BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
@@ -220,7 +221,7 @@ public class TradeEngine {
     private TradeResponse executeImmediateLimitOrder(String userId, String channelId, boolean isBuy, long qty,
                                                      BigDecimal fallbackPrice, BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calcAmmTradeForLimit(channelId, isBuy, qty, limitPrice);
-        if (amm == null) throw new IllegalStateException("Slippage exceeds limit price.");
+        if (amm == null) throw new IllegalStateException("현재 시장가가 지정가보다 높아 체결할 수 없습니다.");
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
         long executedAt = System.currentTimeMillis();
 
@@ -233,7 +234,8 @@ public class TradeEngine {
         String streamerName = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice,
                 executedAt, orderId, "limit", limitPrice);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, currentBalance, shares, heldQty);
-        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet);
+        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet,
+                amm.newPool()[0], amm.newPool()[1]);
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.avgPrice(), newBalance, BigDecimal.ZERO, orderId, "limit");
@@ -267,7 +269,7 @@ public class TradeEngine {
         return ammPoolCache.computeIfAbsent(channelId, k ->
                 stockRepository.findById(k)
                         .map(s -> new long[]{s.getCoinReserve(), s.getShareReserve()})
-                        .orElseThrow(() -> new IllegalStateException("Stock not found: " + k)));
+                        .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다.")));
     }
 
     AmmCalculator.AmmResult calculateAmmTrade(String channelId, boolean isBuy, long qty) {
@@ -282,17 +284,17 @@ public class TradeEngine {
         if (!isBuy) {
             long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
             if (heldQty - pendingSellQty < qty) {
-                throw new IllegalStateException("Insufficient shares.");
+                throw new IllegalStateException("보유 주식이 부족합니다.");
             }
             return;
         }
 
         if (currentBalance.compareTo(cost) < 0) {
-            throw new IllegalStateException("Insufficient balance.");
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
         Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("Stock not found."));
+                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         boolean isNewListing = stock.getListedAt() != null
                 && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
         if (isNewListing) {
@@ -303,7 +305,7 @@ public class TradeEngine {
         }
 
         if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + qty > stock.getTotalSupply()) {
-            throw new IllegalStateException("Issued share limit exceeded.");
+            throw new IllegalStateException("해당 종목의 최대 발행 한도에 도달했습니다.");
         }
     }
 
@@ -312,17 +314,17 @@ public class TradeEngine {
         if (isBuy) {
             validateTrade(userId, channelId, true, qty, reserveAmount, currentBalance, heldQty);
             Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("Stock not found."));
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             long pendingBuyQty = orderRepository.sumPendingBuyQuantityByStreamerId(channelId);
             if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + pendingBuyQty + qty > stock.getTotalSupply()) {
-                throw new IllegalStateException("Issued share limit exceeded.");
+                throw new IllegalStateException("해당 종목의 최대 발행 한도에 도달했습니다.");
             }
             return;
         }
 
         long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
         if (heldQty - pendingSellQty < qty) {
-            throw new IllegalStateException("Insufficient shares.");
+            throw new IllegalStateException("보유 주식이 부족합니다.");
         }
     }
 
@@ -409,7 +411,7 @@ public class TradeEngine {
             return;
         }
         if (userRepository.addToBalance(userId, delta) != 1) {
-            throw new IllegalStateException("User not found.");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
     }
 
@@ -418,7 +420,7 @@ public class TradeEngine {
             return;
         }
         if (userRepository.addToRealizedProfit(userId, delta) != 1) {
-            throw new IllegalStateException("User not found.");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
     }
 
@@ -448,11 +450,11 @@ public class TradeEngine {
             getOrCreateUser(userId);
             BigDecimal newBalance = userRepository.findById(userId)
                     .map(User::getCoinBalance)
-                    .orElseThrow(() -> new IllegalStateException("User not found."));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
             if (isBuy) {
                 newBalance = newBalance.subtract(reserveAmount);
                 if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new IllegalStateException("Insufficient balance.");
+                    throw new IllegalStateException("잔고가 부족합니다.");
                 }
                 addToUserBalance(userId, reserveAmount.negate());
             }
@@ -499,7 +501,7 @@ public class TradeEngine {
             boolean freshIsBuy = "buy".equals(freshOrder.getType());
             Stock stock = stockRepository.findById(freshOrder.getStreamerId()).orElseThrow();
             User user = userRepository.findById(freshOrder.getUserId())
-                    .orElseThrow(() -> new IllegalStateException("User not found."));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
             // DB-fresh 풀로 AMM 재계산 (캐시와 DB 사이 다른 스레드 거래로 풀이 달라질 수 있음)
             AmmCalculator.AmmResult amm = freshIsBuy
@@ -563,7 +565,7 @@ public class TradeEngine {
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), amm.newPrice(), executedAt,
-                BigDecimal.valueOf(amm.userNetAmount()));
+                BigDecimal.valueOf(amm.userNetAmount()), amm.newPool()[0], amm.newPool()[1]);
         messagingTemplate.convertAndSend("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -586,7 +588,8 @@ public class TradeEngine {
 
     // Issue #18: candleService.onTrade를 비동기 호출해 stockLock 보유 상태에서의 모니터 락 중첩 제거
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, long qty,
-                                BigDecimal executedPrice, long executedAt, BigDecimal cost) {
+                                BigDecimal executedPrice, long executedAt, BigDecimal cost,
+                                long coinReserve, long shareReserve) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt));
         messagingTemplate.convertAndSend("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
@@ -597,6 +600,8 @@ public class TradeEngine {
                 "quantity", qty,
                 "price", executedPrice,
                 "tradingValue", cost.longValue(),
+                "coinReserve", coinReserve,
+                "shareReserve", shareReserve,
                 "timestamp", executedAt
         ));
     }

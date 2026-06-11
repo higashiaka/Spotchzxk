@@ -23,6 +23,8 @@ function mapRawToStock(r: any): Stock {
     liveStartedAt: r.liveStartedAt ?? null,
     dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
     preStreamFloat: Number(r.preStreamFloat ?? 0),
+    coinReserve: Number(r.coinReserve ?? 0),
+    shareReserve: Number(r.shareReserve ?? 0),
     listedAt: r.listedAt ?? null,
   };
 }
@@ -86,6 +88,8 @@ export const useStocks = () => {
             price: Number(trade.price),
             totalVolume: stock.totalVolume + Number(trade.quantity),
             dailyTradingValue: stock.dailyTradingValue + Number(trade.tradingValue ?? 0),
+            coinReserve: trade.coinReserve ?? stock.coinReserve,
+            shareReserve: trade.shareReserve ?? stock.shareReserve,
           };
         }));
       } catch (e) {

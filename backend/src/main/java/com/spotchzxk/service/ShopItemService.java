@@ -30,36 +30,36 @@ public class ShopItemService {
 
     private Map<String, Object> purchaseLocked(String uid, String item) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("User not found."));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
         // Issue #16: API 명세(nickname_ticket, stock_ticket)와 내부 키(nickname-change-ticket, stock-add-ticket) 모두 허용
         BigDecimal price = switch (item) {
             case "nickname-change-ticket", "nickname_ticket" -> NICKNAME_TICKET_PRICE;
             case "stock-add-ticket", "stock_ticket" -> STOCK_ADD_TICKET_PRICE;
-            default -> throw new IllegalArgumentException("Unknown item.");
+            default -> throw new IllegalArgumentException("존재하지 않는 상품입니다.");
         };
 
         if (user.getCoinBalance().compareTo(price) < 0) {
-            throw new IllegalStateException("Insufficient balance.");
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
         if (userRepository.addToBalance(uid, price.negate()) != 1) {
-            throw new IllegalStateException("User not found.");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
 
         boolean isNicknameTicket = "nickname-change-ticket".equals(item) || "nickname_ticket".equals(item);
         if (isNicknameTicket) {
             if (userRepository.addNicknameTicket(uid) != 1) {
-                throw new IllegalStateException("User not found.");
+                throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
             }
         } else if (userRepository.addStockAddTicket(uid) != 1) {
-            throw new IllegalStateException("User not found.");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
 
         tradeEngine.evictUserCache(uid);
 
         User updated = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("User not found."));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         return Map.of(
                 "balance", updated.getCoinBalance(),
                 "nicknameChangeTickets", updated.getNicknameChangeTickets(),

@@ -75,7 +75,7 @@ public class AccountLinkService {
     @Transactional
     public void upgradeGuest(String uid) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         user.markAsRegistered();
         registerAfterCommit(() -> tradeEngine.evictUserCache(uid));
     }

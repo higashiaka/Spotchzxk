@@ -1,0 +1,393 @@
+{
+  "meta": {
+    "title": "Spotchzxk 백엔드 취약점 및 논리적 오류 분석",
+    "date": "2026-06-10",
+    "codebase": "backend/src/main/java/com/spotchzxk"
+  },
+  "issues": [
+    {
+      "id": 1,
+      "severity": "critical",
+      "category": "버그",
+      "title": "Market Order orderId UUID 불일치",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java",
+      "lines": "162-163",
+      "description": "executeMarketOrder의 반환값에서 UUID.randomUUID().toString()을 orderId로 사용하지만, persistTrade(line 311) 내부에서도 별도의 UUID를 생성해 DB에 저장한다. 클라이언트가 받은 orderId는 실제 저장된 주문의 ID와 다르다.",
+      "impact": "클라이언트가 받은 orderId로는 주문 취소·조회 등 모든 후속 API 호출이 실패한다.",
+      "fix": "executeMarketOrder에서 UUID를 미리 생성하고, persistTrade에 파라미터로 전달한다. 반환하는 TradeResponse에도 동일한 UUID를 사용한다."
+    },
+    {
+      "id": 2,
+      "severity": "critical",
+      "category": "Race Condition",
+      "title": "executePendingLimitOrder — 트랜잭션 외부 AMM 계산으로 풀 오염",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java",
+      "lines": "473-529",
+      "description": "AMM 계산(calcAmmTradeForLimit)을 트랜잭션 외부 캐시 기준으로 먼저 수행한 뒤, 이 결과를 트랜잭션 내부의 updateStock에 그대로 적용한다. 계산과 커밋 사이에 다른 스레드의 거래가 풀 상태를 변경하면 DB에 잘못된 (coinReserve, shareReserve) 쌍이 저장된다.",
+      "impact": "AMM x*y=k 불변식이 깨지고 이후 모든 가격 계산이 틀어지는 영구적 데이터 오염이 발생한다.",
+      "fix": "트랜잭션 내부에서 stock을 DB로부터 조회한 뒤 해당 시점의 coinReserve, shareReserve를 기준으로 AMM을 재계산하고 적용한다."
+    },
+    {
+      "id": 3,
+      "severity": "critical",
+      "category": "보안",
+      "title": "TradeRequest.userId 클라이언트에서 주입 가능 (확인 필요)",
+      "file": "backend/src/main/java/com/spotchzxk/dto/TradeRequest.java",
+      "lines": "12",
+      "description": "userId 필드에 @Setter가 있으나, TradeController(line 28)에서 req.setUserId(uid)로 SecurityContext의 인증된 uid를 덮어쓰고 있어 실제로는 안전하다. 다만 구조상 취약 — 컨트롤러 수정 시 그대로 보안 구멍이 된다.",
+      "impact": "현재는 컨트롤러에서 보호하지만, 향후 userId를 덮어쓰는 코드를 빠뜨리면 타인 계정으로 거래가 가능해진다.",
+      "fix": "userId를 요청 DTO에서 제거하고 서비스 레이어에서 파라미터로 직접 전달하거나, @JsonIgnore를 추가해 역직렬화를 차단한다."
+    },
+    {
+      "id": 4,
+      "severity": "high",
+      "category": "버그",
+      "title": "INITIAL_BALANCE 1M — 3곳에서 동일하게 잘못 설정",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java, PortfolioService.java, GuestService.java",
+      "lines": "35 / 28 / 16",
+      "description": "TradeEngine, PortfolioService, GuestService 모두 INITIAL_BALANCE = BigDecimal.valueOf(1_000_000). 의도된 초기 잔액은 10,000,000원이다. GuestService.registerGuest가 실제 계정 생성의 주 경로이므로 모든 신규 유저가 1M으로 시작한다.",
+      "impact": "확성기(3천만원), 종목 추가권(1천만원) 등이 초기 잔액 1M으로는 구매 불가능하다. 게임 경제 전체가 망가진다.",
+      "fix": "세 파일 모두 INITIAL_BALANCE = BigDecimal.valueOf(10_000_000)으로 수정한다."
+    },
+    {
+      "id": 5,
+      "severity": "high",
+      "category": "미구현 기능",
+      "title": "슬리피지 보호 필드(maxCoinIn, minCoinOut) 미구현",
+      "file": "backend/src/main/java/com/spotchzxk/dto/TradeRequest.java",
+      "lines": "36-40",
+      "description": "TradeRequest에 maxCoinIn, minCoinOut 필드가 선언됐지만 executeMarketOrder에서 전혀 검사하지 않는다.",
+      "impact": "AMM 특성상 대량 주문 시 슬리피지가 크게 발생하는데, 클라이언트가 설정한 상한·하한이 무시된다. API 계약 위반.",
+      "fix": "executeMarketOrder에서 amm.userNetAmount()를 maxCoinIn(매수) / minCoinOut(매도)과 비교해 초과 시 IllegalStateException을 던진다."
+    },
+    {
+      "id": 6,
+      "severity": "high",
+      "category": "스키마-코드 불일치",
+      "title": "V49 마이그레이션 — 스키마와 엔티티 불일치 및 미완성 기능",
+      "file": "backend/src/main/resources/db/migration/V49__add_amm_and_limit_order_fields.sql",
+      "lines": "전체",
+      "description": "V49가 orders 테이블에 filled_quantity, allow_partial, expires_at 컬럼을 추가하고 titles/cheer_logs 테이블을 생성했지만, Order 엔티티에 해당 필드가 없고 서비스 코드도 없다. TradeRequest.allowPartial 필드도 처리 로직이 없다.",
+      "impact": "부분 체결 기능이 DB 레벨에선 준비됐지만 코드 레벨에선 동작하지 않는 상태. titles/cheer_logs는 완전한 Dead Schema.",
+      "fix": "기능 구현 예정이 없으면 V50 마이그레이션으로 해당 컬럼·테이블을 제거하거나, TradeRequest의 allowPartial 처리 로직을 구현한다."
+    },
+    {
+      "id": 7,
+      "severity": "high",
+      "category": "논리적 오류",
+      "title": "DividendService.DIVIDEND_RATE 문서와 70배 불일치",
+      "file": "backend/src/main/java/com/spotchzxk/service/DividendService.java",
+      "lines": "32",
+      "description": "DIVIDEND_RATE = new BigDecimal(\"0.0001\") — 0.01%. BACKEND_OVERVIEW.md는 ratePerShare = currentPrice × 0.007 (0.7%)이라고 명시한다. 실제 배당이 문서 대비 1/70 수준으로 지급된다.",
+      "impact": "배당 시스템이 의도한 수익률의 1.4%만 지급해 게임 경제 인센티브가 심각하게 약화된다.",
+      "fix": "DIVIDEND_RATE를 0.007로 수정하거나, 의도된 값이 0.0001이라면 BACKEND_OVERVIEW.md를 갱신한다."
+    },
+    {
+      "id": 8,
+      "severity": "high",
+      "category": "논리적 오류",
+      "title": "ChzzkLivePollingService.DIVIDEND_INTERVAL_MINUTES = 60 — 문서는 10분",
+      "file": "backend/src/main/java/com/spotchzxk/service/ChzzkLivePollingService.java",
+      "lines": "24",
+      "description": "DIVIDEND_INTERVAL_MINUTES = 60L. BACKEND_OVERVIEW.md는 '10분마다 배당을 지급한다'고 명시한다. 실제로는 1시간에 1번 지급된다.",
+      "impact": "라이브 1시간 동안 원래 6회 지급되어야 할 배당이 1회만 지급된다.",
+      "fix": "DIVIDEND_INTERVAL_MINUTES = 10L으로 수정하거나, 의도된 주기가 60분이라면 문서를 갱신한다."
+    },
+    {
+      "id": 9,
+      "severity": "medium",
+      "category": "논리적 오류",
+      "title": "avgPrice가 수수료 미포함 금액 기준으로 계산됨",
+      "file": "backend/src/main/java/com/spotchzxk/service/AmmCalculator.java",
+      "lines": "92",
+      "description": "calcBuy에서 avgPrice(ammCost, qty) — ammCost는 1.5% 수수료가 제외된 금액이다. 사용자에게 보여주는 평균 체결가는 실제 지불액보다 1.5% 낮게 표기된다.",
+      "impact": "사용자가 실제 지불한 비용과 표시된 평균가 사이에 불일치가 생겨 손익 계산에 오차가 발생한다.",
+      "fix": "avgPrice 계산 시 userNetAmount를 기준으로 하거나, 응답에 fee를 별도 항목으로 명시한다."
+    },
+    {
+      "id": 10,
+      "severity": "medium",
+      "category": "정밀도",
+      "title": "Stock.applyAmmTrade — currentPrice 정수 나눗셈 정밀도 손실",
+      "file": "backend/src/main/java/com/spotchzxk/entity/Stock.java",
+      "lines": "158",
+      "description": "clampPrice(newCoinReserve / newShareReserve)에서 long 정수 나눗셈으로 소수점이 버려진다. AmmCalculator.price()의 실제 AMM 가격과 DB에 저장되는 currentPrice가 항상 일치하지 않는다.",
+      "impact": "배당 계산, 주식 분할 기준, 시스템 매도 트리거에 오차가 누적된다.",
+      "fix": "AmmCalculator.price()의 BigDecimal 결과를 currentPrice에 반영하도록 통일하거나 currentPrice를 BigDecimal 타입으로 변경한다."
+    },
+    {
+      "id": 11,
+      "severity": "medium",
+      "category": "Race Condition",
+      "title": "processPendingLimitOrders — 개별 주문 체결 간 stockLock 부재",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java",
+      "lines": "461-471",
+      "description": "pending 주문 목록을 조회한 뒤 각 주문을 executePendingLimitOrder로 순서대로 처리하는데, 각 실행 사이에 stockLock이 없다. 첫 번째 주문 체결 이후 AMM 풀이 변경되면 두 번째 주문의 isLimitMarketable 체크가 구버전 가격으로 이루어진다.",
+      "impact": "지정가 주문이 의도치 않은 가격에 체결되거나 불필요하게 거부될 수 있다.",
+      "fix": "processPendingLimitOrders 전체를 stockLock 보유 상태에서 실행하거나, executePendingLimitOrder 호출 전마다 최신 AMM 가격을 재로드해 isLimitMarketable을 재확인한다."
+    },
+    {
+      "id": 12,
+      "severity": "medium",
+      "category": "Thread Safety",
+      "title": "SystemSellPressureService.PressureState — 가변 필드 비동기 접근",
+      "file": "backend/src/main/java/com/spotchzxk/service/system/SystemSellPressureService.java",
+      "lines": "317-332",
+      "description": "PressureState는 public 가변 필드들로 구성되어 있다. tick()의 ConcurrentHashMap.compute로 인스턴스 생성은 원자적이지만, 이후 state.active, state.consecutiveSells, state.soldToday 등의 필드 수정은 동기화 없이 이루어진다. 스케줄러 스레드 풀이 2개 이상이거나 evictStockState와 동시 실행 시 경쟁이 발생한다.",
+      "impact": "soldToday 카운터가 정확하지 않게 되어 일일 매도 한도가 초과되거나 매도 압박이 예상보다 약해질 수 있다.",
+      "fix": "PressureState 내 카운터를 AtomicInteger/AtomicLong으로 교체하거나, runStockIfDue에 synchronized 또는 StampedLock을 추가한다."
+    },
+    {
+      "id": 13,
+      "severity": "medium",
+      "category": "보안",
+      "title": "GuestAbuseProtectionService — X-Forwarded-For IP 스푸핑 위험",
+      "file": "backend/src/main/java/com/spotchzxk/service/GuestAbuseProtectionService.java",
+      "lines": "120-132",
+      "description": "clientIp()에서 trustedProxy 검증 후 X-Forwarded-For의 첫 번째 값(leftmost)을 클라이언트 IP로 사용한다. 리버스 프록시가 이 헤더를 덮어쓰지 않으면 클라이언트가 임의의 IP를 헤더에 주입해 레이트 리밋을 우회할 수 있다.",
+      "impact": "게스트 계정 남용 방지 시스템이 무력화된다.",
+      "fix": "신뢰 프록시를 통과할 때는 X-Forwarded-For의 rightmost IP (프록시가 삽입하는 값)를 사용하거나, nginx 설정에서 헤더를 강제 교체(proxy_set_header X-Forwarded-For)하도록 인프라 레벨에서 처리한다."
+    },
+    {
+      "id": 14,
+      "severity": "medium",
+      "category": "주석 오류",
+      "title": "AccountLinkService ON DELETE CASCADE 주석 오류",
+      "file": "backend/src/main/java/com/spotchzxk/service/AccountLinkService.java",
+      "lines": "65-66",
+      "description": "주석에 'user_shares and orders will be removed via ON DELETE CASCADE'라고 쓰여 있지만, 삭제 전에 updateUserId로 FK를 googleUid로 이미 교체했으므로 CASCADE 대상 레코드가 없다.",
+      "impact": "향후 유지보수 시 CASCADE에 의존하는 잘못된 코드가 추가될 위험이 있다.",
+      "fix": "주석을 '게스트의 user_shares와 orders는 이미 googleUid로 이전됐으므로 게스트 User 레코드만 삭제된다'로 수정한다."
+    },
+    {
+      "id": 15,
+      "severity": "medium",
+      "category": "성능",
+      "title": "ChzzkLivePollingService — 종목 수 비례 순차 API 호출로 폴링 주기 초과",
+      "file": "backend/src/main/java/com/spotchzxk/service/ChzzkLivePollingService.java",
+      "lines": "34-62",
+      "description": "pollLiveStatus()는 fixedDelay=60_000으로 실행되며 모든 종목에 대해 순차적으로 Chzzk API를 호출한다. 종목이 30개이고 API 응답 시간이 300ms라면 총 9초 소요. 종목이 200개이면 60초를 초과해 폴링 간격이 무너진다.",
+      "impact": "종목 수 증가 시 라이브 감지 지연이 길어지고 @Scheduled의 fixedDelay 의미가 퇴색된다.",
+      "fix": "Chzzk OpenAPI의 배치 채널 조회 엔드포인트(channelIds 여러 개 전달)를 활용하거나, CompletableFuture로 병렬 호출한다."
+    },
+    {
+      "id": 16,
+      "severity": "medium",
+      "category": "논리적 오류",
+      "title": "ShopItemService — API 명세의 아이템 키와 서비스 내부 키 불일치",
+      "file": "backend/src/main/java/com/spotchzxk/service/ShopItemService.java",
+      "lines": "36-38",
+      "description": "API 명세에는 item 값이 'nickname_ticket', 'stock_ticket'으로 정의되어 있으나 서비스에서는 'nickname-change-ticket', 'stock-add-ticket'(하이픈, 더 긴 이름)으로 분기한다.",
+      "impact": "프론트엔드가 API 명세대로 구현하면 'Unknown item' 에러가 발생한다.",
+      "fix": "서비스 내부 키를 API 명세와 일치시키거나, BACKEND_OVERVIEW.md API 명세를 실제 코드 기준으로 갱신한다."
+    },
+    {
+      "id": 17,
+      "severity": "low",
+      "category": "메모리 누수",
+      "title": "userLocks / stockLocks 맵 무한 증가",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java",
+      "lines": "51-52",
+      "description": "computeIfAbsent로 ReentrantLock을 추가하지만 제거하는 코드가 없다. 유저와 종목 수가 늘어날수록 맵이 무한히 증가한다.",
+      "impact": "장기 운영 시 JVM Heap 점진적 증가.",
+      "fix": "Caffeine 기반 LoadingCache로 교체하거나, 락 엔트리를 일정 주기로 제거하는 eviction 로직을 추가한다."
+    },
+    {
+      "id": 18,
+      "severity": "low",
+      "category": "성능",
+      "title": "onTrade(synchronized) — stockLock 보유 상태에서 호출",
+      "file": "backend/src/main/java/com/spotchzxk/service/TradeEngine.java",
+      "lines": "566",
+      "description": "broadcastTrade → candleService.onTrade(synchronized) 순서로 호출된다. 이미 stockLock을 보유한 상태에서 CandleService 모니터 락을 추가로 획득한다. tick() 스케줄러도 같은 모니터를 필요로 한다.",
+      "impact": "높은 거래량에서 락 경합으로 인한 latency 증가 및 스케줄러 tick 지연.",
+      "fix": "onTrade를 비동기(CompletableFuture 또는 별도 스레드)로 호출해 거래 처리 경로에서 캔들 집계를 분리한다."
+    },
+    {
+      "id": 19,
+      "severity": "low",
+      "category": "버그",
+      "title": "CandleService.buildOneMin — OhlcCandle 공유 인스턴스 돌연변이",
+      "file": "backend/src/main/java/com/spotchzxk/service/CandleService.java",
+      "lines": "138-141",
+      "description": "buckets.values()에서 OhlcCandle 참조를 직접 setHigh/setLow/setClose로 수정한다. currentBucketCandles에 캐시된 인스턴스가 외부에서 돌연변이되면 캐시 상태가 조용히 변경된다.",
+      "impact": "캔들 데이터가 의도치 않게 변경되어 차트가 잘못된 가격을 표시할 수 있다.",
+      "fix": "candle 수정 전 방어적 복사본을 만들거나 OhlcCandle을 불변 record로 변경하고 새 인스턴스를 반환한다."
+    },
+    {
+      "id": 20,
+      "severity": "low",
+      "category": "보안",
+      "title": "AdminController 인증이 정적 API 키에만 의존",
+      "file": "backend/src/main/java/com/spotchzxk/controller/AdminController.java",
+      "lines": "25-31",
+      "description": "Spring Security role-based 보호 없이 X-Admin-Key 헤더 값 비교만으로 보호된다. app.admin-api-key가 설정되지 않으면 빈 문자열 비교로 항상 401을 반환하지만, 엔드포인트 자체가 공개 경로에 노출될 수 있다.",
+      "impact": "키 유출 시 DB 데이터 대량 변경(AMM 풀 재초기화)이 가능하다.",
+      "fix": "SecurityConfig에서 /api/admin/** 경로를 ROLE_ADMIN으로 제한하고 API 키는 보조 수단으로만 사용한다."
+    },
+    {
+      "id": 21,
+      "severity": "low",
+      "category": "효율성",
+      "title": "StockService.addStockIfNew — 락 외부에서 Chzzk API 호출 (TOCTOU)",
+      "file": "backend/src/main/java/com/spotchzxk/service/StockService.java",
+      "lines": "65-94",
+      "description": "첫 번째 existsById 체크 → Chzzk API 호출 → 락 획득 → 두 번째 existsById 체크. 두 요청이 동시에 동일 채널 등록 시도 시 Chzzk API가 2회 호출된 뒤 하나만 저장된다.",
+      "impact": "Chzzk API 쿼터 낭비. 데이터 오염은 없지만 비효율적이다.",
+      "fix": "락 획득 후 existsById 재확인 결과가 false일 때만 Chzzk API를 호출한다."
+    },
+    {
+      "id": 22,
+      "severity": "low",
+      "category": "메모리 누수",
+      "title": "GuestAbuseProtectionService.localCounters — 만료 항목 자동 제거 없음",
+      "file": "backend/src/main/java/com/spotchzxk/service/GuestAbuseProtectionService.java",
+      "lines": "29",
+      "description": "localCounters ConcurrentHashMap은 Redis 장애 시 폴백으로 사용된다. 만료된 LocalCounter 항목이 자동으로 제거되지 않는다. Redis가 장기간 다운되면 메모리가 계속 증가한다.",
+      "impact": "Redis 장애 시나리오에서 메모리 누수 발생 가능.",
+      "fix": "Caffeine 캐시로 교체하거나, checkAndRecordLocally에서 compute 시 만료 항목을 제거하는 로직을 추가한다."
+    },
+    {
+      "id": 23,
+      "severity": "low",
+      "category": "Thread Safety",
+      "title": "BotActivityService.recentBotTradeCounts — non-atomic cache 갱신",
+      "file": "backend/src/main/java/com/spotchzxk/service/bot/BotActivityService.java",
+      "lines": "335-344",
+      "description": "botTradeCountsCache와 botTradeCountsCacheExpiry는 각각 volatile이지만 두 필드를 원자적으로 함께 갱신하지 않는다. 동시 접근 시 한 스레드가 갱신하는 도중 다른 스레드가 구버전 캐시를 읽을 수 있다.",
+      "impact": "봇 트레이드 편향 점수가 일시적으로 틀릴 수 있다. 기능 오동작보다는 일관성 미약 수준.",
+      "fix": "AtomicReference<CachedResult>를 사용해 맵과 만료시각을 record로 묶어 원자적으로 교체한다."
+    },
+    {
+      "id": 24,
+      "severity": "low",
+      "category": "설계",
+      "title": "PortfolioService.resetPortfolioLocked — 완료된 주문 이력도 삭제",
+      "file": "backend/src/main/java/com/spotchzxk/service/PortfolioService.java",
+      "lines": "117-118",
+      "description": "orderRepository.findByUserIdOrderByCreatedAtDesc(userId)는 모든 상태(completed 포함)의 주문을 반환하며, deleteAll로 전부 삭제한다. 포트폴리오 초기화가 과거 거래 이력까지 지운다.",
+      "impact": "사용자의 모든 거래 이력이 사라져 손익 분석·배당 내역 확인이 불가능해진다.",
+      "fix": "status가 'pending'인 주문만 삭제(이미 cancelPendingOrdersByUserId가 존재)하거나, completed 주문은 소프트 삭제(is_deleted 플래그)로 처리한다."
+    },
+    {
+      "id": 25,
+      "severity": "low",
+      "category": "설계",
+      "title": "AmmMigrationService.calcTierShareReserve 매직 상수 0.04881",
+      "file": "backend/src/main/java/com/spotchzxk/service/AmmMigrationService.java",
+      "lines": "76",
+      "description": "shareReserve = pumpCostTarget / (initialPrice * 0.04881)에서 0.04881의 유도 과정이 코드에 없다. '목표 10% 펌핑 비용 공식'이라고만 주석 처리되어 있다.",
+      "impact": "유동성 파라미터 조정 시 잘못된 값으로 교체될 위험이 있다.",
+      "fix": "0.04881 = buyCost(1, N, 0.1*N) / (price * N)의 근사값임을 주석으로 수식과 함께 명시하거나 AmmCalculator로 동적 계산한다."
+    },
+    {
+      "id": 26,
+      "severity": "medium",
+      "category": "보안",
+      "title": "/api/orders/recent, /api/orders/history — 공개 엔드포인트에서 userId(Firebase UID) 노출",
+      "file": "backend/src/main/java/com/spotchzxk/controller/OrderController.java",
+      "lines": "29-42",
+      "description": "두 엔드포인트는 SecurityConfig에서 permitAll()로 공개되어 있으며, Order 엔티티 전체(userId 포함)를 반환한다. Firebase UID는 내부 식별자임에도 인증 없이 누구에게나 노출된다.",
+      "impact": "Firebase UID를 수집한 공격자가 이를 이용해 다른 API 파라미터 조작, 사용자 활동 추적 등 추가 공격의 기반으로 활용할 수 있다.",
+      "fix": "Order 응답 DTO를 별도 생성해 userId를 제외하거나, userId에 @JsonIgnore를 추가하는 대신 내부 식별자 없이 보여줄 표시용 name만 응답에 포함시킨다."
+    },
+    {
+      "id": 27,
+      "severity": "medium",
+      "category": "보안",
+      "title": "/api/admin/** — anyRequest().authenticated()만으로 보호되어 일반 유저도 접근 가능",
+      "file": "backend/src/main/java/com/spotchzxk/config/SecurityConfig.java",
+      "lines": "38-44",
+      "description": "SecurityConfig에서 /api/admin/** 경로에 대한 별도 role 제한이 없다. anyRequest().authenticated()에 해당하므로 유효한 Firebase 토큰만 있으면 누구나 엔드포인트에 도달한다. AdminController 내부의 API 키 검증이 유일한 방어선이다.",
+      "impact": "API 키가 유출되거나 빈 문자열로 잘못 설정된 경우, 인증된 일반 유저가 /api/admin/amm/migrate를 실행해 전체 AMM 풀을 재초기화할 수 있다.",
+      "fix": "SecurityConfig에 .requestMatchers(\"/api/admin/**\").hasRole(\"ADMIN\")을 추가하거나, ADMIN 역할을 별도 환경변수로 지정된 UID에 부여하는 방식으로 이중 보호한다."
+    },
+    {
+      "id": 28,
+      "severity": "medium",
+      "category": "버그",
+      "title": "FirebaseTokenFilter.tryUpgradeGuestToRegistered — 트랜잭션 없이 save() 호출",
+      "file": "backend/src/main/java/com/spotchzxk/security/FirebaseTokenFilter.java",
+      "lines": "77-90",
+      "description": "tryUpgradeGuestToRegistered에서 user.markAsRegistered() 후 userRepository.save(user)를 호출하지만 @Transactional이 없다. 이 메서드는 필터 레이어(OncePerRequestFilter)에서 호출되므로 Spring의 트랜잭션 AOP 프록시가 적용되지 않는다.",
+      "impact": "is_guest 업데이트가 자동 커밋 모드로 실행되거나 예외 발생 시 롤백되지 않을 수 있다. 또한 모든 신규 Google 유저의 첫 요청마다 DB 조회+저장이 동기적으로 실행되어 응답 latency가 증가한다.",
+      "fix": "AccountLinkService.upgradeGuest(@Transactional)를 필터에서 직접 호출하거나, 필터 밖 별도 @Transactional 서비스 메서드로 위임한다. 또는 checkedUids 캐시를 DB 기반(Redis)으로 영속화해 재시작 후에도 불필요한 DB 쓰기를 방지한다."
+    },
+    {
+      "id": 29,
+      "severity": "medium",
+      "category": "버그",
+      "title": "DonationController — body.get(\"amount\") null 시 NullPointerException",
+      "file": "backend/src/main/java/com/spotchzxk/controller/DonationController.java",
+      "lines": "41-44",
+      "description": "new BigDecimal(body.get(\"amount\").toString())에서 body.get(\"amount\")가 null이면 NullPointerException이 발생한다. catch(Exception e)로 잡히지만 500 대신 400으로 처리되어 의도치 않게 숨겨진다.",
+      "impact": "클라이언트가 amount 필드를 누락한 요청을 보내면 내부적으로 NPE가 발생하며, 스택 트레이스가 로그에 ERROR로 기록된다.",
+      "fix": "Optional.ofNullable(body.get(\"amount\")).orElse(null)으로 null 체크 후 별도 분기하거나, @RequestBody에 DTO 클래스를 사용하고 @NotNull @DecimalMin 검증을 적용한다."
+    },
+    {
+      "id": 30,
+      "severity": "medium",
+      "category": "안정성",
+      "title": "ChzzkApiClient.fetchChannelStatus — 비공식 내부 API 및 쿠키 인증 사용",
+      "file": "backend/src/main/java/com/spotchzxk/service/ChzzkApiClient.java",
+      "lines": "86-118",
+      "description": "라이브 상태 조회에 api.chzzk.naver.com/service/v3/... 비공식 내부 API를 NID_AUT/NID_SES 쿠키로 호출한다. 공식 OpenAPI(openapi.chzzk.naver.com)가 아닌 경로다.",
+      "impact": "Naver/Chzzk가 내부 API 경로나 쿠키 방식을 변경하면 배당 지급, 라이브 감지 등 핵심 기능 전체가 무응답 상태가 된다. 또한 ToS 위반으로 계정 차단 위험이 있다.",
+      "fix": "Chzzk 공식 OpenAPI에 라이브 상태 조회 엔드포인트가 제공되면 즉시 마이그레이션한다. 없다면 현재 방식을 유지하되 fetchChannelStatus가 null을 반환하는 경우를 더 견고하게 처리하고 알림 시스템을 추가한다."
+    },
+    {
+      "id": 31,
+      "severity": "low",
+      "category": "보안",
+      "title": "ProfileService.changeNickname — 닉네임 특수문자/XSS 입력 검증 부재",
+      "file": "backend/src/main/java/com/spotchzxk/service/ProfileService.java",
+      "lines": "17-24",
+      "description": "닉네임 유효성 검사가 길이(8자)와 공백 여부만 확인한다. HTML 태그, 이모지, 제어 문자, 닉네임 충돌을 유발하는 유니코드 등을 허용한다. 닉네임은 랭킹·거래 피드에서 다른 유저에게 노출된다.",
+      "impact": "프론트엔드가 닉네임을 이스케이프 없이 innerHTML에 삽입하면 XSS 공격이 가능하다. 또한 유사 닉네임(비슷해 보이는 유니코드 문자)으로 다른 유저를 사칭할 수 있다.",
+      "fix": "허용 문자 화이트리스트(한글, 영문, 숫자, 일부 특수문자)를 정규식으로 정의하고, 프론트엔드에서도 닉네임을 항상 textContent로 삽입하도록 강제한다."
+    },
+    {
+      "id": 32,
+      "severity": "low",
+      "category": "메모리 누수",
+      "title": "FirebaseTokenFilter.checkedUids — JVM 재시작 전까지 무한 증가",
+      "file": "backend/src/main/java/com/spotchzxk/security/FirebaseTokenFilter.java",
+      "lines": "34",
+      "description": "checkedUids = ConcurrentHashMap.newKeySet()는 인스턴스 필드로, Google로 로그인한 유저 UID가 추가되기만 하고 제거되지 않는다. JVM을 재시작하기 전까지 모든 Google 유저 UID가 메모리에 누적된다.",
+      "impact": "유저 수가 수만 명 이상이 되면 HashSet 메모리가 의미 있는 수준으로 증가한다. 보안적으로는 유저가 게스트로 다운그레이드된 경우에도 checkedUids에 남아 재업그레이드 체크가 건너뛰어진다.",
+      "fix": "Caffeine 캐시나 Redis TTL 기반 구조로 교체해 일정 기간 후 자동 만료되도록 한다."
+    },
+    {
+      "id": 33,
+      "severity": "low",
+      "category": "논리적 오류",
+      "title": "User.addDonation 엔티티 메서드가 DonationController에서 사용되지 않음",
+      "file": "backend/src/main/java/com/spotchzxk/entity/User.java",
+      "lines": "130-133",
+      "description": "User.addDonation(BigDecimal)은 coinBalance 차감과 donationTotal 증가를 원자적으로 수행하는 메서드다. 그러나 DonationController.donateLocked는 userRepository.addToBalance + userRepository.addToDonationTotal 두 개의 별도 쿼리를 사용한다.",
+      "impact": "엔티티 메서드와 실제 사용 코드가 분리되어 있어 향후 addDonation 로직을 수정해도 실제 동작에는 반영되지 않는다. 코드 이해를 어렵게 만드는 중복 경로다.",
+      "fix": "DonationController에서 user.addDonation(amount) + userRepository.save(user)를 사용하거나, addDonation 메서드에 @Deprecated를 표시해 사용하지 않음을 명시한다."
+    }
+  ],
+  "summary": {
+    "total": 33,
+    "by_severity": {
+      "critical": 2,
+      "high": 6,
+      "medium": 13,
+      "low": 12
+    },
+    "top_priorities": [
+      { "rank": 1, "id": 1, "title": "Market orderId UUID 불일치 — 주문 조회·취소 불가" },
+      { "rank": 2, "id": 2, "title": "executePendingLimitOrder AMM 오염 — AMM 풀 영구 손상" },
+      { "rank": 3, "id": 4, "title": "INITIAL_BALANCE 1M × 3곳 — 모든 신규 유저 잔액 1/10" },
+      { "rank": 4, "id": 7, "title": "DIVIDEND_RATE 0.0001 — 배당 70배 축소 지급" },
+      { "rank": 5, "id": 8, "title": "DIVIDEND_INTERVAL_MINUTES 60 — 배당 6배 간격으로 지급" },
+      { "rank": 6, "id": 5, "title": "슬리피지 보호 미구현 — API 계약 위반" },
+      { "rank": 7, "id": 6, "title": "V49 스키마-코드 불일치 — 부분체결 기능 무응답" },
+      { "rank": 8, "id": 27, "title": "/api/admin/** 일반 유저 접근 가능 — API 키만으로 보호" },
+      { "rank": 9, "id": 26, "title": "공개 주문 조회 API에서 Firebase UID 노출" },
+      { "rank": 10, "id": 3, "title": "userId DTO 구조 — 컨트롤러 실수 시 보안 구멍 가능" }
+    ]
+  }
+}

@@ -178,7 +178,7 @@ class SystemSellPressureServiceTest {
         long now = System.currentTimeMillis();
         SystemSellPressureService.PressureState state = service.stateFor("hot", now);
         state.dailySellLimit = 15;
-        state.soldToday = 10;
+        state.soldToday.set(10);
 
         int quantity = service.pickQuantity(stock("hot", 1_000, 5_000), 400, state);
 

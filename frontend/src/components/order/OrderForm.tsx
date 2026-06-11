@@ -8,25 +8,62 @@ import { avatarColor, fmt, changePct, priceColorClass, tradeColorClass } from '.
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
-const PRICE_IMPACT_PER_SHARE = 0.0005;
+const FEE_RATE = 0.015;
 
-const averageImpactPrice = (currentPrice: number, isBuy: boolean, quantity: number): number => {
+const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): number => {
   if (currentPrice <= 0 || quantity <= 0) return 0;
-  const buyRate = 1 + PRICE_IMPACT_PER_SHARE;
-  const rate = isBuy ? buyRate : 1 / buyRate;
-  const total = isBuy
-    ? currentPrice * rate * (Math.pow(rate, quantity) - 1) / (rate - 1)
-    : currentPrice * rate * (1 - Math.pow(rate, quantity)) / (1 - rate);
-  return Math.max(1, Math.round(total / quantity));
+  const gross = currentPrice * quantity;
+  const fee = Math.ceil(gross * FEE_RATE);
+  return isBuy ? gross + fee : gross - fee;
 };
 
-const maxAffordableMarketBuyQuantity = (balance: number, currentPrice: number): number => {
+const ammTradeAmount = (
+  currentPrice: number,
+  coinReserve: number | undefined,
+  shareReserve: number | undefined,
+  isBuy: boolean,
+  quantity: number,
+): number => {
+  if (quantity <= 0) return 0;
+  if (!coinReserve || !shareReserve || coinReserve <= 0 || shareReserve <= 0) {
+    return fallbackTradeAmount(currentPrice, isBuy, quantity);
+  }
+  if (isBuy && quantity >= shareReserve) return Number.POSITIVE_INFINITY;
+
+  const ammAmount = isBuy
+    ? Math.ceil((coinReserve * quantity) / (shareReserve - quantity))
+    : Math.floor((coinReserve * quantity) / (shareReserve + quantity));
+  const fee = Math.ceil(ammAmount * FEE_RATE);
+  return isBuy ? ammAmount + fee : ammAmount - fee;
+};
+
+const averageAmmPrice = (
+  currentPrice: number,
+  coinReserve: number | undefined,
+  shareReserve: number | undefined,
+  isBuy: boolean,
+  quantity: number,
+): number => {
+  const userNetAmount = ammTradeAmount(currentPrice, coinReserve, shareReserve, isBuy, quantity);
+  if (!Number.isFinite(userNetAmount) || quantity <= 0) return userNetAmount;
+  return Math.max(1, Math.round(userNetAmount / quantity));
+};
+
+const maxAffordableMarketBuyQuantity = (
+  balance: number,
+  currentPrice: number,
+  coinReserve?: number,
+  shareReserve?: number,
+): number => {
   if (balance <= 0 || currentPrice <= 0) return 0;
   let low = 0;
   let high = Math.max(0, Math.floor(balance / currentPrice));
+  if (shareReserve && shareReserve > 0) {
+    high = Math.min(high, shareReserve - 1);
+  }
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
-    const cost = averageImpactPrice(currentPrice, true, mid) * mid;
+    const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
     if (cost <= balance) {
       low = mid;
     } else {
@@ -71,18 +108,31 @@ export const OrderForm = ({
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
   const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
-  const marketExecutionPrice = averageImpactPrice(currentPrice, orderType === 'buy', qty);
+  const marketExecutionPrice = averageAmmPrice(
+    currentPrice,
+    streamer.coinReserve,
+    streamer.shareReserve,
+    orderType === 'buy',
+    qty,
+  );
+  const marketExecutionAmount = ammTradeAmount(
+    currentPrice,
+    streamer.coinReserve,
+    streamer.shareReserve,
+    orderType === 'buy',
+    qty,
+  );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
 
   /** Total order cost */
-  const totalCost = estimatedExecutionPrice * qty;
+  const totalCost = orderMode === 'market' ? marketExecutionAmount : estimatedExecutionPrice * qty;
   /** Estimated balance after the order */
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
   /** Maximum purchasable quantity given current balance */
   const maxBuy = orderMode === 'market'
-    ? maxAffordableMarketBuyQuantity(balance, currentPrice)
+    ? maxAffordableMarketBuyQuantity(balance, currentPrice, streamer.coinReserve, streamer.shareReserve)
     : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
   /** Maximum sellable quantity (equals held quantity) */
   const maxSell = held;

@@ -22,6 +22,7 @@ public class DividendController {
 
     private final DividendLogRepository dividendLogRepository;
     private final UserDividendLogRepository userDividendLogRepository;
+    private static final String FALLBACK_CREATED_AT = "1970-01-01T00:00:00";
 
     @GetMapping("/recent")
     public ResponseEntity<List<Map<String, Object>>> getRecentDividends() {
@@ -32,7 +33,7 @@ public class DividendController {
                 "profileImageUrl", log.getStock().getProfileImageUrl() != null ? log.getStock().getProfileImageUrl() : "",
                 "totalDividendPool", log.getTotalDividendPool(),
                 "streamMinutes", log.getStreamMinutes() != null ? log.getStreamMinutes() : 0L,
-                "createdAt", log.getCreatedAt().toString()
+                "createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : FALLBACK_CREATED_AT
         )).collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }
@@ -51,7 +52,7 @@ public class DividendController {
                 "quantity", Math.abs(log.getQuantity()),
                 "ratePerShare", log.getRatePerShare().abs(),
                 "amount", log.getAmount().abs(),
-                "createdAt", log.getCreatedAt().toString()
+                "createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : FALLBACK_CREATED_AT
         )).collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }

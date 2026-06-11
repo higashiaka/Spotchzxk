@@ -29,8 +29,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
-    // Issue #7: BACKEND_OVERVIEW.md 기준 0.7% — 기존 0.0001(0.01%)은 문서 대비 1/70 수준
-    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.007");
+    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.0001");
 
     private final UserShareRepository userShareRepository;
     private final UserDividendLogRepository userDividendLogRepository;
@@ -52,7 +51,7 @@ public class DividendService {
         int updatedUsers = userShareRepository.distributeDividends(stock.getChannelId(), ratePerShare);
 
         if (updatedUsers > 0) {
-            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(stock.getChannelId());
+            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(stock.getChannelId());
             List<UserDividendLog> logs = shares.stream()
                     .filter(us -> us.getPreStreamQuantity() > 0
                             && !"__house__".equals(us.getUser().getId())

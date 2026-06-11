@@ -15,7 +15,7 @@ interface StockSplitNotice {
 
 export default function AnnouncementPopup() {
   const [stockSplitNotice, setStockSplitNotice] = useState<StockSplitNotice | null>(null);
-  const [visible, setVisible] = useState(true);
+  const [sessionDismissed, setSessionDismissed] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch('/api/announcements/stock-splits/latest')
@@ -79,15 +79,18 @@ export default function AnnouncementPopup() {
   const activeAnnouncement = useMemo(() => {
     const candidates = stockSplitAnnouncement ? [stockSplitAnnouncement, latestAnnouncement] : [latestAnnouncement];
 
-    return candidates.find(announcement => localStorage.getItem(announcement.id) !== 'hidden') ?? null;
-  }, [stockSplitAnnouncement]);
+    return candidates.find(announcement =>
+      localStorage.getItem(announcement.id) !== 'hidden'
+      && !sessionDismissed.includes(announcement.id)
+    ) ?? null;
+  }, [stockSplitAnnouncement, sessionDismissed]);
 
-  if (!visible || !activeAnnouncement) return null;
+  if (!activeAnnouncement) return null;
 
   const noticeKey = activeAnnouncement.id;
   const dismiss = (permanent: boolean) => {
     if (permanent) localStorage.setItem(noticeKey, 'hidden');
-    setVisible(false);
+    setSessionDismissed(prev => prev.includes(noticeKey) ? prev : [...prev, noticeKey]);
   };
 
   return (

@@ -69,9 +69,12 @@ public class MegaphoneService {
         }
 
         String normalizedMessage = normalizeMessage(message);
+        if (normalizedMessage == null) {
+            throw new IllegalStateException("확성기 메시지를 입력해주세요.");
+        }
 
         if (userRepository.addToBalance(uid, MEGAPHONE_PRICE.negate()) != 1) {
-            throw new IllegalStateException("User not found.");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
         tradeEngine.evictUserCache(uid);
 

@@ -39,7 +39,7 @@ public class StockService {
 
     public OrderBookDto getOrderBook(String channelId, int depth) {
         Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("Stock not found."));
+                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         int safeDepth = Math.max(1, Math.min(depth, 20));
         return new OrderBookDto(
                 channelId,
@@ -101,12 +101,12 @@ public class StockService {
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalStateException("User not found."));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         if (user.getStockAddTickets() <= 0) {
-            throw new IllegalStateException("No stock-add ticket available.");
+            throw new IllegalStateException("종목 추가권이 없습니다.");
         }
         if (userRepository.useStockAddTicket(userId) != 1) {
-            throw new IllegalStateException("No stock-add ticket available.");
+            throw new IllegalStateException("종목 추가권이 없습니다.");
         }
         tradeEngine.evictUserCache(userId);
 
