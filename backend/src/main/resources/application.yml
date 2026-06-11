@@ -54,7 +54,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 4
+        size: 6
 
   security:
     user:
@@ -67,8 +67,8 @@ spring:
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
+      maximum-pool-size: 15
+      minimum-idle: 3
       connection-timeout: 3000
       idle-timeout: 600000
 
@@ -99,6 +99,10 @@ spring:
 
 server:
   port: ${PORT:8080}
+  tomcat:
+    threads:
+      max: 30
+      min-spare: 5
   servlet:
     encoding:
       charset: UTF-8

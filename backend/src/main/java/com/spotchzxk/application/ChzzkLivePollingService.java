@@ -1,0 +1,234 @@
+package com.spotchzxk.application;
+
+import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.stock.repository.StockRepository;
+import com.spotchzxk.domain.user.repository.UserShareRepository;
+import com.spotchzxk.infrastructure.chzzk.ChzzkApiClient;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ChzzkLivePollingService {
+
+    private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
+    private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
+    private static final String EVENT_CHANNEL_PREFIX = "event-";
+
+    private final StockRepository stockRepository;
+    private final DividendService dividendService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final UserShareRepository userShareRepository;
+    private final ChzzkApiClient chzzkApiClient;
+    private final TransactionTemplate transactionTemplate;
+
+    private final ExecutorService pollingExecutor = Executors.newFixedThreadPool(50);
+    private final ConcurrentHashMap<String, Stock> liveStockCache = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    public void initLiveStockCache() {
+        stockRepository.findByIsLiveTrue().forEach(s -> liveStockCache.put(s.getChannelId(), s));
+        log.info("Live stock cache initialized: {} stocks", liveStockCache.size());
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        pollingExecutor.shutdown();
+        try {
+            if (!pollingExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                pollingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            pollingExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Scheduled(fixedDelay = 60_000)
+    public void pollLiveStatus() {
+        List<Stock> stocks = stockRepository.findAll();
+        if (stocks.isEmpty()) {
+            return;
+        }
+
+        // Issue #15: CompletableFuture濡?蹂묐젹 API ?몄텧 ???쒖감 ?몄텧? 醫낅ぉ ??利앷? ???대쭅 媛꾧꺽 珥덇낵
+        List<Stock> pollingOrder = stocks.stream()
+                .filter(stock -> !isEventStock(stock))
+                .sorted(Comparator.comparing(Stock::isLive).reversed())
+                .toList();
+        List<CompletableFuture<Void>> futures = pollingOrder.stream()
+                .map(stock -> CompletableFuture.runAsync(() -> {
+                    try {
+                        String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                        if (status == null) return;
+                        boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
+                                handleLiveTransition(stock, status)));
+                        if (changed) {
+                            stockRepository.findById(stock.getChannelId()).ifPresent(s -> {
+                                if (s.isLive()) {
+                                    liveStockCache.put(s.getChannelId(), s);
+                                } else {
+                                    liveStockCache.remove(s.getChannelId());
+                                }
+                                messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
+                            });
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to handle live transition for channel {}: {}",
+                                stock.getChannelId(), e.getMessage(), e);
+                    }
+                }, pollingExecutor))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+    }
+
+    private boolean handleLiveTransition(Stock stock, String status) {
+        boolean isLiveNow = "OPEN".equals(status);
+        boolean isBlocked = "BLOCK".equals(status);
+        boolean wasLive = stock.isLive();
+
+        if (!wasLive && isLiveNow) {
+            markStreamStarted(stock);
+            return true;
+        }
+        if (wasLive && isLiveNow) {
+            return false;
+        }
+        if (wasLive) {
+            markStreamEnded(stock, status, isBlocked);
+            return true;
+        }
+        return false;
+    }
+
+    @Scheduled(fixedDelay = 1_000)
+    public void payDueIntervalDividends() {
+        int paidCount = 0;
+        List<Stock> dueStocks = new ArrayList<>(liveStockCache.values()).stream()
+                .filter(stock -> !isEventStock(stock))
+                .filter(this::needsDividendIntervalUpdate)
+                .sorted(Comparator.comparing(s ->
+                        s.getLiveStartedAt().plusMinutes(effectiveDividendIntervalCount(s) * DIVIDEND_INTERVAL_MINUTES)))
+                .toList();
+
+        for (Stock stock : dueStocks) {
+            if (paidCount >= MAX_DIVIDEND_PAYOUTS_PER_TICK) {
+                return;
+            }
+
+            try {
+                String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                if (!"OPEN".equals(status)) {
+                    continue;
+                }
+                Stock paidStock = transactionTemplate.execute(tx ->
+                        stockRepository.findById(stock.getChannelId())
+                                .filter(Stock::isLive)
+                                .map(freshStock -> payIntervalIfDue(freshStock) ? freshStock : null)
+                                .orElse(null));
+                if (paidStock != null) {
+                    liveStockCache.put(paidStock.getChannelId(), paidStock);
+                    paidCount++;
+                    messagingTemplate.convertAndSend("/topic/streamers", List.of(paidStock));
+                }
+            } catch (Exception e) {
+                log.error("Failed to pay interval dividend for channel {}: {}",
+                        stock.getChannelId(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private boolean needsDividendIntervalUpdate(Stock stock) {
+        if (stock.getLiveStartedAt() == null) {
+            return false;
+        }
+        long completedIntervals = completedDividendIntervals(stock);
+        long recordedIntervals = stock.getDividendAccumulationCount();
+        return completedIntervals != recordedIntervals;
+    }
+
+    private boolean isEventStock(Stock stock) {
+        return stock.getChannelId() != null && stock.getChannelId().startsWith(EVENT_CHANNEL_PREFIX);
+    }
+
+    private void markStreamStarted(Stock stock) {
+        Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
+        fresh.startLive(LocalDateTime.now());
+        userShareRepository.snapshotPreStreamQuantities(fresh.getChannelId());
+        long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
+        fresh.updatePreStreamFloat(preStreamFloat);
+        stockRepository.save(fresh);
+        log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
+                fresh.getChannelId(), preStreamFloat);
+    }
+
+    private void markStreamEnded(Stock stock, String status, boolean isBlocked) {
+        if (isBlocked) {
+            log.warn("Channel {} ended with BLOCK. No dividend paid.", stock.getChannelId());
+        }
+        Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
+        fresh.endLive();
+        stockRepository.save(fresh);
+        log.info("Stream ended ({}): channel={}", status, fresh.getChannelId());
+    }
+
+    private boolean payIntervalIfDue(Stock stock) {
+        if (stock.getLiveStartedAt() == null) {
+            return false;
+        }
+
+        long completedIntervals = completedDividendIntervals(stock);
+        long alreadyPaid = stock.getDividendAccumulationCount();
+
+        if (alreadyPaid > completedIntervals) {
+            stock.updateDividendAccumulation(completedIntervals);
+            stockRepository.save(stock);
+            log.info("Dividend interval count normalized for channel {}: intervals {} -> {}",
+                    stock.getChannelId(), alreadyPaid, completedIntervals);
+            return true;
+        }
+
+        if (completedIntervals <= alreadyPaid) {
+            return false;
+        }
+
+        long newIntervals = completedIntervals - alreadyPaid;
+        for (long i = 0; i < newIntervals; i++) {
+            dividendService.payIntervalDividend(stock);
+        }
+        stock.updateDividendAccumulation(completedIntervals);
+        stockRepository.save(stock);
+        log.info("Interval dividend paid for channel {}: intervals {} -> {}",
+                stock.getChannelId(), alreadyPaid, completedIntervals);
+        return true;
+    }
+
+    private long completedDividendIntervals(Stock stock) {
+        long elapsedMinutes = ChronoUnit.MINUTES.between(stock.getLiveStartedAt(), LocalDateTime.now());
+        return Math.max(0, elapsedMinutes / DIVIDEND_INTERVAL_MINUTES);
+    }
+
+    private long effectiveDividendIntervalCount(Stock stock) {
+        return Math.min(stock.getDividendAccumulationCount(), completedDividendIntervals(stock));
+    }
+}
+
+
