@@ -22,7 +22,7 @@ export const formatCandleTime = (time: UTCTimestamp, interval: string): string =
   } else if (interval === '1h') {
     return `${String(d.getUTCHours()).padStart(2, '0')}:00`;
   } else {
-    return `${d.getMonth() + 1}/${d.getDate()}`;
+    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
   }
 };
 

@@ -50,16 +50,29 @@ export function registerOnConnect(callback: () => void): () => void {
 export function subscribeStomp(destination: string, callback: (message: any) => void) {
   const client = getStompClient();
   let subscription: any = null;
+  let active = true;
 
   const unsub = registerOnConnect(() => {
-    subscription = client.subscribe(destination, callback);
+    if (!active) return;
+    if (subscription) {
+      subscription.unsubscribe();
+      subscription = null;
+    }
+    const nextSubscription = client.subscribe(destination, callback);
+    if (!active) {
+      nextSubscription.unsubscribe();
+      return;
+    }
+    subscription = nextSubscription;
   });
 
   return {
     unsubscribe: () => {
+      active = false;
       unsub();
       if (subscription) {
         subscription.unsubscribe();
+        subscription = null;
       }
     }
   };

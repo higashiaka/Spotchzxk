@@ -426,8 +426,10 @@ export const ProfileView = ({
             <div className="space-y-2 max-h-64 overflow-y-auto hide-scrollbar">
               {dividendHistory.map((d, i) => {
                 const s = streamers.find(st => st.id === d.channelId);
-                const date = new Date(d.createdAt);
-                const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                const date = d.createdAt ? new Date(d.createdAt) : null;
+                const dateStr = date && !Number.isNaN(date.getTime())
+                  ? `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+                  : '-';
                 return (
                   <div key={i} className="flex items-center gap-3 py-2"
                     style={{ borderBottom: '1px solid var(--bg-card)' }}>

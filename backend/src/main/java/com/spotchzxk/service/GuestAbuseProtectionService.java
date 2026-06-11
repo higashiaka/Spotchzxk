@@ -94,11 +94,10 @@ public class GuestAbuseProtectionService {
         String normalized = token.trim();
         String key = permitKey(normalized);
         try {
-            String storedAbuseKey = redisTemplate.opsForValue().get(key);
+            String storedAbuseKey = redisTemplate.opsForValue().getAndDelete(key);
             if (!expectedAbuseKey.equals(storedAbuseKey)) {
                 return false;
             }
-            redisTemplate.delete(key);
             return true;
         } catch (RedisConnectionFailureException e) {
             LocalPermit permit = localPermits.remove(normalized);

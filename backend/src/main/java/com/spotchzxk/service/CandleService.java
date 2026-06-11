@@ -81,14 +81,18 @@ public class CandleService {
 
     // ── On trade: recompute current buckets for each interval → STOMP broadcast ─────────────────────
 
-    public synchronized void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
+    public void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
+        Map<String, OhlcCandle> update = recordTradeAndCompute(stockId, executedPrice, timestamp);
+        messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
+    }
+
+    private synchronized Map<String, OhlcCandle> recordTradeAndCompute(String stockId, BigDecimal executedPrice, long timestamp) {
         long minuteStart = (timestamp / MS_1M) * MS_1M;
         tradedStockIdsByMinute
                 .computeIfAbsent(minuteStart, ignored -> ConcurrentHashMap.newKeySet())
                 .add(stockId);
 
-        Map<String, OhlcCandle> update = computeCurrentBuckets(stockId, executedPrice, timestamp);
-        messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
+        return computeCurrentBuckets(stockId, executedPrice, timestamp);
     }
 
     public synchronized void evictStockCache(String stockId) {

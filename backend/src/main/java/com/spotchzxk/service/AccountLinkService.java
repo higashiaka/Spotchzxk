@@ -5,6 +5,7 @@ import com.spotchzxk.repository.OrderRepository;
 import com.spotchzxk.repository.UserRepository;
 import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,7 +57,15 @@ public class AccountLinkService {
                 .dividendTotal(guestUser.getDividendTotal())
                 .donationTotal(guestUser.getDonationTotal())
                 .build();
-        userRepository.save(googleUser);
+        try {
+            userRepository.saveAndFlush(googleUser);
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "이미 연결된 Google 계정입니다.",
+                    e
+            );
+        }
 
         // Bulk-migrate all records that have a FK pointing to the guest over to the Google account
         userShareRepository.updateUserId(guestUid, googleUid);

@@ -9,6 +9,8 @@ import com.spotchzxk.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -50,15 +52,13 @@ public class PortfolioService {
 
     public Map<String, Object> getPortfolioResponse(String userId) {
         User p = getOrCreate(userId);
-        List<UserShare> userShares = userShareRepository.findByUserId(userId);
+        List<UserShare> userShares = userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId);
         Map<String, Long> shares = userShares.stream()
-                .filter(s -> s.getQuantity() > 0)
                 .collect(Collectors.toMap(
                         s -> s.getStock().getChannelId(),
                         s -> s.getQuantity()
                 ));
         Map<String, BigDecimal> avgPrices = userShares.stream()
-                .filter(s -> s.getQuantity() > 0)
                 .collect(Collectors.toMap(
                         s -> s.getStock().getChannelId(),
                         s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
@@ -111,19 +111,37 @@ public class PortfolioService {
         userRepository.save(p);
 
         userShareRepository.deleteAll(shares);
-        tradeEngine.evictUserCache(userId);
-        rankCache.remove(userId);
+        evictAfterCommit(userId);
         // Issue #24: 완료된 주문 기록은 삭제하지 않음 — 거래 히스토리 보존
     }
 
-    private long cachedLeagueRank(String userId) {
-        long[] entry = rankCache.get(userId);
-        if (entry != null && System.currentTimeMillis() < entry[1]) {
-            return entry[0];
+    private void evictAfterCommit(String userId) {
+        Runnable evict = () -> {
+            tradeEngine.evictUserCache(userId);
+            rankCache.remove(userId);
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evict.run();
+            return;
         }
-        long rank = userRepository.countUsersWithHigherTotalAssets(userId) + 1;
-        rankCache.put(userId, new long[]{rank, System.currentTimeMillis() + RANK_CACHE_TTL_MS});
-        return rank;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evict.run();
+            }
+        });
+    }
+
+    private long cachedLeagueRank(String userId) {
+        long now = System.currentTimeMillis();
+        long[] entry = rankCache.compute(userId, (key, current) -> {
+            if (current != null && now < current[1]) {
+                return current;
+            }
+            long rank = userRepository.countUsersWithHigherTotalAssets(key) + 1;
+            return new long[]{rank, now + RANK_CACHE_TTL_MS};
+        });
+        return entry[0];
     }
 
     private long cachedLeagueTotal() {

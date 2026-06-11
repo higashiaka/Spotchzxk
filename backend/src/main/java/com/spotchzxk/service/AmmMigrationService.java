@@ -40,7 +40,7 @@ public class AmmMigrationService implements ApplicationRunner {
         int synced = 0;
         for (Stock stock : stocks) {
             try {
-                if (stock.getCoinReserve() > 0) {
+                if (stock.getCoinReserve() > 0 && stock.getShareReserve() > 0) {
                     long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
                     if (stock.getIssuedShares() != totalHeld) {
                         new TransactionTemplate(txManager).executeWithoutResult(s -> {

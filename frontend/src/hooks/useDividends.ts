@@ -18,6 +18,16 @@ export interface DividendEntry {
   createdAt: string;
 }
 
+function isDividendEntry(value: any): value is DividendEntry {
+  return !!value
+    && typeof value.channelId === 'string'
+    && typeof value.streamerName === 'string'
+    && typeof value.profileImageUrl === 'string'
+    && Number.isFinite(Number(value.totalDividendPool))
+    && Number.isFinite(Number(value.streamMinutes))
+    && typeof value.createdAt === 'string';
+}
+
 /** Initially loads recent dividend history via REST,
  *  then receives new dividend events in real-time via STOMP /topic/dividends
  *  (maintains at most 30 entries in memory) */
@@ -36,7 +46,8 @@ export function useDividends() {
   useEffect(() => {
     const subscription = subscribeStomp('/topic/dividends', (message) => {
       try {
-        const entry: DividendEntry = JSON.parse(message.body);
+        const entry = JSON.parse(message.body);
+        if (!isDividendEntry(entry)) return;
         setDividends(prev => [entry, ...prev].slice(0, 30));
       } catch (e) {
         console.error('Failed to parse dividend message', e);

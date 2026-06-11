@@ -54,6 +54,7 @@ export const StockDetail = ({
   const [hasMoreCandles, setHasMoreCandles] = useState(true);
   const [isLoadingMoreCandles, setIsLoadingMoreCandles] = useState(false);
   const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
+  const [stockTradesError, setStockTradesError] = useState(false);
   const [qtyStr, setQtyStr] = useState('1');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
@@ -128,6 +129,7 @@ export const StockDetail = ({
 
   useEffect(() => {
     setStockTrades([]);
+    setStockTradesError(false);
     apiFetch(`/api/orders/history?streamerId=${encodeURIComponent(streamer.id)}`)
       .then(res => res.ok ? res.json() : null)
       .then((orders: StockOrderHistoryItem[] | null) => {
@@ -145,7 +147,7 @@ export const StockDetail = ({
           .sort((a, b) => b.timestamp - a.timestamp);
         setStockTrades(trades);
       })
-      .catch(() => {});
+      .catch(() => setStockTradesError(true));
   }, [streamer.id, streamer.name]);
 
   useEffect(() => {
@@ -210,7 +212,11 @@ export const StockDetail = ({
         </span>
       </div>
       <div className="space-y-2 max-h-48 md:max-h-[360px] overflow-y-auto hide-scrollbar">
-        {streamerTrades.length === 0 ? (
+        {stockTradesError ? (
+          <div className="text-center py-6 text-xs" style={{ color: '#FF6B6B' }}>
+            체결 내역을 불러오지 못했습니다.
+          </div>
+        ) : streamerTrades.length === 0 ? (
           <div className="text-center py-6 text-xs" style={{ color: 'var(--text-dim)' }}>
             새로운 거래 체결을 대기하고 있습니다...
           </div>

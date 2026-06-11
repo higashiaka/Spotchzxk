@@ -35,7 +35,11 @@ export const OrderView = ({
 
   // Reset quantity to 1 when the selected stock changes
   useEffect(() => {
-    if (!selectedStreamer || selectedStreamer.id === prevId) return;
+    if (!selectedStreamer) {
+      setPrevId(null);
+      return;
+    }
+    if (selectedStreamer.id === prevId) return;
     setPrevId(selectedStreamer.id);
     setQtyStr('1');
   }, [selectedStreamer, prevId]);

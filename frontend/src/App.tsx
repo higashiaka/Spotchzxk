@@ -250,6 +250,7 @@ function App() {
       // After guest-to-Google linking, request server-side data merge
       const pendingGuestUid = localStorage.getItem('pendingGuestMerge');
       if (pendingGuestUid && u && u.providerData.some(p => p.providerId === 'google.com')) {
+        localStorage.removeItem('pendingGuestMerge');
         try {
           const res = await apiFetch('/api/auth/link-google', {
             method: 'POST',
@@ -257,12 +258,14 @@ function App() {
           });
           if (res.ok || res.status === 404 || res.status === 409) {
             localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
-            localStorage.removeItem('pendingGuestMerge');
             if (res.status === 409) {
               alert('이미 사용 중인 Google 계정이라 게스트 자산을 자동 병합하지 않았습니다.');
             }
+          } else {
+            localStorage.setItem('pendingGuestMerge', pendingGuestUid);
           }
         } catch {
+          localStorage.setItem('pendingGuestMerge', pendingGuestUid);
           // Retry on the next auth state change
         }
       }

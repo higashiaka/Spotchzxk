@@ -27,8 +27,12 @@ public final class AmmCalculator {
         BigInteger den = BigInteger.valueOf(shareReserve - qty);
         // 올림 처리 (유저가 조금 더 내도록)
         BigInteger[] qr = num.divideAndRemainder(den);
-        long result = qr[0].longValueExact();
-        return qr[1].signum() > 0 ? result + 1 : result;
+        try {
+            long result = qr[0].longValueExact();
+            return qr[1].signum() > 0 ? result + 1 : result;
+        } catch (ArithmeticException e) {
+            throw new IllegalStateException("거래 금액이 너무 큽니다. 수량을 줄여주세요.");
+        }
     }
 
     /**
@@ -40,7 +44,11 @@ public final class AmmCalculator {
         if (qty <= 0) throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve + qty);
-        return num.divide(den).longValueExact(); // 내림 (유저가 조금 덜 받도록)
+        try {
+            return num.divide(den).longValueExact(); // 내림 (유저가 조금 덜 받도록)
+        } catch (ArithmeticException e) {
+            throw new IllegalStateException("거래 금액이 너무 큽니다. 수량을 줄여주세요.");
+        }
     }
 
     /** 수수료 계산: {feePoolAmount, burnAmount} */
@@ -62,6 +70,7 @@ public final class AmmCalculator {
 
     /** 현재 AMM 가격 (coinReserve / shareReserve) */
     public static BigDecimal price(long coinReserve, long shareReserve) {
+        if (shareReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         return BigDecimal.valueOf(coinReserve)
                 .divide(BigDecimal.valueOf(shareReserve), 0, RoundingMode.HALF_UP);
     }
@@ -104,7 +113,7 @@ public final class AmmCalculator {
         return new AmmResult(
             ammRevenue, fee[0], fee[1], userReceives,
             newPool,
-            avgPrice(ammRevenue, qty),
+            avgPrice(userReceives, qty),
             price(newPool[0], newPool[1])
         );
     }

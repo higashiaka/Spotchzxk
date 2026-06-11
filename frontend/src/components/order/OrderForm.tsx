@@ -123,9 +123,13 @@ export const OrderForm = ({
     qty,
   );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
+  const limitGrossAmount = estimatedExecutionPrice * qty;
+  const limitFee = Math.ceil(limitGrossAmount * FEE_RATE);
 
   /** Total order cost */
-  const totalCost = orderMode === 'market' ? marketExecutionAmount : estimatedExecutionPrice * qty;
+  const totalCost = orderMode === 'market'
+    ? marketExecutionAmount
+    : orderType === 'buy' ? limitGrossAmount + limitFee : Math.max(0, limitGrossAmount - limitFee);
   /** Estimated balance after the order */
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
@@ -168,8 +172,11 @@ export const OrderForm = ({
       quantity: qty,
       estimatedPrice: currentPrice,
       estimatedExecutionPrice,
+      estimatedTotalAmount: totalCost,
       orderMode,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
+      maxCoinIn: orderMode === 'market' && orderType === 'buy' ? Math.ceil(totalCost) : undefined,
+      minCoinOut: orderMode === 'market' && orderType === 'sell' && totalCost >= 1 ? Math.floor(totalCost) : undefined,
     });
   };
 

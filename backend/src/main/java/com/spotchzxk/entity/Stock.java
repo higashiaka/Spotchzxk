@@ -189,6 +189,8 @@ public class Stock {
     }
 
     private long splitPrice(long price, int ratio) {
-        return Math.max(1L, Math.round((double) price / ratio));
+        return Math.max(1L, java.math.BigDecimal.valueOf(price)
+                .divide(java.math.BigDecimal.valueOf(ratio), 0, java.math.RoundingMode.HALF_UP)
+                .longValue());
     }
 }

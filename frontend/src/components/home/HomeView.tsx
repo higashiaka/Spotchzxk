@@ -8,6 +8,13 @@ import { useVisibleMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
 import { MegaphonePostList } from '../common/MegaphonePostList';
 
+const formatFeedTime = (value: number | string | null | undefined): string => {
+  if (value == null) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
 /** Home screen component.
  *  Renders the ticker, recent megaphone posts, investment summary,
  *  holdings (up to 3), stat rows, recently viewed, live trade feed,
@@ -343,8 +350,7 @@ export const HomeView = ({
             ) : (
               liveTrades.map((trade, idx) => {
                 const isBuy = trade.type === 'buy';
-                const d = new Date(trade.timestamp);
-                const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const timeStr = formatFeedTime(trade.timestamp);
                 const stock = streamers.find(s => s.id === trade.streamerId);
                 return (
                   <div key={idx}
@@ -399,8 +405,7 @@ export const HomeView = ({
               history.map((item: any) => {
                 const s = streamers.find(st => st.id === item.streamerId);
                 const price = item.executedPrice ?? item.estimatedPrice;
-                const d = new Date(item.createdAt);
-                const timeStr = `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+                const timeStr = formatFeedTime(item.createdAt);
                 return (
                   <div key={item.id} className="flex items-center px-4 py-3.5"
                     style={{ borderBottom: rowBorder }}>

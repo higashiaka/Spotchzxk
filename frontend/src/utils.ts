@@ -1,9 +1,6 @@
 /** Default base price for new stocks in KRW */
 export const BASE_PRICE = 1000;
 
-/** Initial investment balance given at game start in KRW */
-export const INITIAL_BALANCE = 1_000_000;
-
 /** Formats a number as Korean KRW string; shows 2 decimal places below 1 KRW */
 export const fmt = (value: number): string => {
   if (value < 1) return `${value.toFixed(2)}원`;

@@ -6,7 +6,7 @@
 
 ### ✅ 해결 완료 (2026-06-11)
 
-> 총 **10개 항목 처리됨**: #1/2/3/4/5/8/13/28/29/34/44
+> 총 **35개 항목 처리됨**: #1/2/3/4/5/8/9/10/11/12/13/14/17/18/21/25/26/27/28/29/30/31/32/33/34/35/36/37/38/39/40/41/42/43/44
 
 | # | 항목 |
 |---|------|
@@ -18,8 +18,32 @@
 | 13 | MegaphoneService.java — 빈 메시지 NPE 대신 한국어 오류로 거절 |
 | 28 | UserShareRepository.java — 게스트 배당 합계 불일치 수정 |
 | 29 | DividendController.java — `createdAt null` 방어 |
-| 34 | CandleService.java — `broadcastTrade()`에서 `candleService.onTrade()`를 `CompletableFuture.runAsync()`로 비동기화, stock 락 밖에서 실행돼 체결 지연 문제 제거 (기존 코드에 이미 적용돼 있었음) |
+| 34 | CandleService.java — 캔들 STOMP 전송을 synchronized 락 밖으로 이동하고, 거래 엔진에서도 stock 락 밖 비동기 실행 유지 |
 | 44 | DividendService.java — 방송 중 전량 매도자 배당 로그 및 개인 알림 누락 수정 |
+| 9 | useTrade.ts — 시장가 낙관적 업데이트가 수수료/슬리피지 포함 총액을 사용하도록 수정 |
+| 10 | useTrade.ts — 지정가 매수 예약금 낙관적 차감 및 주문 내역 즉시 무효화 추가 |
+| 11 | OrderForm.tsx + useTrade.ts — 시장가 주문에 `maxCoinIn`/`minCoinOut` 전송 |
+| 12 | TradeEngine.java — 지정가 예약금/체결 조건/환불 계산을 수수료 포함 기준으로 통일 |
+| 17 | PortfolioService.java — 포트폴리오 초기화 후 캐시 무효화를 트랜잭션 커밋 이후로 이동 |
+| 21 | Stock.java — 액면분할 가격 반올림을 `BigDecimal` 기준으로 변경 |
+| 30 | V53 migration — `orders(user_id, status, created_at)` 복합 인덱스 추가 |
+| 37 | FirebaseConfig.java — service account `FileInputStream` try-with-resources 적용 |
+| 38 | AmmCalculator.java — 매도 평균 체결가를 실제 수령액 기준으로 변경 |
+| 42 | GuestAbuseProtectionService.java — Redis precheck permit 소비를 `getAndDelete`로 원자화 |
+| 43 | AccountLinkService.java — Google 계정 merge 동시 PK 충돌을 409 응답으로 변환 |
+| 14 | PortfolioService.java — 보유 주식 조회에 JOIN FETCH 메서드 사용해 N+1 제거 |
+| 18 | stompClient.ts — 구독 생성 전/재연결 중 unsubscribe 시 누락되지 않도록 active guard 추가 |
+| 25 | DividendLogRepository.java — 최근 배당 로그 조회에 `@EntityGraph(stock)` 적용 |
+| 27 | utils.ts — 미사용 `INITIAL_BALANCE` 상수 제거 |
+| 31 | useDividends.ts — STOMP 배당 메시지 필드 검증 추가 |
+| 32 | ProfileView.tsx — 배당 날짜가 null/invalid일 때 `-` 표시 |
+| 33 | StockDetail.tsx — 주문 내역 API 실패 시 사용자에게 오류 표시 |
+| 35 | HomeView.tsx — 주문/거래 feed 날짜가 null/invalid일 때 `-` 표시 |
+| 36 | HomeView.tsx — 거래 feed/주문 내역 시간의 hour 제로패딩 일관화 |
+| 40 | OrderView.tsx — 선택 종목 해제 시 `prevId` 초기화해 재선택 수량 리셋 보장 |
+| 41 | App.tsx — `pendingGuestMerge` 키를 요청 전 삭제하고 실패 시 복구해 중복 merge 요청 방지 |
+| 26 | PortfolioService.java — `rankCache.compute()`로 리그 랭킹 캐시 갱신을 원자화 |
+| 39 | chartUtils.ts — 일봉/주봉 레이블도 UTC 기준 월/일 사용 |
 
 ### 📋 재검증으로 위험도 조정
 
@@ -27,18 +51,18 @@
 |---|------|
 | 6 | DonationController — 현재 코드에 이미 null 금액 방어 존재 → 문서 설명과 다름, 실질 위험 없음 |
 | 7 | ChzzkLivePollingService `payDueIntervalDividends` — 현재 코드가 `TransactionTemplate`으로 감싸고 있어 `@Transactional` 누락 위험이 직접 적용되지 않음 → 실질 위험 낮음 |
+| 16 | DailyResetService — 현재 코드가 `sendAfterCommit`으로 STOMP 전송을 커밋 이후 실행 → 문서의 캐시/전송 타이밍 위험 낮음 |
+| 22 | GuestAbuseProperties — Java record compact constructor의 파라미터 재할당은 정상적으로 필드 초기화에 반영됨 → 문서 설명과 다름 |
+| 20 | ChzzkLivePollingService `markStreamStarted` — 현재 `transactionTemplate.execute()` 내부에서 호출되어 스냅샷·합계 계산이 트랜잭션 경계 안에 있음 |
+| 24 | OrderForm — 시장가 주문에 `maxCoinIn`/`minCoinOut`을 전송하므로 렌더 시점 가격 캡처로 인한 주요 슬리피지 위험은 서버에서 방어됨 |
 
 ### 🔎 다음 검토 우선순위
 
 | 순서 | 항목 | 이유 |
 |------|------|------|
-| 1 | #9, #10, #11 `frontend/src/hooks/useTrade.ts` | 낙관적 업데이트/슬리피지 보호가 실제 주문 UX와 중복 주문 방지에 직접 영향 |
-| 2 | #12 `backend/.../service/TradeEngine.java` | 지정가 예약금과 실제 수수료 포함 비용 기준 불일치 가능성 |
-| 3 | #30 `backend/src/main/resources/db/migration/` | 주문 목록 조회 성능 저하 가능성이 명확하고 인덱스로 해결 가능 |
-| 4 | #34 `backend/.../service/CandleService.java` | synchronized 락 안 STOMP I/O 가능성으로 체결 지연 위험 |
-| 5 | #15, #16, #17 | 스레드 안전성/트랜잭션 커밋 전 캐시 무효화 계열 |
-| 6 | #37 `backend/.../config/FirebaseConfig.java` | 서버 기동 후 파일 스트림 누수 가능성 |
-| 7 | #42, #43 | precheck token/account merge TOCTOU 보안성 검토 필요 |
+| 1 | #15 | SystemSellPressureService 상태 필드 스레드 안전성 검토 |
+| 2 | #19 | 부분 체결 필드와 실제 로직 간 미구현 상태 정리 |
+| 3 | #23 | CSRF/WebSocket 보안 설정 검토 |
 
 ---
 
@@ -72,11 +96,7 @@
 
 ## 높음 — 서버 오류·데이터 손상 가능
 
-| # | 파일 | 줄 | 내용 |
-|---|------|----|------|
-| 12 | `backend/.../service/TradeEngine.java` | 207-218 | `calcAmmTradeForLimit()`: 예약금(`limitPrice * qty`, 수수료 제외)과 실제 비용(`userNetAmount`, 수수료 포함) 비교 기준 불일치 |
-| 30 | `backend/src/main/resources/db/migration/` | V34, V37 | `orders` 테이블에 `(user_id, status, created_at)` 복합 인덱스 없음 → `findByUserIdAndStatusOrderByCreatedAtDesc` 호출 시 풀 스캔 |
-| 34 | `backend/.../service/CandleService.java` | 84-96 | `onTrade()`, `evictStockCache()` 모두 `synchronized` → `messagingTemplate.convertAndSend()` (STOMP 네트워크 I/O)를 락 보유 중 실행. 다수 종목 동시 체결 시 모든 거래 스레드가 이 락에서 블로킹돼 체결 지연 가능 |
+현재 높음 미처리 항목 없음.
 
 ---
 
@@ -84,14 +104,7 @@
 
 | # | 파일 | 줄 | 내용 |
 |---|------|----|------|
-| 9 | `frontend/src/hooks/useTrade.ts` | 42-65 | Optimistic update 잔고 차감 시 수수료 미반영 (`estimatedPrice * qty` 사용) → 잔고 표시 일시적 불일치 |
-| 10 | `frontend/src/hooks/useTrade.ts` | 43-68 | 지정가 주문 제출 시 낙관적 업데이트 완전 스킵 → 예약금 차감이 UI에 미반영, 3.5초 대기 중 중복 주문 가능 |
-| 11 | `frontend/src/hooks/useTrade.ts` | — | `TradeRequest`에 `maxCoinIn`/`minCoinOut` 미전송 → 슬리피지 보호 미작동 |
-| 14 | `backend/.../service/PortfolioService.java` | 52-59 | `s.getStock()` Lazy 로딩으로 N+1 쿼리 발생 (JOIN FETCH 메서드 있으나 미사용) |
 | 15 | `backend/.../service/system/SystemSellPressureService.java` | 319-334 | `PressureState` 필드 `volatile`/`AtomicInteger` 혼용 → 스레드 안전성 불일치 |
-| 16 | `backend/.../service/DailyResetService.java` | 33-54 | 캐시 무효화가 트랜잭션 내부에서 실행 → 커밋 전 다른 스레드가 구식 캐시 재로드 가능 |
-| 17 | `backend/.../service/PortfolioService.java` | 84-117 | `resetPortfolioLocked()` 내 `evictUserCache()`가 트랜잭션 내부 호출 → 동일 문제 |
-| 18 | `frontend/src/lib/stompClient.ts` | 50-66 | STOMP 연결 진행 중 `unsubscribe()` 호출 시 `subscription`이 null → 구독 해제 누락·메모리 누수 가능 |
 
 ---
 
@@ -100,26 +113,7 @@
 | # | 파일 | 줄 | 내용 |
 |---|------|----|------|
 | 19 | `backend/.../entity/Order.java` | 55-62 | `filledQuantity`, `allowPartial` 필드가 DB 스키마에 있으나 부분 체결 로직 미구현 |
-| 20 | `backend/.../service/ChzzkLivePollingService.java` | 139-148 | `markStreamStarted()` 트랜잭션 없이 실행 → 스냅샷·합계 계산 사이 매매 발생 시 `preStreamFloat` 부정확 |
-| 21 | `backend/.../entity/Stock.java` | 191-193 | `splitPrice()`에서 `double` 반올림 정밀도 손실 (BigDecimal 권장) |
-| 22 | `backend/.../config/GuestAbuseProperties.java` | 7-28 | Record compact constructor에서 `trustedProxyCidrs` 재할당이 필드에 미반영될 수 있음 |
 | 23 | `backend/.../config/SecurityConfig.java` | 36 | CSRF 완전 비활성화 (Stateless API이므로 실질 위험 낮으나 WebSocket 사용 시 검토 필요) |
-| 24 | `frontend/src/components/order/OrderForm.tsx` | 113-124 | `handleSubmit` 클로저가 렌더 시점 `currentPrice` 캡처 → 수량 변경 중 가격 변동 시 구형 가격으로 주문 전송 가능 |
-| 25 | `backend/.../repository/DividendLogRepository.java` | 12 | `findTop30ByOrderByCreatedAtDesc()` — JOIN FETCH 없이 LAZY Stock 접근 → 최대 30×3 필드 = 90개 추가 쿼리 발생 |
-| 26 | `backend/.../service/PortfolioService.java` | 119-125 | `cachedLeagueRank()` read→write 비원자적 — 동시 요청 시 캐시 미스 중복 발생, DB 쿼리 n중 실행 |
-| 27 | `frontend/src/utils.ts` | 5 | `INITIAL_BALANCE = 1_000_000` 선언됐으나 아무 곳에서도 import 안 됨 (dead code) + 백엔드 실제값 10,000,000과 불일치 |
-| 31 | `frontend/src/hooks/useDividends.ts` | 37-44 | STOMP 배당 메시지 수신 시 JSON 파싱 후 필드 검증 없음 → 잘못된 메시지 수신 시 렌더 크래시 가능 |
-| 32 | `frontend/src/components/profile/ProfileView.tsx` | 429-430 | `new Date(d.createdAt)` null/undefined 처리 없음 → Invalid Date → `getMonth()` NaN → 표시 오류 |
-| 33 | `frontend/src/components/prices/StockDetail.tsx` | 131-148 | 주문 내역 API 실패 시 `.catch(() => {})` silent swallow → 사용자에게 오류 미표시, 빈 목록으로 렌더 |
-| 35 | `frontend/src/components/home/HomeView.tsx` | 402 | `new Date(item.createdAt)` — `item: any` 타입으로 null 체크 없음 → `createdAt` 누락 시 Invalid Date → `getMonth()` NaN → 시간 표시 오류 (#32와 동일 패턴, 다른 파일) |
-| 36 | `frontend/src/components/home/HomeView.tsx` | 347, 403 | `d.getHours()` 제로패딩 없음, `d.getMinutes()`는 `padStart(2,'0')` 적용됨 → 시간 표시 불일치 (예: "9:05" 대신 "09:05"). 거래 피드·주문 내역 두 곳 모두 해당. `ProfileView.tsx:430`은 이미 수정돼 있음 |
-| 37 | `backend/.../config/FirebaseConfig.java` | 30-34 | `new FileInputStream(file)` 후 `try-with-resources` 없음 → `GoogleCredentials.fromStream()`이 스트림을 닫지 않으므로 서버 기동 후 파일 디스크립터가 영구 누수됨 |
-| 38 | `backend/.../service/AmmCalculator.java` | 107 | `calcSell()`의 avgPrice가 `ammRevenue`(fee 차감 전) 기준 → `calcBuy()`는 `userPays`(fee 포함) 기준이라 일관성 없음. 매도 체결 단가가 실제 수령액보다 ~1.5% 과대 표시됨 |
-| 39 | `frontend/src/components/chart/chartUtils.ts` | 25 | 일봉/주봉 레이블에 `getMonth()`/`getDate()` (로컬 타임존) 사용 → 1m/5m/1h는 `getUTCHours()` 사용 중. UTC+9 서버 기준 자정 캔들이 한국 이외 유저에게 날짜 오표기 가능 |
-| 40 | `frontend/src/components/order/OrderView.tsx` | 37-41 | 동일 종목을 닫았다가 다시 선택하면 `selectedStreamer.id === prevId` 조건으로 수량 리셋 스킵 → 이전 수량이 그대로 유지됨. `selectedStreamer`가 null이 될 때 `prevId`도 함께 초기화해야 함 |
-| 41 | `frontend/src/App.tsx` | 251-267 | `pendingGuestMerge` localStorage 키를 API 요청 성공 후에 제거 → auth 상태가 빠르게 두 번 발생하면 merge 요청이 중복 전송될 수 있음 (서버 409 처리로 부분 완화되나, 요청 전 동기 삭제가 더 안전) |
-| 42 | `backend/.../service/GuestAbuseProtectionService.java` | 97-101 | `consumePrecheckPermit()` Redis 경로에서 `get(key)` → `delete(key)` 비원자적 실행 → 동일 토큰으로 동시 요청 2건이 모두 `get`을 통과한 후 한 건만 `delete`하면 같은 precheck 토큰으로 중복 가입 가능 (TOCTOU). Lua 스크립트 또는 `getAndDelete()`로 원자화 필요 |
-| 43 | `backend/.../service/AccountLinkService.java` | 37-59 | `mergeGuestIntoGoogle()` 내 `existsById(googleUid)` 통과 후 `save()` 사이 트랜잭션 경계 없음 → 두 요청이 동시에 체크를 통과하면 두 번째 `save()`에서 PK 중복 예외(500) 발생. 의도한 409 대신 500 반환. `@Transactional` 있으나 `READ_COMMITTED`에서는 두 트랜잭션 모두 체크 통과 가능 |
 
 ---
 

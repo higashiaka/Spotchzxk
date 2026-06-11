@@ -27,10 +27,12 @@ public class FirebaseConfig {
                 log.warn("Firebase service account not found at '{}'; Firebase disabled.", serviceAccountPath);
                 return;
             }
-            FileInputStream serviceAccount = new FileInputStream(file);
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    .build();
+            FirebaseOptions options;
+            try (FileInputStream serviceAccount = new FileInputStream(file)) {
+                options = FirebaseOptions.builder()
+                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                        .build();
+            }
             FirebaseApp.initializeApp(options);
         }
     }
