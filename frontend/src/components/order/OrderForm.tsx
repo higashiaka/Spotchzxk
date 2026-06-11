@@ -9,6 +9,7 @@ import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
 const FEE_RATE = 0.015;
+const MARKET_SLIPPAGE_TOLERANCE = 0.05;
 
 const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): number => {
   if (currentPrice <= 0 || quantity <= 0) return 0;
@@ -166,6 +167,8 @@ export const OrderForm = ({
   /** Order submission handler */
   const handleSubmit = () => {
     if (!canSubmit) return;
+    const maxCoinIn = Math.ceil(totalCost * (1 + MARKET_SLIPPAGE_TOLERANCE));
+    const minCoinOut = Math.floor(totalCost * (1 - MARKET_SLIPPAGE_TOLERANCE));
     tradeMutation.mutate({
       streamerId: streamer.id,
       type: orderType,
@@ -175,8 +178,8 @@ export const OrderForm = ({
       estimatedTotalAmount: totalCost,
       orderMode,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
-      maxCoinIn: orderMode === 'market' && orderType === 'buy' ? Math.ceil(totalCost) : undefined,
-      minCoinOut: orderMode === 'market' && orderType === 'sell' && totalCost >= 1 ? Math.floor(totalCost) : undefined,
+      maxCoinIn: orderMode === 'market' && orderType === 'buy' ? maxCoinIn : undefined,
+      minCoinOut: orderMode === 'market' && orderType === 'sell' && minCoinOut >= 1 ? minCoinOut : undefined,
     });
   };
 

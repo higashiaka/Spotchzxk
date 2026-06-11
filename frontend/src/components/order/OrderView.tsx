@@ -45,9 +45,13 @@ export const OrderView = ({
   }, [selectedStreamer, prevId]);
 
   const sorted = useMemo(() => [...streamers].sort((a, b) => b.totalVolume - a.totalVolume), [streamers]);
+  const activeStreamer = useMemo(() => {
+    if (!selectedStreamer) return null;
+    return streamers.find(s => s.id === selectedStreamer.id) ?? selectedStreamer;
+  }, [selectedStreamer, streamers]);
 
   // Render OrderForm when a stock is selected
-  if (selectedStreamer) {
+  if (activeStreamer) {
     return (
       <div className="h-full flex flex-col overflow-hidden surface-sidebar">
         <button
@@ -63,7 +67,7 @@ export const OrderView = ({
         </button>
         <div className="flex-1 overflow-hidden">
           <OrderForm
-            streamer={selectedStreamer}
+            streamer={activeStreamer}
             user={user}
             qtyStr={qtyStr}
             setQtyStr={setQtyStr}
