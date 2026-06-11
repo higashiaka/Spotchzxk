@@ -1,0 +1,137 @@
+package com.spotchzxk.application;
+
+import com.spotchzxk.presentation.dto.OrderBookDto;
+import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.user.entity.User;
+import com.spotchzxk.shared.exception.ChannelNotFoundException;
+import com.spotchzxk.shared.exception.InsufficientFollowerCountException;
+import com.spotchzxk.domain.order.repository.OrderRepository;
+import com.spotchzxk.domain.stock.repository.StockRepository;
+import com.spotchzxk.domain.user.repository.UserRepository;
+import com.spotchzxk.infrastructure.chzzk.ChzzkApiClient;
+import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class StockService {
+
+    private static final int MIN_FOLLOWER_COUNT = 100;
+
+    private final StockRepository stockRepository;
+    private final OrderRepository orderRepository;
+    private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final ChzzkApiClient chzzkApiClient;
+    private final TradeEngine tradeEngine;
+    private final TransactionTemplate transactionTemplate;
+
+    public List<Stock> getAllStocks() {
+        return stockRepository.findAll();
+    }
+
+    public OrderBookDto getOrderBook(String channelId, int depth) {
+        Stock stock = stockRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+        int safeDepth = Math.max(1, Math.min(depth, 20));
+        return new OrderBookDto(
+                channelId,
+                BigDecimal.valueOf(stock.getCurrentPrice()),
+                toOrderBookEntries(orderRepository.findAskLevels(channelId, safeDepth)),
+                toOrderBookEntries(orderRepository.findBidLevels(channelId, safeDepth))
+        );
+    }
+
+    private List<OrderBookDto.OrderBookEntry> toOrderBookEntries(List<Object[]> rows) {
+        return rows.stream()
+                .map(row -> new OrderBookDto.OrderBookEntry(
+                        row[0] instanceof BigDecimal price ? price : new BigDecimal(String.valueOf(row[0])),
+                        ((Number) row[1]).longValue()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * @return empty if stock already exists, filled if newly created with Chzzk API name.
+     */
+    public Optional<Stock> addStockIfNew(String userId, String channelId) {
+        if (stockRepository.existsById(channelId)) {
+            return Optional.empty();
+        }
+
+        Stock stock = Stock.builder()
+                .channelId(channelId)
+                .streamerName(channelId)
+                .totalSupply(0L)
+                .currentPrice(1000)
+                .basePrice(1000)
+                .listingPrice(1000)
+                .isLive(false)
+                .listedAt(java.time.LocalDateTime.now())
+                .build();
+
+        // Issue #21: Chzzk API ?몄텧? ?좉툑 ?대?????踰덉㎏ existsById 寃???댄썑濡??대룞 (TOCTOU)
+        AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
+        tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
+                addStockIfNewLocked(userId, channelId, stock))));
+
+        result.get().ifPresent(savedStock ->
+                messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll()));
+        return result.get();
+    }
+
+    private Optional<Stock> addStockIfNewLocked(String userId, String channelId, Stock stock) {
+        if (stockRepository.existsById(channelId)) {
+            return Optional.empty();
+        }
+
+        // Issue #21: Chzzk API????踰덉㎏ existsById ?댄썑 ???대? ?깅줉??梨꾨꼸???ㅽ듃?뚰겕 ?붿껌????퉬?섏? ?딆쓬
+        if (!chzzkApiClient.populateChannelInfo(stock)) {
+            throw new ChannelNotFoundException(channelId);
+        }
+        if (stock.getFollowerCount() < MIN_FOLLOWER_COUNT) {
+            throw new InsufficientFollowerCountException(channelId, stock.getFollowerCount());
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+        if (user.getStockAddTickets() <= 0) {
+            throw new IllegalStateException("醫낅ぉ 異붽?沅뚯씠 ?놁뒿?덈떎.");
+        }
+        if (userRepository.useStockAddTicket(userId) != 1) {
+            throw new IllegalStateException("醫낅ぉ 異붽?沅뚯씠 ?놁뒿?덈떎.");
+        }
+        tradeEngine.evictUserCache(userId);
+
+        long listingPrice = calcListingPrice(stock.getFollowerCount());
+        stock.finalizeListing(listingPrice, 100_000L);
+
+        int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());
+        long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount(), listingPrice);
+        long coinReserve = (long) listingPrice * shareReserve;
+        stock.initAmmPool(coinReserve, shareReserve, tier);
+
+        stockRepository.save(stock);
+
+        return Optional.of(stockRepository.findById(channelId).orElseThrow());
+    }
+
+    private static long calcListingPrice(int followerCount) {
+        if (followerCount <= 0) {
+            return 10_000L;
+        }
+        long raw = (long) (Math.sqrt(followerCount) * 300);
+        long rounded = (raw / 1_000) * 1_000;
+        return Math.max(10_000L, Math.min(300_000L, rounded));
+    }
+}
+
+
