@@ -55,8 +55,7 @@ export const HomeView = ({
   const userGrade = portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
-  /** Display count adjusted for bot trading activity */
-  const displayedOnlineCount = (onlineCount ?? 0) + 5;
+  const displayedOnlineCount = onlineCount ?? 0;
 
   /** Holdings sorted by value descending */
   const { holdings, holdingCount } = useHoldings(portfolio, streamers);
