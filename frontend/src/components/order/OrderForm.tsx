@@ -9,7 +9,7 @@ import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
 const FEE_RATE = 0.015;
-const MARKET_SLIPPAGE_TOLERANCE = 0.05;
+const MARKET_SLIPPAGE_TOLERANCE = 0.2;
 
 const tierShareReserve = (followers?: number): number => {
   const count = followers ?? 0;
@@ -108,25 +108,15 @@ const maxAffordableMarketBuyQuantity = (
   return low;
 };
 
-/** Buy/sell order form component.
- *  Computes order feasibility from real-time price, held quantity,
- *  and balance, then submits a market order to the server */
 export const OrderForm = ({
   streamer, user, qtyStr, setQtyStr, orderType, setOrderType, embedded = false,
 }: {
-  /** Target stock for the order */
   streamer: Stock;
-  /** Authenticated user, null if not logged in */
   user: User | null;
-  /** Order quantity as string to preserve intermediate input state */
   qtyStr: string;
-  /** Quantity change handler */
   setQtyStr: (v: string) => void;
-  /** Order direction (buy or sell) */
   orderType: 'buy' | 'sell';
-  /** Order direction change handler */
   setOrderType: (v: 'buy' | 'sell') => void;
-  /** Reduces outer chrome when embedded */
   embedded?: boolean;
 }) => {
   const { currentPrice } = useStockPrice(streamer.id, streamer.price);
@@ -135,11 +125,8 @@ export const OrderForm = ({
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
   const [limitPriceStr, setLimitPriceStr] = useState('');
 
-  /** Parsed integer quantity, clamped to minimum 0 */
   const qty = Math.max(0, parseInt(qtyStr, 10) || 0);
-  /** Current cash balance */
   const balance: number = Number(portfolio?.balance ?? 0);
-  /** Held quantity for this stock */
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
   const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
@@ -162,49 +149,44 @@ export const OrderForm = ({
   const limitGrossAmount = estimatedExecutionPrice * qty;
   const limitFee = Math.ceil(limitGrossAmount * FEE_RATE);
 
-  /** Total order cost */
   const totalCost = orderMode === 'market'
     ? marketExecutionAmount
     : orderType === 'buy' ? limitGrossAmount + limitFee : Math.max(0, limitGrossAmount - limitFee);
-  /** Estimated balance after the order */
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
-  /** Maximum purchasable quantity given current balance */
   const maxBuyPool = effectiveAmmPool(streamer, currentPrice, true, Math.max(1, streamer.shareReserve ?? 0));
   const maxBuy = orderMode === 'market'
     ? maxAffordableMarketBuyQuantity(balance, currentPrice, maxBuyPool.coinReserve, maxBuyPool.shareReserve)
     : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
-  /** Maximum sellable quantity (equals held quantity) */
   const maxSell = held;
 
-  /** Sets quantity from a quick-ratio button click (minimum 1 share) */
   const setQuick = (ratio: number) => {
     const max = orderType === 'buy' ? maxBuy : maxSell;
     setQtyStr(String(Math.max(1, Math.floor(max * ratio))));
   };
 
-  /** Buy feasibility: logged in + qty > 0 + sufficient balance */
   const canBuy = !!user && qty > 0 && balance >= totalCost;
-  /** Sell feasibility: logged in + qty > 0 + sufficient holdings */
   const canSell = !!user && qty > 0 && held >= qty;
-  /** Whether the order can be submitted for the current direction */
   const hasValidLimit = orderMode === 'market' || limitPrice > 0;
   const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
 
   if (portfolioLoading) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-[var(--text-dim)]">
-        포트폴리오 불러오는 중...
+        포트폴리오를 불러오는 중...
       </div>
     );
   }
 
-  /** Order submission handler */
   const handleSubmit = () => {
     if (!canSubmit) return;
-    const maxCoinIn = Math.ceil(totalCost * (1 + MARKET_SLIPPAGE_TOLERANCE));
-    const minCoinOut = Math.floor(totalCost * (1 - MARKET_SLIPPAGE_TOLERANCE));
+    const currentPriceAmount = fallbackTradeAmount(currentPrice, orderType === 'buy', qty);
+    const protectionBaseAmount = orderMode === 'market'
+      ? Math.max(totalCost, currentPriceAmount)
+      : totalCost;
+    const maxCoinIn = Math.ceil(protectionBaseAmount * (1 + MARKET_SLIPPAGE_TOLERANCE));
+    const minCoinOut = Math.floor(protectionBaseAmount * (1 - MARKET_SLIPPAGE_TOLERANCE));
     tradeMutation.mutate({
       streamerId: streamer.id,
       type: orderType,
@@ -221,7 +203,6 @@ export const OrderForm = ({
 
   return (
     <div className={`${embedded ? 'h-auto p-0' : 'h-full overflow-y-auto p-4 pb-24 surface-sidebar'} hide-scrollbar text-white`}>
-      {/* Buy/sell tab toggle */}
       <div className="rounded-xl p-1 flex mb-4 surface-card-secondary">
         <button type="button" onClick={() => setOrderType('buy')}
           className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderType === 'buy' ? 'bg-danger text-white' : 'bg-transparent text-dim-token'}`}>
@@ -244,7 +225,6 @@ export const OrderForm = ({
         </button>
       </div>
 
-      {/* Selected stock display */}
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">선택 종목</p>
         <div className="rounded-xl border px-3 py-2 flex items-center gap-2 surface-card-secondary border-primary-token">
@@ -268,7 +248,6 @@ export const OrderForm = ({
         </div>
       </div>
 
-      {/* Current price (market order basis) */}
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">현재가 (체결 기준)</p>
         <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center surface-card-secondary border-primary-token">
@@ -294,7 +273,6 @@ export const OrderForm = ({
         </div>
       )}
 
-      {/* Order quantity input */}
       <div className="mb-3">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">주문 수량 (주)</p>
         <input
@@ -308,7 +286,6 @@ export const OrderForm = ({
         />
       </div>
 
-      {/* Quick ratio buttons (10% / 25% / 50% / 100%) */}
       <div className="grid grid-cols-4 gap-2 mb-4">
         {([0.1, 0.25, 0.5, 1.0] as const).map((r) => (
           <button key={r} type="button" onClick={() => setQuick(r)}
@@ -318,7 +295,6 @@ export const OrderForm = ({
         ))}
       </div>
 
-      {/* Order summary (total / estimated balance / holdings) */}
       <div className="pt-3 mb-5 border-t border-primary-token">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs text-[var(--text-muted)]">주문 총액</span>
@@ -338,14 +314,12 @@ export const OrderForm = ({
         )}
       </div>
 
-      {/* Insufficient balance warning */}
       {orderType === 'buy' && !!user && qty > 0 && balance < totalCost && (
         <p className="text-xs text-center mb-3 text-[#FF5252]">
           잔고가 부족합니다 (보유: {fmt(balance)})
         </p>
       )}
 
-      {/* Order submit button */}
       <button type="button" onClick={handleSubmit}
         disabled={tradeMutation.isPending || !canSubmit}
         className={`w-full rounded-xl py-3.5 text-white font-extrabold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99] ${orderType === 'buy' ? 'bg-danger' : 'bg-info'}`}>

@@ -161,10 +161,10 @@ public class TradeEngine {
         long userNetAmount = amm.userNetAmount();
 
         if (isBuy && maxCoinIn != null && userNetAmount > maxCoinIn) {
-            throw new IllegalStateException("슬리피지 초과: 실제 비용 " + userNetAmount + " > 최대허용 " + maxCoinIn);
+            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 비용 " + userNetAmount + " > 최대 허용 " + maxCoinIn + ")");
         }
         if (!isBuy && minCoinOut != null && userNetAmount < minCoinOut) {
-            throw new IllegalStateException("슬리피지 초과: 실제 수령 " + userNetAmount + " < 최소허용 " + minCoinOut);
+            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 수령 " + userNetAmount + " < 최소 허용 " + minCoinOut + ")");
         }
 
         BigDecimal userNet = BigDecimal.valueOf(userNetAmount);
