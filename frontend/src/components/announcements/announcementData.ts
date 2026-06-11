@@ -1,13 +1,19 @@
+export interface AnnouncementSection {
+  title: string;
+  rows?: { label: string; value: string; tone?: 'accent' | 'danger' }[];
+  table?: {
+    headers: string[];
+    rows: string[][];
+  };
+  note?: string;
+}
+
 export interface AnnouncementItem {
   id: string;
   title: string;
   date: string;
   summary: string;
-  sections: {
-    title: string;
-    rows: { label: string; value: string; tone?: 'accent' | 'danger' }[];
-    note?: string;
-  }[];
+  sections: AnnouncementSection[];
 }
 
 export const announcements: AnnouncementItem[] = [

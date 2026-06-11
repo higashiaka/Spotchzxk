@@ -42,8 +42,7 @@ export default function AnnouncementPopup() {
     const stockNames = stockSplitNotice.stockNames
       .split(',')
       .map(name => name.trim())
-      .filter(Boolean)
-      .join(', ');
+      .filter(Boolean);
 
     return {
       id: `stock_split_${stockSplitNotice.id}`,
@@ -52,7 +51,7 @@ export default function AnnouncementPopup() {
       summary: `${stockSplitNotice.stockCount}개 종목이 ${stockSplitNotice.splitRatio}:1 액면분할되었습니다.`,
       sections: [
         {
-          title: '분할 종목',
+          title: '분할 기준',
           rows: [
             {
               label: '기준',
@@ -64,12 +63,14 @@ export default function AnnouncementPopup() {
               value: `${stockSplitNotice.splitRatio}:1`,
               tone: 'accent' as const,
             },
-            {
-              label: '종목',
-              value: stockNames || '-',
-              tone: 'accent' as const,
-            },
           ],
+        },
+        {
+          title: '분할 대상 종목',
+          table: {
+            headers: ['종목'],
+            rows: (stockNames.length > 0 ? stockNames : ['-']).map(name => [name]),
+          },
           note: '보유 수량과 미체결 지정가 주문 수량/가격이 같은 비율로 조정되었습니다.',
         },
       ],
@@ -117,12 +118,44 @@ export default function AnnouncementPopup() {
             <div key={section.title}>
               <p className="text-white font-semibold mb-1.5">{section.title}</p>
               <div className="rounded-xl p-3 text-sm modal-panel">
-                {section.rows.map(row => (
+                {section.rows?.map(row => (
                   <p key={`${section.title}-${row.label}`} className="mb-1 last:mb-0">
                     <span className={row.tone === 'danger' ? 'text-[#FF6B6B]' : 'text-accent'}>{row.label}</span>
                     <span className="ml-2 text-white">{row.value}</span>
                   </p>
                 ))}
+                {section.table && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr>
+                          {section.table.headers.map(header => (
+                            <th
+                              key={`${section.title}-${header}`}
+                              className="py-1 pr-3 text-left font-bold text-accent border-b border-[#1E2330]"
+                            >
+                              {header}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.table.rows.map((row, rowIndex) => (
+                          <tr key={`${section.title}-${rowIndex}`}>
+                            {row.map((cell, cellIndex) => (
+                              <td
+                                key={`${section.title}-${rowIndex}-${cellIndex}`}
+                                className="py-1 pr-3 text-white border-b border-[#1E2330]"
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 {section.note && <p className="mt-1 text-xs text-dim-token">{section.note}</p>}
               </div>
             </div>

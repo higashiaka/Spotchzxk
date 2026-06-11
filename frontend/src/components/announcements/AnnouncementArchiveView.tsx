@@ -65,12 +65,46 @@ export const AnnouncementArchiveView = ({ onBack }: { onBack: () => void }) => {
                   style={{ background: 'var(--bg-card)', borderColor: 'var(--border-card)' }}
                 >
                   <p className="text-sm font-bold text-white mb-2">{section.title}</p>
-                  {section.rows.map(row => (
+                  {section.rows?.map(row => (
                     <p key={`${active.id}-${section.title}-${row.label}`} className="text-sm mb-1 last:mb-0">
                       <span style={{ color: row.tone === 'danger' ? '#FF6B6B' : 'var(--accent)' }}>{row.label}</span>
                       <span className="ml-2 text-white">{row.value}</span>
                     </p>
                   ))}
+                  {section.table && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-xs md:text-sm">
+                        <thead>
+                          <tr>
+                            {section.table.headers.map(header => (
+                              <th
+                                key={`${active.id}-${section.title}-${header}`}
+                                className="py-1.5 pr-3 text-left font-bold"
+                                style={{ color: 'var(--accent)', borderBottom: '1px solid var(--border-card)' }}
+                              >
+                                {header}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {section.table.rows.map((row, rowIndex) => (
+                            <tr key={`${active.id}-${section.title}-${rowIndex}`}>
+                              {row.map((cell, cellIndex) => (
+                                <td
+                                  key={`${active.id}-${section.title}-${rowIndex}-${cellIndex}`}
+                                  className="py-1.5 pr-3 text-white"
+                                  style={{ borderBottom: '1px solid var(--border-card)' }}
+                                >
+                                  {cell}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   {section.note && (
                     <p className="text-xs mt-1.5" style={{ color: 'var(--text-dim)' }}>
                       {section.note}
