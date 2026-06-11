@@ -104,10 +104,10 @@ public class StockService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
         if (user.getStockAddTickets() <= 0) {
-            throw new IllegalStateException("醫낅ぉ 異붽?沅뚯씠 ?놁뒿?덈떎.");
+            throw new IllegalStateException("채널 등록권이 없습니다.");
         }
         if (userRepository.useStockAddTicket(userId) != 1) {
-            throw new IllegalStateException("醫낅ぉ 異붽?沅뚯씠 ?놁뒿?덈떎.");
+            throw new IllegalStateException("채널 등록권이 없습니다.");
         }
         tradeEngine.evictUserCache(userId);
 

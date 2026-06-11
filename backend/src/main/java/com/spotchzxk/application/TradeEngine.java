@@ -128,9 +128,9 @@ public class TradeEngine {
     private BigDecimal cancelLimitOrderLocked(String userId, String orderId) {
         return new TransactionTemplate(txManager).execute(status -> {
             Order order = orderRepository.findByIdForUpdate(orderId)
-                    .orElseThrow(() -> new IllegalStateException("議댁옱?섏? ?딅뒗 二쇰Ц?낅땲??"));
+                    .orElseThrow(() -> new IllegalStateException("존재하지 않는 주문입니다."));
             if (!userId.equals(order.getUserId())) {
-                throw new IllegalStateException("議댁옱?섏? ?딅뒗 二쇰Ц?낅땲??");
+                throw new IllegalStateException("존재하지 않는 주문입니다.");
             }
             if (!"pending".equals(order.getStatus())) {
                 throw new IllegalStateException("?대? 泥닿껐?섏뿀嫄곕굹 痍⑥냼??二쇰Ц?낅땲??");

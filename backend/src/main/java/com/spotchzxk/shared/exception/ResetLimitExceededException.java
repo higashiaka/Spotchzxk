@@ -2,8 +2,6 @@ package com.spotchzxk.shared.exception;
 
 public class ResetLimitExceededException extends RuntimeException {
     public ResetLimitExceededException() {
-        super("?ㅻ뒛 ?먭툑 珥덇린???잛닔(3??瑜?紐⑤몢 ?ъ슜?덉뒿?덈떎. KST ?먯젙 ?댄썑 ?ㅼ떆 ?쒕룄?섏꽭??");
+        super("오늘 최대 초기화 횟수(3회)를 모두 사용했습니다. KST 자정 이후 다시 시도해주세요.");
     }
 }
-
-

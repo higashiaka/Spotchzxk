@@ -77,7 +77,7 @@ public class StockController {
 
             if (result.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(Map.of("error", "?대? 異붽???醫낅ぉ?낅땲??", "id", channelId));
+                        .body(Map.of("error", "이미 등록된 채널입니다.", "id", channelId));
             }
 
             Stock stock = result.get();
@@ -86,7 +86,7 @@ public class StockController {
                     "name", stock.getStreamerName(),
                     "price", stock.getCurrentPrice(),
                     "totalVolume", stock.getTotalSupply(),
-                    "message", "醫낅ぉ??異붽??섏뿀?듬땲??"
+                    "message", "채널이 등록됐습니다."
             ));
         } catch (ChannelNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)

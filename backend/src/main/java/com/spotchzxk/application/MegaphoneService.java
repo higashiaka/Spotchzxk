@@ -63,7 +63,7 @@ public class MegaphoneService {
         }
 
         Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("議댁옱?섏? ?딅뒗 醫낅ぉ?낅땲??"));
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 채널입니다."));
         if (!stock.isLive()) {
             throw new IllegalStateException("?꾩옱 ?쇱씠釉?以묒씤 ?ㅽ듃由щ㉧留??뺤꽦湲곕? ?ъ슜?????덉뒿?덈떎.");
         }

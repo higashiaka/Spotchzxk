@@ -34,19 +34,19 @@ public class DonationController {
             @RequestBody Map<String, Object> body,
             @AuthenticationPrincipal String uid) {
         if (uid == null || uid.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "濡쒓렇?몄씠 ?꾩슂?⑸땲??"));
+            return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
         }
 
         // Issue #29: body.get("amount")媛 null?대㈃ NullPointerException 諛쒖깮 ??紐낆떆??null 泥댄겕
         Object amountObj = body.get("amount");
         if (amountObj == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "?щ컮瑜?湲덉븸???낅젰?댁＜?몄슂."));
+            return ResponseEntity.badRequest().body(Map.of("error", "금액을 올바르게 입력해주세요."));
         }
         BigDecimal amount;
         try {
             amount = new BigDecimal(amountObj.toString());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "?щ컮瑜?湲덉븸???낅젰?댁＜?몄슂."));
+            return ResponseEntity.badRequest().body(Map.of("error", "금액을 올바르게 입력해주세요."));
         }
 
         if (amount.compareTo(MIN_DONATION) < 0) {

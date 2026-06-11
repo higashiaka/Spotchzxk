@@ -36,7 +36,7 @@ public class ShopItemService {
         BigDecimal price = switch (item) {
             case "nickname-change-ticket", "nickname_ticket" -> NICKNAME_TICKET_PRICE;
             case "stock-add-ticket", "stock_ticket" -> STOCK_ADD_TICKET_PRICE;
-            default -> throw new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?곹뭹?낅땲??");
+            default -> throw new IllegalArgumentException("존재하지 않는 상품입니다.");
         };
 
         if (user.getCoinBalance().compareTo(price) < 0) {

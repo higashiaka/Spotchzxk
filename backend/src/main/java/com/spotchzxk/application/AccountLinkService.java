@@ -62,7 +62,7 @@ public class AccountLinkService {
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "?대? ?곌껐??Google 怨꾩젙?낅땲??",
+                    "이미 연결된 Google 계정입니다.",
                     e
             );
         }

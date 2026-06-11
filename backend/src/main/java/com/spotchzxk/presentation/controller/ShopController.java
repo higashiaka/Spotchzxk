@@ -37,12 +37,12 @@ public class ShopController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal String uid) {
         if (uid == null || uid.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "濡쒓렇?몄씠 ?꾩슂?⑸땲??"));
+            return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
         }
         String channelId = body.get("channelId");
         String message = body.get("message");
         if (channelId == null || channelId.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "醫낅ぉ???좏깮?댁＜?몄슂."));
+            return ResponseEntity.badRequest().body(Map.of("error", "채널을 선택해주세요."));
         }
         try {
             MegaphonePost post = megaphoneService.useMegaphone(uid, channelId, message);
@@ -57,7 +57,7 @@ public class ShopController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal String uid) {
         if (uid == null || uid.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "濡쒓렇?몄씠 ?꾩슂?⑸땲??"));
+            return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
         }
         try {
             return ResponseEntity.ok(shopItemService.purchase(uid, body.getOrDefault("item", "")));

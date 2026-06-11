@@ -31,7 +31,7 @@ public final class AmmCalculator {
             long result = qr[0].longValueExact();
             return qr[1].signum() > 0 ? result + 1 : result;
         } catch (ArithmeticException e) {
-            throw new IllegalStateException("嫄곕옒 湲덉븸???덈Т ?쎈땲?? ?섎웾??以꾩뿬二쇱꽭??");
+            throw new IllegalStateException("충분한 코인이 없습니다. 수량을 줄여주세요.");
         }
     }
 
@@ -47,7 +47,7 @@ public final class AmmCalculator {
         try {
             return num.divide(den).longValueExact(); // ?대┝ (?좎?媛 議곌툑 ??諛쏅룄濡?
         } catch (ArithmeticException e) {
-            throw new IllegalStateException("嫄곕옒 湲덉븸???덈Т ?쎈땲?? ?섎웾??以꾩뿬二쇱꽭??");
+            throw new IllegalStateException("충분한 코인이 없습니다. 수량을 줄여주세요.");
         }
     }
 
