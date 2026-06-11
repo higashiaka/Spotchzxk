@@ -16,6 +16,8 @@ function mapRawToStock(r: any): Stock {
     totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
     dailyTradingValue: Number(r.dailyTradingValue ?? 0),
     basePrice: r.basePrice ?? 1000,
+    followers: Number(r.followerCount ?? r.followers ?? 0),
+    listingPrice: Number(r.listingPrice ?? 0),
     profileImageUrl: r.profileImageUrl,
     isLive: r.isLive ?? false,
     totalSupply: Number(r.totalSupply ?? 0),

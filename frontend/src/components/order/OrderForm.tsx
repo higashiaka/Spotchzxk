@@ -11,6 +11,40 @@ import { PendingOrdersPanel } from './PendingOrdersPanel';
 const FEE_RATE = 0.015;
 const MARKET_SLIPPAGE_TOLERANCE = 0.05;
 
+const tierShareReserve = (followers?: number): number => {
+  const count = followers ?? 0;
+  if (count < 2_000) return 3_000;
+  if (count < 20_000) return 5_000;
+  if (count < 200_000) return 12_000;
+  if (count < 1_000_000) return 30_000;
+  return 80_000;
+};
+
+const effectiveAmmPool = (
+  streamer: Stock,
+  currentPrice: number,
+  isBuy: boolean,
+  quantity: number,
+): { coinReserve?: number; shareReserve?: number } => {
+  const targetShareReserve = tierShareReserve(streamer.followers);
+  const listingPrice = streamer.listingPrice ?? 0;
+  const shareReserve = streamer.shareReserve ?? 0;
+  if (isBuy
+      && quantity >= shareReserve
+      && listingPrice > 0
+      && currentPrice >= listingPrice * 10
+      && shareReserve < targetShareReserve) {
+    return {
+      coinReserve: currentPrice * targetShareReserve,
+      shareReserve: targetShareReserve,
+    };
+  }
+  return {
+    coinReserve: streamer.coinReserve,
+    shareReserve: streamer.shareReserve,
+  };
+};
+
 const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): number => {
   if (currentPrice <= 0 || quantity <= 0) return 0;
   const gross = currentPrice * quantity;
@@ -109,17 +143,18 @@ export const OrderForm = ({
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
   const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
+  const { coinReserve, shareReserve } = effectiveAmmPool(streamer, currentPrice, orderType === 'buy', qty);
   const marketExecutionPrice = averageAmmPrice(
     currentPrice,
-    streamer.coinReserve,
-    streamer.shareReserve,
+    coinReserve,
+    shareReserve,
     orderType === 'buy',
     qty,
   );
   const marketExecutionAmount = ammTradeAmount(
     currentPrice,
-    streamer.coinReserve,
-    streamer.shareReserve,
+    coinReserve,
+    shareReserve,
     orderType === 'buy',
     qty,
   );
@@ -136,8 +171,9 @@ export const OrderForm = ({
   const pct = changePct(currentPrice, streamer.basePrice);
 
   /** Maximum purchasable quantity given current balance */
+  const maxBuyPool = effectiveAmmPool(streamer, currentPrice, true, Math.max(1, streamer.shareReserve ?? 0));
   const maxBuy = orderMode === 'market'
-    ? maxAffordableMarketBuyQuantity(balance, currentPrice, streamer.coinReserve, streamer.shareReserve)
+    ? maxAffordableMarketBuyQuantity(balance, currentPrice, maxBuyPool.coinReserve, maxBuyPool.shareReserve)
     : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
   /** Maximum sellable quantity (equals held quantity) */
   const maxSell = held;

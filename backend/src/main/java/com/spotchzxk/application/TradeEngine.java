@@ -288,9 +288,30 @@ public class TradeEngine {
 
     AmmCalculator.AmmResult calculateAmmTrade(String channelId, boolean isBuy, long qty) {
         long[] pool = loadAmmPool(channelId);
+        if (isBuy && qty >= pool[1]) {
+            pool = rebalanceCachedPoolIfNeeded(channelId, pool);
+        }
         return isBuy
                 ? AmmCalculator.calcBuy(pool[0], pool[1], qty)
                 : AmmCalculator.calcSell(pool[0], pool[1], qty);
+    }
+
+    private long[] rebalanceCachedPoolIfNeeded(String channelId, long[] currentPool) {
+        long[] rebalancedPool = new TransactionTemplate(txManager).execute(status -> {
+            Stock stock = stockRepository.findById(channelId)
+                    .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+            long targetReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
+            if (!stock.rebalancePoolIfNeeded(targetReserve)) {
+                return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
+            }
+            stockRepository.save(stock);
+            return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
+        });
+        if (rebalancedPool == null) {
+            return currentPool;
+        }
+        ammPoolCache.put(channelId, rebalancedPool);
+        return rebalancedPool;
     }
 
     private void validateTrade(String userId, String channelId, boolean isBuy, long qty, BigDecimal cost,

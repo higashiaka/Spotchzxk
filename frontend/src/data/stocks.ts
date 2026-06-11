@@ -14,6 +14,8 @@ export interface Stock {
   basePrice?: number;
   /** Number of followers */
   followers?: number;
+  /** Listing price used for AMM rebalance threshold */
+  listingPrice?: number;
   /** Profile image URL */
   profileImageUrl?: string;
   /** Whether the streamer is currently live */
