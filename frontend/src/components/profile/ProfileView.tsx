@@ -1,201 +1,78 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { User } from 'firebase/auth';
-import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
 import { fmt, grade } from '../../utils';
 import { apiFetch } from '../../lib/api';
-import { subscribeStomp } from '../../lib/stompClient';
+import { useQueryClient } from '@tanstack/react-query';
 import { useHoldings } from '../../hooks/useHoldings';
+import { useDividendHistory } from '../../hooks/useDividendHistory';
+import { useNicknameEdit } from '../../hooks/useNicknameEdit';
 
-/** Profile screen component.
- *  Shows a login screen when not authenticated; when logged in, displays holdings,
- *  investment summary, dividend history, stock addition, and fund reset. */
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
   onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
   onSelect: _onSelect, onNavigate,
 }: {
-  /** Authenticated Firebase user, null if not logged in */
   user: User | null;
-  /** Portfolio data fetched from the server */
   portfolio: any;
-  /** Array of completed order records */
   history: any[];
-  /** Full list of stocks */
   streamers: Stock[];
-  /** Total assets = cash balance + evaluated holdings */
   totalAssets: number;
-  /** Admin flag (currently unused, reserved for future use) */
   isAdmin: boolean;
-  /** Google login handler */
   onLoginGoogle: () => void;
-  /** Guest login handler */
   onLoginGuest: () => void;
-  /** Logout handler */
   onLogout: () => void;
-  /** Portfolio reset handler */
   onReset: () => void;
-  /** Google account linking handler */
   onLinkGoogle: () => void;
-  /** Whether a reset request is in progress */
   isResetting: boolean;
-  /** Remaining reset count for today */
   remainingResets: number;
-  /** Stock selection handler */
   onSelect: (s: Stock) => void;
-  /** Tab navigation handler */
   onNavigate: (tab: AppTab) => void;
 }) => {
   const queryClient = useQueryClient();
   const userGrade = !user?.isAnonymous && portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
-  /** Evaluated holdings value (total assets minus cash) */
   const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
-  /** Total number of completed orders */
   const orderCount = history?.length ?? 0;
-  /** Number of held stocks (including defaults) */
   const { holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
-  /** Name override applied immediately after a backend displayName update */
-  const [nameOverride, setNameOverride] = useState<string | null>(null);
-  /** Whether the nickname edit mode is active */
-  const [isEditingName, setIsEditingName] = useState(false);
-  /** Current value of the nickname input */
-  const [nameInput, setNameInput] = useState('');
-  /** Whether a nickname save request is in progress */
-  const [nameUpdating, setNameUpdating] = useState(false);
-
-  /** Display name resolved from: override → backend displayName → default */
-  const currentName = nameOverride ?? (portfolio?.displayName || '트레이더');
   const nicknameChangeTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
   const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
+  const baseName = portfolio?.displayName || '트레이더';
 
-  /** Starts nickname edit mode with the current name pre-filled */
-  const startEditName = () => {
-    setNameInput(currentName);
-    setIsEditingName(true);
-  };
+  const {
+    resolvedName, isEditingName, nameInput, nameUpdating,
+    setNameInput, startEdit, cancelEdit, saveEdit,
+  } = useNicknameEdit(user, baseName, nicknameChangeTickets);
 
-  /** Cancels nickname editing and clears the input */
-  const cancelEditName = () => {
-    setIsEditingName(false);
-    setNameInput('');
-  };
+  const { dividendHistory, dividendHistoryLoaded } = useDividendHistory(user);
 
-  /** Saves the nickname via the server, which charges the user and updates the DB */
-  const saveEditName = async () => {
-    if (!user) return;
-    const trimmed = nameInput.trim();
-    if (!trimmed || trimmed === currentName) { cancelEditName(); return; }
-    if (nicknameChangeTickets <= 0) {
-      alert('닉네임 변경권이 없습니다. 상점에서 먼저 구매해 주세요.');
-      return;
-    }
-    setNameUpdating(true);
-    try {
-      const res = await apiFetch('/api/profile/nickname', {
-        method: 'POST',
-        body: JSON.stringify({ displayName: trimmed }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || '닉네임 변경 실패');
-      }
-      setNameOverride(trimmed);
-      setIsEditingName(false);
-      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '이름 변경에 실패했습니다.');
-    } finally {
-      setNameUpdating(false);
-    }
-  };
-
-  /** Dividend history records fetched from the server */
-  const [dividendHistory, setDividendHistory] = useState<any[]>([]);
-  /** Whether dividend history has finished loading */
-  const [dividendHistoryLoaded, setDividendHistoryLoaded] = useState(false);
-
-  /** Fetches the user's dividend history from the server and updates state */
-  const fetchDividendHistory = () => {
-    apiFetch('/api/dividends/my')
-      .then(res => res.ok ? res.json() : [])
-      .then((data: any[]) => { setDividendHistory(data); setDividendHistoryLoaded(true); })
-      .catch(() => setDividendHistoryLoaded(true));
-  };
-
-  // Load dividend history on login (non-anonymous)
-  useEffect(() => {
-    if (!user || user.isAnonymous) return;
-    fetchDividendHistory();
-  }, [user]);
-
-  // STOMP subscriptions: refresh list on any dividend event
-  useEffect(() => {
-    if (!user || user.isAnonymous) return;
-
-    // ① /topic/dividends: shared across old/new backend — re-fetch on any dividend event
-    const subGlobal = subscribeStomp('/topic/dividends', () => {
-      fetchDividendHistory();
-    });
-
-    // ② /topic/user-dividends/{uid}: new backend only — immediately prepend the user's dividend entry
-    const subPersonal = subscribeStomp(`/topic/user-dividends/${user.uid}`, (message) => {
-      try {
-        const entry = JSON.parse(message.body);
-        setDividendHistory(prev => {
-          if (prev.some(d => d.channelId === entry.channelId && d.createdAt === entry.createdAt)) {
-            return prev;
-          }
-          return [entry, ...prev].slice(0, 50);
-        });
-      } catch {
-        // parse failures are covered by the ① re-fetch
-      }
-    });
-
-    return () => {
-      subGlobal.unsubscribe();
-      subPersonal.unsubscribe();
-    };
-  }, [user]);
-
-  /** URL input for adding a new stock */
   const [addUrl, setAddUrl] = useState('');
-  /** Stock addition request status */
   const [addStatus, setAddStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
-  /** Result message for stock addition */
   const [addMsg, setAddMsg] = useState('');
 
-  /** Stock addition handler.
-   *  Parses a Chzzk URL or channel ID, then POSTs to /api/stocks */
   const handleAddStock = async () => {
     if (!addUrl.trim()) return;
 
     let channelId = addUrl.trim();
-    if (channelId.includes("chzzk.naver.com")) {
+    if (channelId.includes('chzzk.naver.com')) {
       try {
         const urlStr = channelId.startsWith('http') ? channelId : `https://${channelId}`;
         const urlObj = new URL(urlStr);
-        let path = urlObj.pathname.replace(/^\/|\/$/g, "");
-        if (path.startsWith("live/")) {
-          channelId = path.substring("live/".length);
-        } else {
-          channelId = path;
-        }
-      } catch (e) {
+        let path = urlObj.pathname.replace(/^\/|\/$/g, '');
+        channelId = path.startsWith('live/') ? path.substring('live/'.length) : path;
+      } catch {
         setAddStatus('error');
         setAddMsg('올바르지 않은 URL 형식입니다.');
         setTimeout(() => setAddStatus('idle'), 3000);
         return;
       }
     }
-    channelId = channelId.replace(/[?#].*/g, "").trim();
+    channelId = channelId.replace(/[?#].*/g, '').trim();
 
-    const alreadyExists = streamers.some(s => s.id === channelId);
-    if (alreadyExists) {
+    if (streamers.some(s => s.id === channelId)) {
       setAddStatus('error');
       setAddMsg('이미 추가된 종목입니다.');
       setTimeout(() => setAddStatus('idle'), 3000);
@@ -222,7 +99,7 @@ export const ProfileView = ({
         setAddStatus('ok');
         setAddMsg(`'${json.name}' 종목이 추가되었습니다.`);
         setAddUrl('');
-        queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio', user!.uid] });
       }
     } catch {
       setAddStatus('error');
@@ -231,7 +108,6 @@ export const ProfileView = ({
     setTimeout(() => setAddStatus('idle'), 3000);
   };
 
-  // Not logged in: render login screen
   if (!user) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8 text-center">
@@ -247,12 +123,7 @@ export const ProfileView = ({
         <div className="w-full space-y-3">
           <button type="button" onClick={onLoginGoogle}
             className="w-full bg-white text-gray-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2">
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
+            <GoogleIcon />
             Google 로그인
           </button>
           <button type="button" onClick={onLoginGuest}
@@ -265,12 +136,13 @@ export const ProfileView = ({
     );
   }
 
+  const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
-      {/* Profile card: avatar, name editing, grade badge, logout button */}
+      {/* Profile card */}
       <div className="rounded-2xl border p-5 mb-4"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
-        {/* Top row: avatar + name info + logout */}
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full border flex items-center justify-center shrink-0 overflow-hidden"
             style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
@@ -286,11 +158,9 @@ export const ProfileView = ({
               <p className="text-white font-bold truncate">게스트 투자자</p>
             ) : (
               <div className="flex items-center gap-1.5 group min-w-0">
-                <p className="text-white font-bold flex-1 min-w-0 truncate leading-snug">
-                  {currentName}
-                </p>
+                <p className="text-white font-bold flex-1 min-w-0 truncate leading-snug">{resolvedName}</p>
                 {!isEditingName && (
-                  <button type="button" onClick={startEditName}
+                  <button type="button" onClick={startEdit}
                     className="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
                     title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
                     <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,9 +173,7 @@ export const ProfileView = ({
             )}
             <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>UID: {user.uid.slice(0, 8)}</p>
             {!user.isAnonymous && (
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-                닉네임 변경권 {nicknameChangeTickets}개
-              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>닉네임 변경권 {nicknameChangeTickets}개</p>
             )}
             {userGrade && (
               <div className="mt-2 flex gap-2">
@@ -322,14 +190,13 @@ export const ProfileView = ({
             로그아웃
           </button>
         </div>
-        {/* Nickname edit form: spans the full card width */}
         {!user.isAnonymous && isEditingName && (
           <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
             <input
               autoFocus
               value={nameInput}
               onChange={e => setNameInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') cancelEditName(); }}
+              onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
               maxLength={8}
               placeholder="닉네임 입력 (최대 8자)"
               aria-label="닉네임 변경"
@@ -338,10 +205,10 @@ export const ProfileView = ({
               disabled={nameUpdating}
             />
             <div className="flex gap-2 mt-2">
-              <button type="button" onClick={saveEditName} disabled={nameUpdating}
+              <button type="button" onClick={saveEdit} disabled={nameUpdating}
                 className="text-xs font-bold px-3 py-1 rounded"
                 style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>확인</button>
-              <button type="button" onClick={cancelEditName} disabled={nameUpdating}
+              <button type="button" onClick={cancelEdit} disabled={nameUpdating}
                 className="text-xs px-3 py-1 rounded"
                 style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
             </div>
@@ -349,16 +216,11 @@ export const ProfileView = ({
         )}
       </div>
 
-      {/* Prompt banner for linking a Google account when not yet linked */}
-      {(user.isAnonymous || !user.providerData.some(p => p.providerId === 'google.com')) && (
+      {/* Google account linking banner */}
+      {(user.isAnonymous || !isGoogleLinked) && (
         <div className="rounded-2xl border p-4 mb-4 flex items-center gap-3"
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
-          <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
+          <GoogleIcon className="w-5 h-5 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-white text-xs font-bold">Google 계정 연동</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>포트폴리오를 안전하게 보관하세요</p>
@@ -371,17 +233,12 @@ export const ProfileView = ({
         </div>
       )}
 
-      {/* Holdings shortcut button */}
-      <button
-        type="button"
-        onClick={() => onNavigate('holdings')}
+      {/* Holdings shortcut */}
+      <button type="button" onClick={() => onNavigate('holdings')}
         className="w-full rounded-2xl border p-4 mb-4 flex items-center gap-4 transition-colors hover:opacity-80 active:opacity-60"
-        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}
-      >
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: 'var(--accent-soft)' }}
-        >
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: 'var(--accent-soft)' }}>
           <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -414,7 +271,7 @@ export const ProfileView = ({
         ))}
       </div>
 
-      {/* Dividend history (non-anonymous users only) */}
+      {/* Dividend history */}
       {!user.isAnonymous && (
         <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>배당 내역</h3>
@@ -454,8 +311,8 @@ export const ProfileView = ({
         </div>
       )}
 
-      {/* Stock addition: Google-linked accounts only */}
-      {user.providerData.some(p => p.providerId === 'google.com') ? (
+      {/* Stock addition */}
+      {isGoogleLinked ? (
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
@@ -470,13 +327,10 @@ export const ProfileView = ({
               className="w-full rounded-xl border py-2.5 px-3 text-white text-sm focus:outline-none focus:border-blue-500"
               style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}
             />
-            <button
-              type="button"
-              onClick={handleAddStock}
+            <button type="button" onClick={handleAddStock}
               disabled={addStatus === 'loading' || !addUrl.trim()}
               className="w-full py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
-              style={{ background: '#3D8BFF', color: '#fff' }}
-            >
+              style={{ background: '#3D8BFF', color: '#fff' }}>
               {addStatus === 'loading' ? '추가 중...' : '+ 종목 추가'}
             </button>
             {addStatus !== 'idle' && addMsg && (
@@ -489,16 +343,12 @@ export const ProfileView = ({
       ) : (
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
-          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-            종목 추가는 Google 로그인 후 이용할 수 있습니다.
-          </p>
+          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>종목 추가는 Google 로그인 후 이용할 수 있습니다.</p>
         </div>
       )}
-      {/* Fund reset button */}
-      <button
-        type="button"
-        onClick={onReset}
-        disabled={isResetting || remainingResets <= 0}
+
+      {/* Fund reset */}
+      <button type="button" onClick={onReset} disabled={isResetting || remainingResets <= 0}
         className="w-full rounded-xl border px-4 py-3 mb-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <div className="flex flex-col items-start gap-0.5">
@@ -512,16 +362,22 @@ export const ProfileView = ({
         </span>
       </button>
 
-      {/* Past announcements shortcut */}
-      <button
-        type="button"
-        onClick={() => onNavigate('announcements')}
+      {/* Announcements shortcut */}
+      <button type="button" onClick={() => onNavigate('announcements')}
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
-        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}
-      >
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>지난 공지 보기</span>
         <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
       </button>
     </div>
   );
 };
+
+const GoogleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24">
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+  </svg>
+);

@@ -41,7 +41,17 @@
       "PowerShell(Get-ChildItem \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\backend\\\\src\\\\main\\\\resources\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object Name)",
       "PowerShell(cd \"c:\\\\Users\\\\KIMDH\\\\Documents\\\\Higashiaka\\\\Spotchzxk\\\\backend\"; .\\\\gradlew build -x test -q; echo \"EXIT:$LASTEXITCODE\")",
       "Bash(./gradlew compileJava -q)",
-      "Bash(grep -v \"//\")"
+      "Bash(grep -v \"//\")",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":8080 \")",
+      "Bash(findstr \":5173 \")",
+      "Bash(findstr \":3306 \")",
+      "Bash(./gradlew bootRun --console=plain)",
+      "Bash(curl -s http://localhost:8080/health)",
+      "Bash(./gradlew bootRun -Pargs=\"--spring.profiles.active=local\" --console=plain)",
+      "Bash(curl -sf http://localhost:8080/health)",
+      "Bash(./gradlew bootRun --args=\"--spring.profiles.active=local\" --console=plain)",
+      "Bash(SPRING_PROFILES_ACTIVE=local ./gradlew bootRun --console=plain)"
     ]
   }
 }

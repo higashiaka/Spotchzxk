@@ -1,6 +1,6 @@
 # Spotchzxk 백엔드 구조 발표 자료
 
-작성일: 2026-06-08 / 최종 업데이트: 2026-06-10  
+작성일: 2026-06-08 / 최종 업데이트: 2026-06-11
 기준 코드: `backend/src/main/java/com/spotchzxk`
 
 ---
@@ -8,7 +8,7 @@
 ## 1. 프로젝트 개요
 
 치지직(Chzzk) 스트리머를 주식처럼 사고 파는 모의 주식 거래 시뮬레이터.  
-스트리머가 라이브 중일 때 10분마다 배당을 지급하고, CPAMM(Constant Product AMM) 모델로 주가를 결정한다.
+스트리머가 라이브 중일 때 1시간마다 배당을 지급하고, CPAMM(Constant Product AMM) 모델로 주가를 결정한다.
 
 **Tech Stack**
 
@@ -17,10 +17,10 @@
 | Language | Java 17 |
 | Framework | Spring Boot 3.5.0 |
 | ORM | Spring Data JPA (Hibernate) |
-| DB | MySQL + Flyway 마이그레이션 |
+| DB/Cache | MySQL + Flyway 마이그레이션, Redis, Caffeine |
 | 인증 | Firebase Admin SDK (ID Token) |
 | 실시간 | WebSocket + STOMP (SockJS) |
-| 외부 연동 | Chzzk OpenAPI (채널 정보 조회) |
+| 외부 연동 | Chzzk OpenAPI (채널 정보/라이브 상태 조회) |
 | 빌드 | Gradle |
 
 ---
