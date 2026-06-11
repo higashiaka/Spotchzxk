@@ -10,7 +10,6 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -81,7 +80,7 @@ class TradeEnginePricingTest {
                 mock(UserShareRepository.class),
                 stockRepository,
                 orderRepository,
-                mock(SimpMessagingTemplate.class),
+                mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
                 mock(CandleService.class)
         );
@@ -123,7 +122,7 @@ class TradeEnginePricingTest {
                 mock(UserShareRepository.class),
                 stockRepository,
                 orderRepository,
-                mock(SimpMessagingTemplate.class),
+                mock(AsyncBroadcastService.class),
                 txManager,
                 mock(CandleService.class)
         );
@@ -165,7 +164,7 @@ class TradeEnginePricingTest {
                 userShareRepository,
                 mock(StockRepository.class),
                 mock(OrderRepository.class),
-                mock(SimpMessagingTemplate.class),
+                mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
                 mock(CandleService.class)
         );

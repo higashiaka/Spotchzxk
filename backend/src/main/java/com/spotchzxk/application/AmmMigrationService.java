@@ -64,7 +64,7 @@ public class AmmMigrationService implements ApplicationRunner {
         long currentPrice = Math.max(1, stock.getCurrentPrice());
         long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
         int tier = calcLiquidityTier(stock.getFollowerCount());
-        long tierReserve = calcTierShareReserve(stock.getFollowerCount(), currentPrice);
+        long tierReserve = calcTierShareReserve(stock.getFollowerCount());
 
         // 湲곗〈 蹂댁쑀?됱쓽 2諛곗? ?곗뼱 湲곗? 以?????媛??ъ슜 (留ㅻ룄 ?뺣젰 媛먮떦)
         long shareReserve = Math.max(totalHeld * 2, tierReserve);
@@ -82,28 +82,19 @@ public class AmmMigrationService implements ApplicationRunner {
     }
 
     public static int calcLiquidityTier(int followerCount) {
-        if (followerCount < 10_000)    return 1;
-        if (followerCount < 100_000)   return 2;
-        if (followerCount < 1_000_000) return 3;
-        return 4;
+        if (followerCount < 2_000)     return 1;
+        if (followerCount < 20_000)    return 2;
+        if (followerCount < 200_000)   return 3;
+        if (followerCount < 1_000_000) return 4;
+        return 5;
     }
 
-    /**
-     * ?좉퇋 ?곸옣 ???곗뼱 湲곕컲 shareReserve 怨꾩궛.
-     * 紐⑺몴 10% ?뚰븨 鍮꾩슜: pumpCostTarget = price 횞 shareReserve 횞 0.04881
-     * 0.04881 ??buyCost(1, N, 0.1*N) / (price * N)  ??x*y=k 紐⑤뜽?먯꽌 10% ?뚰븨???꾩슂??肄붿씤 鍮꾩쑉
-     */
-    public static long calcTierShareReserve(int followerCount, long initialPrice) {
-        long pumpCostTarget = calcPumpCostTarget(followerCount);
-        long shareReserve = (long) (pumpCostTarget / (initialPrice * 0.04881));
-        return Math.max(100, shareReserve);
-    }
-
-    static long calcPumpCostTarget(int followerCount) {
-        if (followerCount < 10_000)    return 240_000L;
-        if (followerCount < 100_000)   return 2_440_000L;
-        if (followerCount < 1_000_000) return 24_400_000L;
-        return 244_000_000L;
+    public static long calcTierShareReserve(int followerCount) {
+        if (followerCount < 2_000)     return 3_000L;
+        if (followerCount < 20_000)    return 5_000L;
+        if (followerCount < 200_000)   return 12_000L;
+        if (followerCount < 1_000_000) return 30_000L;
+        return 80_000L;
     }
 
     private void registerAfterCommit(Runnable task) {

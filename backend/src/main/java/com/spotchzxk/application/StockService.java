@@ -115,7 +115,7 @@ public class StockService {
         stock.finalizeListing(listingPrice, 100_000L);
 
         int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());
-        long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount(), listingPrice);
+        long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
         long coinReserve = (long) listingPrice * shareReserve;
         stock.initAmmPool(coinReserve, shareReserve, tier);
 

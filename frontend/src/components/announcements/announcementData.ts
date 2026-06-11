@@ -18,6 +18,23 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_dividend_volume_based_20260611',
+    title: '배당률 산정 방식 변경 안내',
+    date: '운영 정책 업데이트',
+    summary: '앞으로 배당률은 종목의 최근 거래 흐름에 따라 결정됩니다. 거래가 활발한 종목일수록 배당 재원이 커지고, 거래가 적은 종목은 배당이 줄어들 수 있습니다.',
+    sections: [
+      {
+        title: '배당률 변경',
+        rows: [
+          { label: '변경 후', value: '최근 거래량에 비례해 배당률 결정', tone: 'accent' },
+          { label: '지급 주기', value: '방송 중 1시간마다 지급', tone: 'accent' },
+          { label: '배당 대상', value: '방송 시작 시점 보유 수량 기준', tone: 'accent' },
+        ],
+        note: '거래가 활발한 종목은 배당률이 높아질 수 있고, 거래가 거의 없는 종목은 배당이 지급되지 않을 수 있습니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_official_launch_20260701',
     title: '베타 서비스 종료 및 정식 서비스 전환 안내',
     date: '정식 서비스 전환',

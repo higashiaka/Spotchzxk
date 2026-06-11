@@ -177,10 +177,10 @@ public class TradeEngine {
         validateTrade(userId, channelId, isBuy, qty, isBuy ? userNet : BigDecimal.ZERO, currentBalance, heldQty);
 
         String orderId = UUID.randomUUID().toString();
-        String streamerName = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice, executedAt, orderId, "market", null);
-        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, currentBalance, shares, heldQty);
-        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet,
-                amm.newPool()[0], amm.newPool()[1]);
+        TradePersistenceResult savedTrade = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice, executedAt, orderId, "market", null);
+        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
+        broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1]);
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -237,11 +237,11 @@ public class TradeEngine {
 
         validateTrade(userId, channelId, isBuy, qty, isBuy ? userNet : BigDecimal.ZERO, currentBalance, heldQty);
         String orderId = UUID.randomUUID().toString();
-        String streamerName = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice,
+        TradePersistenceResult savedTrade = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice,
                 executedAt, orderId, "limit", limitPrice);
-        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, currentBalance, shares, heldQty);
-        broadcastTrade(channelId, streamerName, isBuy, qty, amm.newPrice(), executedAt, userNet,
-                amm.newPool()[0], amm.newPool()[1]);
+        BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
+        broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1]);
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.avgPrice(), newBalance, BigDecimal.ZERO, orderId, "limit");
@@ -342,16 +342,16 @@ public class TradeEngine {
         }
     }
 
-    private String persistTrade(String userId, String channelId, AmmCalculator.AmmResult amm,
-                                boolean isBuy, long qty, BigDecimal fallbackPrice, long executedAt,
-                                String orderId, String orderMode, BigDecimal limitPrice) {
+    private TradePersistenceResult persistTrade(String userId, String channelId, AmmCalculator.AmmResult amm,
+                                                boolean isBuy, long qty, BigDecimal fallbackPrice, long executedAt,
+                                                String orderId, String orderMode, BigDecimal limitPrice) {
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
         return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId)
                     .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
             User user = getOrCreateUser(userId);
 
-            updateStock(stock, isBuy, qty, amm, userNet);
+            long[] poolForCache = updateStock(stock, isBuy, qty, amm, userNet);
             BigDecimal realizedProfit = updateUserShareAndCalculateProfit(user, stock, channelId, isBuy, qty, userNet);
             addToUserBalance(userId, isBuy ? userNet.negate() : userNet);
             if (!isBuy) {
@@ -359,7 +359,7 @@ public class TradeEngine {
             }
             saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.avgPrice(), executedAt,
                     orderId, orderMode, limitPrice, "completed");
-            return stock.getStreamerName();
+            return new TradePersistenceResult(stock.getStreamerName(), poolForCache);
         });
     }
 
@@ -368,10 +368,15 @@ public class TradeEngine {
                 .orElseGet(() -> userRepository.save(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build()));
     }
 
-    private void updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
+    private long[] updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
         stock.applyTrade(amm.newPrice().longValue(), isBuy, qty, userNet.longValue());
+        long targetReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
+        if (stock.rebalancePoolIfNeeded(targetReserve)) {
+            ammPoolCache.remove(stock.getChannelId());
+        }
         stockRepository.save(stock);
+        return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
     }
 
     private BigDecimal updateUserShareAndCalculateProfit(User user, Stock stock, String channelId, boolean isBuy,
@@ -525,6 +530,7 @@ public class TradeEngine {
         long executedAt = System.currentTimeMillis();
 
         AmmCalculator.AmmResult[] resultHolder = new AmmCalculator.AmmResult[1];
+        long[][] poolHolder = new long[1][];
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             Order freshOrder = orderRepository.findByIdForUpdate(order.getId()).orElse(null);
             if (freshOrder == null || !"pending".equals(freshOrder.getStatus())) return;
@@ -575,7 +581,7 @@ public class TradeEngine {
                 addToUserRealizedProfit(user.getId(), profit);
             }
 
-            updateStock(stock, freshIsBuy, freshOrder.getQuantity(), amm, userNet);
+            poolHolder[0] = updateStock(stock, freshIsBuy, freshOrder.getQuantity(), amm, userNet);
             freshOrder.complete(amm.avgPrice(), executedAt);
             orderRepository.save(freshOrder);
             resultHolder[0] = amm;
@@ -587,22 +593,23 @@ public class TradeEngine {
         }
 
         AmmCalculator.AmmResult amm = resultHolder[0];
-        ammPoolCache.put(order.getStreamerId(), amm.newPool());
+        long[] poolForCache = poolHolder[0] != null ? poolHolder[0] : amm.newPool();
+        ammPoolCache.put(order.getStreamerId(), poolForCache);
         priceCache.put(order.getStreamerId(), amm.newPrice());
         evictUserCache(order.getUserId());
         String streamerName = stockRepository.findById(order.getStreamerId())
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), amm.newPrice(), executedAt,
-                BigDecimal.valueOf(amm.userNetAmount()), amm.newPool()[0], amm.newPool()[1]);
+                BigDecimal.valueOf(amm.userNetAmount()), poolForCache[0], poolForCache[1]);
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
 
     private BigDecimal updateCaches(String userId, String channelId, boolean isBuy, long qty,
-                                    AmmCalculator.AmmResult amm, BigDecimal currentBalance,
+                                    AmmCalculator.AmmResult amm, long[] poolForCache, BigDecimal currentBalance,
                                     Map<String, Long> shares, long heldQty) {
-        ammPoolCache.put(channelId, amm.newPool());
+        ammPoolCache.put(channelId, poolForCache);
         priceCache.put(channelId, amm.newPrice());
 
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
@@ -613,6 +620,9 @@ public class TradeEngine {
 
         shares.put(channelId, isBuy ? heldQty + qty : heldQty - qty);
         return newBalance;
+    }
+
+    private record TradePersistenceResult(String streamerName, long[] poolForCache) {
     }
 
     // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅

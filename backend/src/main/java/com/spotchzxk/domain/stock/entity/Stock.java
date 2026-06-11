@@ -173,6 +173,21 @@ public class Stock {
         this.feePool = Math.max(0, this.feePool - amount);
     }
 
+    public boolean rebalancePoolIfNeeded(long targetShareReserve) {
+        if (targetShareReserve <= 0) {
+            return false;
+        }
+        if (listingPrice <= 0 || currentPrice < listingPrice * 10) {
+            return false;
+        }
+        if (shareReserve >= targetShareReserve) {
+            return false;
+        }
+        this.coinReserve = currentPrice * targetShareReserve;
+        this.shareReserve = targetShareReserve;
+        return true;
+    }
+
     public void applyStockSplit(int ratio) {
         if (ratio <= 1) {
             throw new IllegalArgumentException("Split ratio must be greater than 1.");

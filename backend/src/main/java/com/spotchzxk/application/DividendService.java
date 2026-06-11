@@ -2,6 +2,7 @@ package com.spotchzxk.application;
 
 import com.spotchzxk.domain.dividend.entity.DividendLog;
 import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.entity.UserDividendLog;
 import com.spotchzxk.domain.user.entity.UserShare;
 import com.spotchzxk.domain.dividend.repository.DividendLogRepository;
@@ -29,11 +30,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DividendService {
 
-    private static final BigDecimal DIVIDEND_RATE = new BigDecimal("0.0001");
+    private static final BigDecimal FEE_POOL_PAYOUT_RATIO = new BigDecimal("0.35");
 
     private final UserShareRepository userShareRepository;
     private final UserDividendLogRepository userDividendLogRepository;
     private final DividendLogRepository dividendLogRepository;
+    private final StockRepository stockRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final TradeEngine tradeEngine;
 
@@ -42,15 +44,25 @@ public class DividendService {
         long eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
         if (eligibleShares <= 0) return;
 
-        BigDecimal ratePerShare = BigDecimal.valueOf(stock.getCurrentPrice())
-                .multiply(DIVIDEND_RATE)
-                .setScale(4, RoundingMode.HALF_UP);
+        long feePool = stock.getFeePool();
+        if (feePool <= 0) return;
+
+        BigDecimal totalPayout = BigDecimal.valueOf(feePool)
+                .multiply(FEE_POOL_PAYOUT_RATIO)
+                .setScale(0, RoundingMode.FLOOR);
+        if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        BigDecimal ratePerShare = totalPayout
+                .divide(BigDecimal.valueOf(eligibleShares), 4, RoundingMode.FLOOR);
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
 
         int updatedUsers = userShareRepository.distributeDividends(stock.getChannelId(), ratePerShare);
 
         if (updatedUsers > 0) {
+            stock.drainFeePool(totalPayout.longValue());
+            stockRepository.save(stock);
+
             List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(stock.getChannelId());
             List<UserDividendLog> logs = shares.stream()
                     .filter(us -> us.getPreStreamQuantity() > 0
@@ -77,8 +89,7 @@ public class DividendService {
                     .map(UserDividendLog::getUserId)
                     .collect(Collectors.toCollection(LinkedHashSet::new)));
 
-            BigDecimal actualPaid = ratePerShare.multiply(BigDecimal.valueOf(eligibleShares))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal actualPaid = totalPayout;
             DividendLog logEntry = DividendLog.builder()
                     .stock(stock)
                     .totalDividendPool(actualPaid)
@@ -87,8 +98,8 @@ public class DividendService {
                     .build();
             dividendLogRepository.save(logEntry);
 
-            log.info("Interval dividend for channel {}: price={}, ratePerShare={}, eligibleShares={}, {} users",
-                    stock.getChannelId(), stock.getCurrentPrice(), ratePerShare, eligibleShares, updatedUsers);
+            log.info("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
+                    stock.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
 
             // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
             final String now = LocalDateTime.now().toString();

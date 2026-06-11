@@ -55,6 +55,7 @@ class ChzzkLivePollingServiceTest {
                 stock("real-live-channel", true, liveStartedAt)
         ));
 
+        service.initLiveStockCache();
         service.payDueIntervalDividends();
 
         verify(chzzkApiClient, never()).fetchChannelStatus("event-live-stock");
