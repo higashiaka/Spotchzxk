@@ -1,4 +1,4 @@
-package com.spotchzxk.domain.trading.service;
+﻿package com.spotchzxk.domain.trading.service;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -20,9 +20,9 @@ public final class AmmCalculator {
      * cost = coinReserve * qty / (shareReserve - qty)
      */
     public static long buyCost(long coinReserve, long shareReserve, long qty) {
-        if (coinReserve <= 0) throw new IllegalStateException("AMM ???珥덇린?붾릺吏 ?딆? 醫낅ぉ?낅땲?? ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
-        if (qty <= 0) throw new IllegalStateException("二쇰Ц ?섎웾? 1二??댁긽?댁뼱???⑸땲??");
-        if (qty >= shareReserve) throw new IllegalStateException("二쇰Ц ?섎웾??AMM ????좊룞?깆쓣 珥덇낵?⑸땲?? ?섎웾??以꾩뿬二쇱꽭??");
+        if (coinReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
+        if (qty <= 0) throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
+        if (qty >= shareReserve) throw new IllegalStateException("주문 수량이 AMM 풀 유동성을 초과합니다. 수량을 줄여주세요.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve - qty);
         // ?щ┝ 泥섎━ (?좎?媛 議곌툑 ???대룄濡?
@@ -40,8 +40,8 @@ public final class AmmCalculator {
      * revenue = coinReserve * qty / (shareReserve + qty)
      */
     public static long sellRevenue(long coinReserve, long shareReserve, long qty) {
-        if (coinReserve <= 0) throw new IllegalStateException("AMM ???珥덇린?붾릺吏 ?딆? 醫낅ぉ?낅땲?? ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
-        if (qty <= 0) throw new IllegalStateException("二쇰Ц ?섎웾? 1二??댁긽?댁뼱???⑸땲??");
+        if (coinReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
+        if (qty <= 0) throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve + qty);
         try {
@@ -70,7 +70,7 @@ public final class AmmCalculator {
 
     /** ?꾩옱 AMM 媛寃?(coinReserve / shareReserve) */
     public static BigDecimal price(long coinReserve, long shareReserve) {
-        if (shareReserve <= 0) throw new IllegalStateException("AMM ???珥덇린?붾릺吏 ?딆? 醫낅ぉ?낅땲?? ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂.");
+        if (shareReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         return BigDecimal.valueOf(coinReserve)
                 .divide(BigDecimal.valueOf(shareReserve), 0, RoundingMode.HALF_UP);
     }

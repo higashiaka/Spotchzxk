@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.megaphone.entity.MegaphonePost;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -68,11 +68,11 @@ class MegaphoneServiceTest {
         when(stockRepository.findById("channel-1")).thenReturn(Optional.of(stock));
         when(userRepository.addToBalance(eq("user-1"), any(BigDecimal.class))).thenReturn(1);
 
-        MegaphonePost post = service.useMegaphone("user-1", "channel-1", "  吏湲??쇱씠釉??щ컡?댁슂  ");
+        MegaphonePost post = service.useMegaphone("user-1", "channel-1", "  지금 라이브 보세요  ");
 
         verify(userRepository).addToBalance("user-1", new BigDecimal("-30000000"));
         verify(tradeEngine).evictUserCache("user-1");
-        assertThat(post.getMessage()).isEqualTo("吏湲??쇱씠釉??щ컡?댁슂");
+        assertThat(post.getMessage()).isEqualTo("지금 라이브 보세요");
         assertThat(post.getLiveUrl()).isEqualTo("https://chzzk.naver.com/live/channel-1");
         assertThat(post.getLiveSessionStartedAt()).isEqualTo(stock.getLiveStartedAt());
 
@@ -89,7 +89,7 @@ class MegaphoneServiceTest {
 
         assertThatThrownBy(() -> service.useMegaphone("user-1", "channel-1", "   "))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("?뺤꽦湲?硫붿떆吏瑜??낅젰?댁＜?몄슂.");
+                .hasMessage("확성기 메시지를 입력해주세요.");
 
         verify(userRepository, never()).addToBalance(eq("user-1"), any(BigDecimal.class));
         verify(megaphonePostRepository, never()).save(any());
@@ -104,7 +104,7 @@ class MegaphoneServiceTest {
 
         assertThatThrownBy(() -> service.useMegaphone("user-1", "channel-1", "媛".repeat(51)))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("?뺤꽦湲?硫붿떆吏??理쒕? 50?먭퉴吏 ?낅젰?????덉뒿?덈떎.");
+                .hasMessage("확성기 메시지는 최대 50자까지 입력할 수 있습니다.");
 
         assertThat(user.getCoinBalance()).isEqualByComparingTo("40000000");
         verify(userRepository, never()).save(any());
@@ -125,7 +125,7 @@ class MegaphoneServiceTest {
 
         assertThatThrownBy(() -> service.useMegaphone("user-1", "channel-1", "hello"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("?꾩옱 ?쇱씠釉?以묒씤 ?ㅽ듃由щ㉧留??뺤꽦湲곕? ?ъ슜?????덉뒿?덈떎.");
+                .hasMessage("현재 라이브 중인 스트리머에게만 확성기를 사용할 수 있습니다.");
 
         assertThat(user.getCoinBalance()).isEqualByComparingTo("40000000");
         verify(userRepository, never()).save(any());

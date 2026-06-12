@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.presentation.dto.OrderBookDto;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -40,7 +40,7 @@ public class StockService {
 
     public OrderBookDto getOrderBook(String channelId, int depth) {
         Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         int safeDepth = Math.max(1, Math.min(depth, 20));
         return new OrderBookDto(
                 channelId,
@@ -102,7 +102,7 @@ public class StockService {
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         if (user.getStockAddTickets() <= 0) {
             throw new IllegalStateException("채널 등록권이 없습니다.");
         }

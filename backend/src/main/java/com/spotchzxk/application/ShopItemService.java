@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
@@ -30,7 +30,7 @@ public class ShopItemService {
 
     private Map<String, Object> purchaseLocked(String uid, String item) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
         // Issue #16: API 紐낆꽭(nickname_ticket, stock_ticket)? ?대? ??nickname-change-ticket, stock-add-ticket) 紐⑤몢 ?덉슜
         BigDecimal price = switch (item) {
@@ -40,26 +40,26 @@ public class ShopItemService {
         };
 
         if (user.getCoinBalance().compareTo(price) < 0) {
-            throw new IllegalStateException("?붽퀬媛 遺議깊빀?덈떎.");
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
         if (userRepository.addToBalance(uid, price.negate()) != 1) {
-            throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
 
         boolean isNicknameTicket = "nickname-change-ticket".equals(item) || "nickname_ticket".equals(item);
         if (isNicknameTicket) {
             if (userRepository.addNicknameTicket(uid) != 1) {
-                throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+                throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
             }
         } else if (userRepository.addStockAddTicket(uid) != 1) {
-            throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
 
         tradeEngine.evictUserCache(uid);
 
         User updated = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         return Map.of(
                 "balance", updated.getCoinBalance(),
                 "nicknameChangeTickets", updated.getNicknameChangeTickets(),

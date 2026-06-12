@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.entity.UserShare;
@@ -92,11 +92,11 @@ public class PortfolioService {
         List<UserShare> shares = userShareRepository.findByUserId(userId);
         boolean hasShares = shares.stream().anyMatch(s -> s.getQuantity() > 0);
         if (hasShares) {
-            throw new IllegalStateException("蹂댁쑀 二쇱떇???덉쑝硫?珥덇린?뷀븷 ???놁뒿?덈떎. 癒쇱? ?꾨웾 留ㅻ룄?댁＜?몄슂.");
+            throw new IllegalStateException("보유 주식이 있으면 초기화할 수 없습니다. 먼저 매도 후 시도해주세요.");
         }
         boolean hasPendingOrders = !orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, "pending").isEmpty();
         if (hasPendingOrders) {
-            throw new IllegalStateException("誘몄껜寃?二쇰Ц???덉쑝硫?珥덇린?뷀븷 ???놁뒿?덈떎. 癒쇱? 紐⑤뱺 二쇰Ц??痍⑥냼?댁＜?몄슂.");
+            throw new IllegalStateException("미체결 주문이 있으면 초기화할 수 없습니다. 먼저 모든 주문을 취소해주세요.");
         }
 
         LocalDate todayKst = LocalDate.now(KST);

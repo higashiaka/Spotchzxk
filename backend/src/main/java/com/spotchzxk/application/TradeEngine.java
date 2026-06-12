@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.presentation.dto.TradeRequest;
 import com.spotchzxk.presentation.dto.TradeResponse;
@@ -133,7 +133,7 @@ public class TradeEngine {
                 throw new IllegalStateException("존재하지 않는 주문입니다.");
             }
             if (!"pending".equals(order.getStatus())) {
-                throw new IllegalStateException("?대? 泥닿껐?섏뿀嫄곕굹 痍⑥냼??二쇰Ц?낅땲??");
+                throw new IllegalStateException("이미 처리되었거나 취소된 주문입니다.");
             }
 
             BigDecimal refund = BigDecimal.ZERO;
@@ -146,7 +146,7 @@ public class TradeEngine {
             addToUserBalance(userId, refund);
             return userRepository.findById(userId)
                     .map(User::getCoinBalance)
-                    .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         });
     }
 
@@ -192,7 +192,7 @@ public class TradeEngine {
     private TradeResponse submitLimitOrder(String userId, String channelId, boolean isBuy, long qty,
                                            BigDecimal fallbackPrice, BigDecimal limitPrice) {
         if (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("吏?뺢? 二쇰Ц?먮뒗 媛寃⑹쓣 ?낅젰?댁빞 ?⑸땲??");
+            throw new IllegalStateException("지정가 주문에는 가격을 입력해야 합니다.");
         }
 
         BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
@@ -227,7 +227,7 @@ public class TradeEngine {
     private TradeResponse executeImmediateLimitOrder(String userId, String channelId, boolean isBuy, long qty,
                                                      BigDecimal fallbackPrice, BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calcAmmTradeForLimit(channelId, isBuy, qty, limitPrice);
-        if (amm == null) throw new IllegalStateException("?꾩옱 ?쒖옣媛媛 吏?뺢?蹂대떎 ?믪븘 泥닿껐?????놁뒿?덈떎.");
+        if (amm == null) throw new IllegalStateException("현재 시장가가 지정가보다 많이 벗어났습니다.");
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
         long executedAt = System.currentTimeMillis();
 
@@ -283,7 +283,7 @@ public class TradeEngine {
         return ammPoolCache.computeIfAbsent(channelId, k ->
                 stockRepository.findById(k)
                         .map(s -> new long[]{s.getCoinReserve(), s.getShareReserve()})
-                        .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎.")));
+                        .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다.")));
     }
 
     AmmCalculator.AmmResult calculateAmmTrade(String channelId, boolean isBuy, long qty) {
@@ -299,7 +299,7 @@ public class TradeEngine {
     private long[] rebalanceCachedPoolIfNeeded(String channelId, long[] currentPool) {
         long[] rebalancedPool = new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             long targetReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
             if (!stock.rebalancePoolIfNeeded(targetReserve)) {
                 return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
@@ -319,28 +319,28 @@ public class TradeEngine {
         if (!isBuy) {
             long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
             if (heldQty - pendingSellQty < qty) {
-                throw new IllegalStateException("蹂댁쑀 二쇱떇??遺議깊빀?덈떎.");
+                throw new IllegalStateException("보유 수량이 부족합니다.");
             }
             return;
         }
 
         if (currentBalance.compareTo(cost) < 0) {
-            throw new IllegalStateException("?붽퀬媛 遺議깊빀?덈떎.");
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
         Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         boolean isNewListing = stock.getListedAt() != null
                 && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
         if (isNewListing) {
             long pendingBuyQty = orderRepository.sumPendingBuyQuantity(userId, channelId);
             if (heldQty + pendingBuyQty + qty > AntiWhalePolicy.NEW_LISTING_CAP) {
-                throw new IllegalStateException("?좉퇋 ?곸옣 珥덇린 理쒕? 200媛쒓퉴吏 留ㅼ닔 媛?ν빀?덈떎.");
+                throw new IllegalStateException("신규 상장 초기에는 최대 200주까지 보유 가능합니다.");
             }
         }
 
         if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + qty > stock.getTotalSupply()) {
-            throw new IllegalStateException("?대떦 醫낅ぉ??理쒕? 諛쒗뻾 ?쒕룄???꾨떖?덉뒿?덈떎.");
+            throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
         }
     }
 
@@ -349,17 +349,17 @@ public class TradeEngine {
         if (isBuy) {
             validateTrade(userId, channelId, true, qty, reserveAmount, currentBalance, heldQty);
             Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             long pendingBuyQty = orderRepository.sumPendingBuyQuantityByStreamerId(channelId);
             if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + pendingBuyQty + qty > stock.getTotalSupply()) {
-                throw new IllegalStateException("?대떦 醫낅ぉ??理쒕? 諛쒗뻾 ?쒕룄???꾨떖?덉뒿?덈떎.");
+                throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
             }
             return;
         }
 
         long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
         if (heldQty - pendingSellQty < qty) {
-            throw new IllegalStateException("蹂댁쑀 二쇱떇??遺議깊빀?덈떎.");
+            throw new IllegalStateException("보유 수량이 부족합니다.");
         }
     }
 
@@ -369,7 +369,7 @@ public class TradeEngine {
         BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
         return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("醫낅ぉ ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎."));
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             User user = getOrCreateUser(userId);
 
             long[] poolForCache = updateStock(stock, isBuy, qty, amm, userNet);
@@ -414,9 +414,9 @@ public class TradeEngine {
             return BigDecimal.ZERO;
         } else {
             UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
-                    .orElseThrow(() -> new IllegalStateException("蹂댁쑀 二쇱떇??遺議깊빀?덈떎."));
+                    .orElseThrow(() -> new IllegalStateException("보유 수량이 부족합니다."));
             if (share.getQuantity() < qty) {
-                throw new IllegalStateException("蹂댁쑀 二쇱떇??遺議깊빀?덈떎.");
+                throw new IllegalStateException("보유 수량이 부족합니다.");
             }
             BigDecimal profit = calculateRealizedProfit(share, qty, cost);
             updateSoldShare(share, qty);
@@ -456,7 +456,7 @@ public class TradeEngine {
             return;
         }
         if (userRepository.addToBalance(userId, delta) != 1) {
-            throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
     }
 
@@ -465,7 +465,7 @@ public class TradeEngine {
             return;
         }
         if (userRepository.addToRealizedProfit(userId, delta) != 1) {
-            throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
     }
 
@@ -495,11 +495,11 @@ public class TradeEngine {
             getOrCreateUser(userId);
             BigDecimal newBalance = userRepository.findById(userId)
                     .map(User::getCoinBalance)
-                    .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
             if (isBuy) {
                 newBalance = newBalance.subtract(reserveAmount);
                 if (newBalance.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new IllegalStateException("?붽퀬媛 遺議깊빀?덈떎.");
+                    throw new IllegalStateException("잔고가 부족합니다.");
                 }
                 addToUserBalance(userId, reserveAmount.negate());
             }
@@ -559,7 +559,7 @@ public class TradeEngine {
             boolean freshIsBuy = "buy".equals(freshOrder.getType());
             Stock stock = stockRepository.findById(freshOrder.getStreamerId()).orElseThrow();
             User user = userRepository.findById(freshOrder.getUserId())
-                    .orElseThrow(() -> new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                    .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
             // DB-fresh ?濡?AMM ?ш퀎??(罹먯떆? DB ?ъ씠 ?ㅻⅨ ?ㅻ젅??嫄곕옒濡?????щ씪吏????덉쓬)
             AmmCalculator.AmmResult amm = freshIsBuy

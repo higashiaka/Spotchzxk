@@ -1,6 +1,9 @@
 node_modules/
 dist/
 
+.cloude/
+.vscode/
+
 # Firebase service account key - DO NOT COMMIT
 backend/serviceAccountKey.json
 
@@ -8,3 +11,4 @@ backend/serviceAccountKey.json
 .env
 backend/.env
 frontend/.env
+documents/test/

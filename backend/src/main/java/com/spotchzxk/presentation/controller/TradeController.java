@@ -1,4 +1,4 @@
-package com.spotchzxk.presentation.controller;
+﻿package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.presentation.dto.TradeRequest;
 import com.spotchzxk.presentation.dto.TradeResponse;
@@ -34,7 +34,7 @@ public class TradeController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Trade error: user={}, stock={}, type={}", uid, req.getStreamerId(), req.getType(), e);
-            return ResponseEntity.internalServerError().body(Map.of("error", "?쒕쾭 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄?댁＜?몄슂."));
+            return ResponseEntity.internalServerError().body(Map.of("error", "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
         }
     }
 

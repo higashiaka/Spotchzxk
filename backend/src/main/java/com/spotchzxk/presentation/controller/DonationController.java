@@ -1,4 +1,4 @@
-package com.spotchzxk.presentation.controller;
+﻿package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
@@ -50,10 +50,10 @@ public class DonationController {
         }
 
         if (amount.compareTo(MIN_DONATION) < 0) {
-            return ResponseEntity.badRequest().body(Map.of("error", "理쒖냼 ?꾩썝 湲덉븸? 1,000?먯엯?덈떎."));
+            return ResponseEntity.badRequest().body(Map.of("error", "최소 후원 금액은 1,000원입니다."));
         }
         if (amount.compareTo(MAX_DONATION) > 0) {
-            return ResponseEntity.badRequest().body(Map.of("error", "理쒕? ?꾩썝 湲덉븸? 1?듭썝?낅땲??"));
+            return ResponseEntity.badRequest().body(Map.of("error", "최대 후원 금액은 1억원입니다."));
         }
 
         AtomicReference<Map<String, Object>> result = new AtomicReference<>();
@@ -70,14 +70,14 @@ public class DonationController {
     private Map<String, Object> donateLocked(String uid, BigDecimal amount) {
         User user = portfolioService.getOrCreate(uid);
         if (user.getCoinBalance().compareTo(amount) < 0) {
-            throw new IllegalStateException("?붽퀬媛 遺議깊빀?덈떎.");
+            throw new IllegalStateException("잔고가 부족합니다.");
         }
 
         if (userRepository.addToBalance(uid, amount.negate()) != 1) {
-            throw new IllegalStateException("?ъ슜?먮? 李얠쓣 ???놁뒿?덈떎.");
+            throw new IllegalStateException("사용자를 찾을 수 없습니다.");
         }
         if (userRepository.addToDonationTotal(uid, amount) != 1) {
-            throw new IllegalStateException("?ъ슜?먮? 李얠쓣 ???놁뒿?덈떎.");
+            throw new IllegalStateException("사용자를 찾을 수 없습니다.");
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -88,7 +88,7 @@ public class DonationController {
         });
 
         User updated = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("?ъ슜?먮? 李얠쓣 ???놁뒿?덈떎."));
+                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
         return Map.of(
                 "balance", updated.getCoinBalance(),
                 "donationTotal", updated.getDonationTotal()

@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.order.repository.OrderRepository;
@@ -33,7 +33,7 @@ public class AccountLinkService {
         if (guestUid.equals(googleUid)) return;
 
         User guestUser = userRepository.findById(guestUid)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "寃뚯뒪??怨꾩젙??李얠쓣 ???놁뒿?덈떎."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게스트 계정을 찾을 수 없습니다."));
 
         if (userRepository.existsById(googleUid)) {
             throw new ResponseStatusException(
@@ -84,7 +84,7 @@ public class AccountLinkService {
     @Transactional
     public void upgradeGuest(String uid) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         user.markAsRegistered();
         registerAfterCommit(() -> tradeEngine.evictUserCache(uid));
     }

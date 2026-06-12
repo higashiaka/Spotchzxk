@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.megaphone.entity.MegaphonePost;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -49,32 +49,32 @@ public class MegaphoneService {
 
     private MegaphonePost useMegaphoneLocked(String uid, String channelId, String message) {
         User user = userRepository.findById(uid)
-                .orElseThrow(() -> new IllegalStateException("?ъ슜?먮? 李얠쓣 ???놁뒿?덈떎."));
+                .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
         if (user.getCoinBalance().compareTo(MEGAPHONE_PRICE) < 0) {
-            throw new IllegalStateException("?붿븸??遺議깊빀?덈떎. ?뺤꽦湲??ъ슜?먮뒗 3泥쒕쭔?먯씠 ?꾩슂?⑸땲??");
+            throw new IllegalStateException("잔고가 부족합니다. 확성기 사용에는 3천만원이 필요합니다.");
         }
 
         LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         long usesToday = megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
         if (usesToday >= DAILY_LIMIT) {
-            throw new IllegalStateException("?ㅻ뒛 ?뺤꽦湲??ъ슜 ?잛닔瑜?紐⑤몢 ?ъ슜?덉뒿?덈떎. (1??理쒕? 3??");
+            throw new IllegalStateException("오늘 확성기 사용 횟수를 모두 사용했습니다. (1일 최대 3회)");
         }
 
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 채널입니다."));
         if (!stock.isLive()) {
-            throw new IllegalStateException("?꾩옱 ?쇱씠釉?以묒씤 ?ㅽ듃由щ㉧留??뺤꽦湲곕? ?ъ슜?????덉뒿?덈떎.");
+            throw new IllegalStateException("현재 라이브 중인 스트리머에게만 확성기를 사용할 수 있습니다.");
         }
 
         String normalizedMessage = normalizeMessage(message);
         if (normalizedMessage == null) {
-            throw new IllegalStateException("?뺤꽦湲?硫붿떆吏瑜??낅젰?댁＜?몄슂.");
+            throw new IllegalStateException("확성기 메시지를 입력해주세요.");
         }
 
         if (userRepository.addToBalance(uid, MEGAPHONE_PRICE.negate()) != 1) {
-            throw new IllegalStateException("?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎. ?ㅼ떆 濡쒓렇?명빐二쇱꽭??");
+            throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
         tradeEngine.evictUserCache(uid);
 
@@ -144,7 +144,7 @@ public class MegaphoneService {
             return null;
         }
         if (trimmed.length() > MAX_MESSAGE_LENGTH) {
-            throw new IllegalStateException("?뺤꽦湲?硫붿떆吏??理쒕? 50?먭퉴吏 ?낅젰?????덉뒿?덈떎.");
+            throw new IllegalStateException("확성기 메시지는 최대 50자까지 입력할 수 있습니다.");
         }
         return trimmed;
     }
