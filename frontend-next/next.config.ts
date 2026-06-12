@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   async rewrites() {
     const target = process.env.PROXY_TARGET || 'https://spotchzxk.xyz';
     return [
