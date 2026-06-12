@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useOrderBook } from '../../hooks/useOrderBook';
-import { fmt } from '../../utils';
+import { fmtKorean, fmtShares } from '../../utils';
 
 export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
   const { data } = useOrderBook(streamerId);
@@ -36,7 +36,7 @@ export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
           if (row.type === 'current') {
             return (
               <div key="current" className="py-1.5 my-1 border-y border-primary-token text-center">
-                <span className="font-mono text-sm font-black text-white">{fmt(row.price)}</span>
+                <span className="font-mono text-sm font-black text-white">{fmtKorean(row.price)}</span>
               </div>
             );
           }
@@ -53,10 +53,10 @@ export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
                 }}
               />
               <span className="relative font-mono font-bold" style={{ color: isAsk ? '#3D8BFF' : '#FF5252' }}>
-                {fmt(row.price)}
+                {fmtKorean(row.price)}
               </span>
               <span className="relative text-right font-mono text-white">
-                {row.quantity.toLocaleString('ko-KR')}
+                {fmtShares(row.quantity)}
               </span>
             </div>
           );

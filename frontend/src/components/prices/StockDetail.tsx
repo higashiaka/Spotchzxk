@@ -7,7 +7,7 @@ import { usePortfolio } from '../../hooks/usePortfolio';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { apiFetch } from '../../lib/api';
 import { LiveTrade } from '../../types';
-import { avatarColor, fmt, fmtCompact, changePct, priceColor, fmtPct } from '../../utils';
+import { avatarColor, fmtCompact, fmtKorean, fmtShares, changePct, priceColor, fmtPct } from '../../utils';
 import { InteractiveChart } from '../chart/InteractiveChart';
 import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
@@ -235,9 +235,9 @@ export const StockDetail = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="font-mono text-white">{trade.quantity.toLocaleString()}주</span>
+                  <span className="font-mono text-white">{fmtShares(trade.quantity)}</span>
                   <span className="font-mono font-bold text-right w-20" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                    {fmt(trade.price)}
+                    {fmtKorean(trade.price)}
                   </span>
                 </div>
               </div>
@@ -273,9 +273,9 @@ export const StockDetail = ({
           </div>
           <div className="flex items-baseline gap-3 mt-1">
             <span className="text-2xl md:text-4xl font-black font-mono" style={{ color: priceColor(pct) }}>
-              {fmt(currentPrice)}
+              {fmtKorean(currentPrice)}
             </span>
-            <span className="text-sm md:text-lg font-bold" style={{ color: priceColor(pct) }}>
+            <span className="text-sm md:text-lg font-bold shrink-0 whitespace-nowrap" style={{ color: priceColor(pct) }}>
               {fmtPct(pct)}
             </span>
             {direction !== 'none' && (
@@ -367,7 +367,7 @@ export const StockDetail = ({
             <div className="flex items-center justify-between gap-3 mb-4">
               <h3 className="text-white text-sm md:text-base font-bold">내 보유 현황</h3>
               <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
-                {heldQty > 0 ? `${heldQty.toLocaleString('ko-KR')}주 보유` : '미보유'}
+                {heldQty > 0 ? `${fmtShares(heldQty)} 보유` : '미보유'}
               </span>
             </div>
             {!user ? (
@@ -382,22 +382,22 @@ export const StockDetail = ({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>보유 수량</p>
-                  <p className="text-white font-bold font-mono">{heldQty.toLocaleString('ko-KR')}주</p>
+                  <p className="text-white font-bold font-mono">{fmtShares(heldQty)}</p>
                 </div>
                 <div>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평균 단가</p>
-                  <p className="text-white font-bold font-mono">{fmt(avgPrice)}</p>
+                  <p className="text-white font-bold font-mono">{fmtKorean(avgPrice)}</p>
                 </div>
                 <div>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평가 금액</p>
-                  <p className="text-white font-bold font-mono">{fmt(holdingValue)}</p>
+                  <p className="text-white font-bold font-mono">{fmtKorean(holdingValue)}</p>
                 </div>
                 <div>
                   <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>평가 손익</p>
                   <p className="font-bold font-mono" style={{ color: priceColor(holdingPnLPct) }}>
-                    {holdingPnL >= 0 ? '+' : ''}{fmt(holdingPnL)}
+                    {holdingPnL >= 0 ? '+' : ''}{fmtKorean(holdingPnL)}
                   </p>
-                  <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(holdingPnLPct) }}>
+                  <p className="text-xs font-bold mt-0.5 whitespace-nowrap" style={{ color: priceColor(holdingPnLPct) }}>
                     {fmtPct(holdingPnLPct)}
                   </p>
                 </div>
@@ -412,7 +412,7 @@ export const StockDetail = ({
             </div>
             <div className="rounded-xl border p-3 md:p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
               <p className="text-xs md:text-sm" style={{ color: 'var(--text-muted)' }}>시초가 대비</p>
-              <p className="font-bold font-mono mt-1 md:text-lg" style={{ color: priceColor(pct) }}>
+              <p className="font-bold font-mono mt-1 md:text-lg whitespace-nowrap" style={{ color: priceColor(pct) }}>
                 {fmtPct(pct)}
               </p>
             </div>

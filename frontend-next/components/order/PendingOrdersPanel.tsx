@@ -1,5 +1,5 @@
 import { usePendingOrders } from '@/hooks/usePendingOrders';
-import { fmt, tradeColorClass } from '@/utils';
+import { fmtKorean, fmtShares, tradeColorClass } from '@/utils';
 
 export const PendingOrdersPanel = ({
   userId,
@@ -41,11 +41,11 @@ export const PendingOrdersPanel = ({
               <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
                 <div>
                   <span className="text-[var(--text-muted)]">지정가</span>
-                  <p className="font-mono font-bold text-white">{fmt(Number(order.limitPrice ?? order.estimatedPrice))}</p>
+                  <p className="font-mono font-bold text-white">{fmtKorean(Number(order.limitPrice ?? order.estimatedPrice))}</p>
                 </div>
                 <div className="text-right">
                   <span className="text-[var(--text-muted)]">수량</span>
-                  <p className="font-mono font-bold text-white">{order.quantity.toLocaleString('ko-KR')}주</p>
+                  <p className="font-mono font-bold text-white">{fmtShares(order.quantity)}</p>
                 </div>
               </div>
             </div>

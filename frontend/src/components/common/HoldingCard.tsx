@@ -1,5 +1,5 @@
 import { Stock } from '../../hooks/useStocks';
-import { fmt, priceColorClass, avatarColorClass, fmtPct } from '../../utils';
+import { fmtKorean, fmtShares, priceColorClass, avatarColorClass, fmtPct } from '../../utils';
 
 /** Holding position card component.
  *  Renders either compact (single-row list) or detail (card box) layout based on variant */
@@ -38,12 +38,12 @@ export const HoldingCard = ({
           <div>
             <p className="text-white text-sm font-bold">{streamer.name}</p>
             <p className="text-xs mt-1 text-muted-token">
-              {qty}주 · 평단 {fmt(avgPrice)}
+              {fmtShares(qty)} · 평단 {fmtKorean(avgPrice)}
             </p>
           </div>
           <div className="text-right">
-            <p className="font-bold text-sm font-mono text-white">{fmt(streamer.price)}</p>
-            <p className={`text-xs font-bold mt-1 ${priceColorClass(pct)}`}>
+            <p className="font-bold text-sm font-mono text-white">{fmtKorean(streamer.price)}</p>
+            <p className={`text-xs font-bold mt-1 whitespace-nowrap ${priceColorClass(pct)}`}>
               {fmtPct(pct)}
             </p>
           </div>
@@ -69,14 +69,14 @@ export const HoldingCard = ({
       {/* Stock name and held quantity */}
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-bold truncate">{streamer.name}</p>
-        <p className="text-xs mt-0.5 text-dim-token">{qty}주</p>
+        <p className="text-xs mt-0.5 text-dim-token">{fmtShares(qty)}</p>
       </div>
 
       {/* Market value and return rate */}
       <div className="text-right shrink-0">
-        <p className="font-mono font-bold text-sm text-white">{fmt(value)}</p>
-        <p className={`text-xs font-bold mt-0.5 ${priceColorClass(pct)}`}>
-          {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+        <p className="font-mono font-bold text-sm text-white">{fmtKorean(value)}</p>
+        <p className={`text-xs font-bold mt-0.5 whitespace-nowrap ${priceColorClass(pct)}`}>
+          {fmtPct(pct)}
         </p>
       </div>
     </div>

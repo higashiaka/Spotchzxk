@@ -121,7 +121,7 @@ export const PricesView = ({
                 </div>
               </div>
               <div className="w-16 text-right">
-                <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
+                <p className="text-xs font-bold whitespace-nowrap" style={{ color: priceColor(pct) }}>
                   {fmtPct(pct, 1)}
                 </p>
               </div>

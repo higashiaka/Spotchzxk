@@ -223,7 +223,7 @@ export const OrderForm = ({
           </div>
           <p className="text-white font-bold text-sm min-w-0">
             <span className="truncate inline-block max-w-full align-bottom">{streamer.name}</span>
-            <span className={`font-mono ml-2 ${priceColorClass(pct)}`}>
+            <span className={`font-mono ml-2 shrink-0 whitespace-nowrap ${priceColorClass(pct)}`}>
               ({fmt(currentPrice)})
             </span>
           </p>
@@ -233,7 +233,7 @@ export const OrderForm = ({
       <div className="mb-4">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">현재가 (체결 기준)</p>
         <div className="rounded-xl border px-3 py-2.5 flex justify-between items-center surface-card-secondary border-primary-token">
-          <p className={`font-mono font-bold text-base ${priceColorClass(pct)}`}>
+          <p className={`font-mono font-bold text-base whitespace-nowrap ${priceColorClass(pct)}`}>
             {fmt(currentPrice)}
           </p>
           <span className="text-[10px] text-[var(--text-dim)]">시장가</span>

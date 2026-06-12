@@ -97,7 +97,7 @@ export const OrderView = ({
               {/* Current price and change rate */}
               <div className="text-right ml-3 shrink-0">
                 <p className={`font-mono font-bold text-sm ${priceColorClass(pct)}`}>{fmt(s.price)}</p>
-                <p className={`text-xs font-bold mt-0.5 ${priceColorClass(pct)}`}>
+                <p className={`text-xs font-bold mt-0.5 whitespace-nowrap ${priceColorClass(pct)}`}>
                   {fmtPct(pct, 1)}
                 </p>
               </div>

@@ -50,7 +50,7 @@ export const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrad
           return (
             <span key={i} className="inline-flex items-center gap-1.5 px-4">
               <span className="text-xs font-bold text-secondary-token">{s.name}</span>
-              <span className={`text-xs font-bold font-mono ${priceColorClass(pct)}`}>
+              <span className={`text-xs font-bold font-mono shrink-0 whitespace-nowrap ${priceColorClass(pct)}`}>
                 {pct >= 0 ? '▲' : '▼'} {fmtPct(Math.abs(pct)).replace(/^\+/, '')}
               </span>
               <span className="text-xs text-[var(--border-secondary)]">|</span>

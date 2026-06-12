@@ -210,7 +210,7 @@ export const ChartView = ({
         <span className="w-6 md:w-10 mr-3 md:mr-5 text-center">#</span>
         <span className="flex-1">스트리머</span>
         <span className="w-24 md:w-36 text-right">현재가</span>
-        {category !== 'dividend' && <span className="w-16 md:w-24 text-right">등락률</span>}
+        {category !== 'dividend' && <span className="w-20 md:w-28 text-right">등락률</span>}
         <span className={`${category === 'dividend' ? 'w-28 md:w-40' : 'w-24 md:w-36'} text-right`}>{colLabel}</span>
       </div>
 
@@ -257,8 +257,8 @@ export const ChartView = ({
                 </div>
                 {/* Change rate (hidden for dividend category) */}
                 {category !== 'dividend' && (
-                  <div className="w-16 md:w-24 text-right shrink-0">
-                    <p className="text-xs md:text-base font-bold" style={{ color: priceColor(pct) }}>
+                  <div className="w-20 md:w-28 text-right shrink-0">
+                    <p className="text-xs md:text-base font-bold whitespace-nowrap" style={{ color: priceColor(pct) }}>
                       {fmtPct(pct, 1)}
                     </p>
                   </div>

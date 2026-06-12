@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '@/hooks/useStocks';
 import { AppTab, LiveTrade } from '@/types';
-import { fmt, fmtCompact, changePct, priceColor, avatarColor, grade, fmtPct } from '@/utils';
+import { fmtCompact, fmtKorean, fmtShares, changePct, priceColor, avatarColor, grade, fmtPct } from '@/utils';
 import { Ticker } from '../Ticker';
 import { useVisibleMegaphonePosts } from '@/hooks/useMegaphone';
 import { useHoldings } from '@/hooks/useHoldings';
@@ -110,11 +110,11 @@ export const HomeView = ({
             <>
               <button type="button" onClick={() => onNavigate('profile')}
                 className="flex items-baseline gap-2">
-                <span className="text-3xl font-black font-mono text-white">{fmt(totalAssets)}</span>
+                <span className="text-3xl font-black font-mono text-white">{fmtKorean(totalAssets)}</span>
                 <span className="text-base" style={{ color: 'var(--text-dim)' }}>›</span>
               </button>
-              <p className="text-sm font-bold mt-1" style={{ color: priceColor(holdingsPnLPct) }}>
-                {holdingsPnL >= 0 ? '+' : ''}{fmt(holdingsPnL)}&nbsp;
+              <p className="text-sm font-bold mt-1 whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: priceColor(holdingsPnLPct) }}>
+                {holdingsPnL >= 0 ? '+' : ''}{fmtKorean(holdingsPnL)}&nbsp;
                 ({fmtPct(holdingsPnLPct)})
                 <span className="ml-1 font-normal" style={{ color: 'var(--text-dim)' }}>매입 대비</span>
               </p>
@@ -155,11 +155,11 @@ export const HomeView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-bold truncate">{s.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{qty}주</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(qty)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono font-bold text-sm text-white">{fmt(value)}</p>
-                      <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(pct) }}>
+                      <p className="font-mono font-bold text-sm text-white">{fmtKorean(value)}</p>
+                      <p className="text-xs font-bold mt-0.5 whitespace-nowrap" style={{ color: priceColor(pct) }}>
                         {fmtPct(pct)}
                       </p>
                     </div>
@@ -183,15 +183,15 @@ export const HomeView = ({
         <div style={{ borderBottom: sectionBorder }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
-            { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmt(holdingsPnL)}` : fmt(holdingsPnL), sub: fmtPct(holdingsPnLPct) },
+            { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmtKorean(holdingsPnL)}` : fmtKorean(holdingsPnL), sub: fmtPct(holdingsPnLPct) },
             { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
               style={{ borderBottom: rowBorder }}
               onClick={row.action}>
               <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-              <span className="text-sm font-bold font-mono text-white mr-1">{row.value}</span>
-              {row.sub && <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{row.sub}</span>}
+              <span className="text-sm font-bold font-mono text-white mr-1 min-w-0 truncate">{row.value}</span>
+              {row.sub && <span className="text-xs shrink-0 whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>{row.sub}</span>}
               <span className="ml-2 text-xs" style={{ color: 'var(--text-dim)' }}>›</span>
             </div>
           ))}
@@ -210,7 +210,7 @@ export const HomeView = ({
                     <button type="button" onClick={() => onSelect(s)}
                       className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-white">{s.name}</span>
-                      <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
+                      <span className="text-xs font-bold font-mono shrink-0 whitespace-nowrap" style={{ color: priceColor(pct) }}>
                         {fmtPct(pct, 1)}
                       </span>
                     </button>
@@ -265,9 +265,9 @@ export const HomeView = ({
                       </span>
                     </div>
                     <div className="flex items-center justify-end gap-2 shrink-0 min-w-0 max-w-[55%]">
-                      <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>{trade.quantity}주</span>
+                      <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>{fmtShares(trade.quantity)}</span>
                       <span className="font-mono font-bold w-16 max-w-16 text-right shrink-0 truncate" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                        {fmt(trade.price)}
+                        {fmtKorean(trade.price)}
                       </span>
                     </div>
                   </div>
@@ -304,10 +304,10 @@ export const HomeView = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-bold truncate">{s.name}</p>
-                    <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmt(s.price)}</p>
+                    <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtKorean(s.price)}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold" style={{ color: priceColor(pct) }}>
+                    <p className="text-sm font-bold whitespace-nowrap" style={{ color: priceColor(pct) }}>
                       {fmtPct(pct)}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
@@ -370,9 +370,9 @@ export const HomeView = ({
                       <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono font-bold text-sm text-white">{trade.quantity}주</p>
+                      <p className="font-mono font-bold text-sm text-white">{fmtShares(trade.quantity)}</p>
                       <p className="text-xs font-mono mt-0.5" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                        {fmt(trade.price)}
+                        {fmtKorean(trade.price)}
                       </p>
                     </div>
                   </div>
@@ -423,8 +423,8 @@ export const HomeView = ({
                       <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr} · {item.status}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono font-bold text-sm text-white">{item.quantity}주</p>
-                      <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>{fmt(price)}</p>
+                      <p className="font-mono font-bold text-sm text-white">{fmtShares(item.quantity)}</p>
+                      <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>{fmtKorean(price)}</p>
                     </div>
                   </div>
                 );

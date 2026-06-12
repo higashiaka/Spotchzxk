@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '@/hooks/useStocks';
 import { AppTab } from '@/types';
-import { fmt, grade } from '@/utils';
+import { fmtKorean, fmtShares, grade } from '@/utils';
 import { apiFetch } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHoldings } from '@/hooks/useHoldings';
@@ -259,9 +259,9 @@ export const ProfileView = ({
       <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
-          { label: '총 스트리머 자산', value: fmt(totalAssets) },
-          { label: '캐시', value: fmt(portfolio?.balance ?? 0) },
-          { label: '주식 평가액', value: fmt(holdingsValue) },
+          { label: '총 스트리머 자산', value: fmtKorean(totalAssets) },
+          { label: '캐시', value: fmtKorean(portfolio?.balance ?? 0) },
+          { label: '주식 평가액', value: fmtKorean(holdingsValue) },
           { label: '누적 매매 횟수', value: `${orderCount}회` },
         ].map(row => (
           <div key={row.label} className="flex justify-between items-center mb-3 last:mb-0">
@@ -298,10 +298,10 @@ export const ProfileView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{d.quantity}주 · {dateStr}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(d.quantity)} · {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: 'var(--accent)' }}>
-                      +{Math.abs(Number(d.amount)).toFixed(2)}
+                      +{fmtKorean(Math.abs(Number(d.amount)))}
                     </p>
                   </div>
                 );

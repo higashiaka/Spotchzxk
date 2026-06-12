@@ -123,7 +123,7 @@ export const HoldingsView = ({
             {totalPnL >= 0 ? '+' : ''}{fmt(totalPnL)}
           </span>
           <span
-            className="text-xs font-bold px-1.5 py-0.5 rounded"
+            className="text-xs font-bold px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap"
             style={{
               backgroundColor: priceColor(totalPnLPct) + '22',
               color: priceColor(totalPnLPct),
@@ -225,13 +225,13 @@ export const HoldingsView = ({
                 </div>
 
                 {/* Market value + P&L */}
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 min-w-[92px]">
                   <p className="text-sm font-bold font-mono text-white mb-0.5">
                     {fmt(value)}
                   </p>
-                  <p className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
+                  <p className="text-xs font-bold font-mono whitespace-nowrap" style={{ color: priceColor(pct) }}>
                     {pnlTotal >= 0 ? '+' : ''}{fmt(pnlTotal)}&nbsp;
-                    <span className="font-normal">
+                    <span className="font-normal whitespace-nowrap">
                       ({fmtPct(pct)})
                     </span>
                   </p>
