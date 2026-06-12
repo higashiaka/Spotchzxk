@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 
 import com.spotchzxk.domain.trading.service.AmmCalculator;
@@ -33,9 +33,9 @@ class TradeEnginePricingTest {
     void buySlippage_avgPriceExceedsInitialPrice() {
         AmmCalculator.AmmResult result = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
 
-        // ?됯퇏 泥닿껐媛 > 珥덇린媛 (?щ━?쇱?)
+        // avg fill price > initial price due to slippage
         assertThat(result.avgPrice()).isGreaterThan(BigDecimal.valueOf(10_000));
-        // 嫄곕옒 ??媛寃?> ?됯퇏 泥닿껐媛
+        // post-trade spot price > avg fill price (price impact)
         assertThat(result.newPrice()).isGreaterThan(result.avgPrice());
         // ?좎? 吏遺덉븸 > AMM 肄붿씤 (?섏닔猷??ы븿)
         assertThat(result.userNetAmount()).isGreaterThan(result.ammAmount());
@@ -50,7 +50,7 @@ class TradeEnginePricingTest {
         // 700二?留ㅻ룄
         AmmCalculator.AmmResult sell = AmmCalculator.calcSell(poolAfterBuy[0], poolAfterBuy[1], 700);
 
-        // 留ㅻ룄 ?섎졊??< 留ㅼ닔 吏遺덉븸 (?섏닔猷?+ ?щ━?쇱? ?먯떎)
+        // sell proceeds < buy cost due to fee + slippage
         assertThat(sell.userNetAmount()).isLessThan(buy.userNetAmount());
     }
 
@@ -196,7 +196,7 @@ class TradeEnginePricingTest {
                 BigDecimal.valueOf(10_000)
         ))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("蹂댁쑀 二쇱떇??遺議깊빀?덈떎.");
+                .hasMessageContaining("보유 수량이 부족합니다.");
     }
 }
 

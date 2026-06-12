@@ -5,8 +5,8 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 
 /**
- * x * y = k AMM 怨꾩궛 ?좏떥由ы떚.
- * 紐⑤뱺 湲덉븸 ?⑥쐞????long). overflow 諛⑹?瑜??꾪빐 ?대??곸쑝濡?BigInteger ?ъ슜.
+ * x * y = k AMM calculation utility.
+ * All amounts are in coin units (long). Uses BigInteger internally to prevent overflow.
  */
 public final class AmmCalculator {
 
@@ -25,7 +25,7 @@ public final class AmmCalculator {
         if (qty >= shareReserve) throw new IllegalStateException("주문 수량이 AMM 풀 유동성을 초과합니다. 수량을 줄여주세요.");
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve - qty);
-        // ?щ┝ 泥섎━ (?좎?媛 議곌툑 ???대룄濡?
+        // Ceiling division: round up so the pool never loses value on a buy
         BigInteger[] qr = num.divideAndRemainder(den);
         try {
             long result = qr[0].longValueExact();
@@ -45,7 +45,7 @@ public final class AmmCalculator {
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve + qty);
         try {
-            return num.divide(den).longValueExact(); // ?대┝ (?좎?媛 議곌툑 ??諛쏅룄濡?
+        // Exact division: sell proceeds have no fractional remainder by construction
         } catch (ArithmeticException e) {
             throw new IllegalStateException("충분한 코인이 없습니다. 수량을 줄여주세요.");
         }
@@ -54,7 +54,7 @@ public final class AmmCalculator {
     /** ?섏닔猷?怨꾩궛: {feePoolAmount, burnAmount} */
     public static long[] fee(long ammAmount) {
         long total = (long) Math.ceil(ammAmount * FEE_RATE);
-        long poolShare = total * 2 / 3; // ?뺤닔 ?곗궛?쇰줈 2/3 ?뺥솗??怨꾩궛
+        // Integer arithmetic for 2/3 split; remainder goes to burn
         return new long[]{poolShare, total - poolShare};
     }
 
@@ -68,7 +68,7 @@ public final class AmmCalculator {
         return new long[]{coinReserve - ammRevenue, shareReserve + qty};
     }
 
-    /** ?꾩옱 AMM 媛寃?(coinReserve / shareReserve) */
+    /** Current AMM spot price (coinReserve / shareReserve) */
     public static BigDecimal price(long coinReserve, long shareReserve) {
         if (shareReserve <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         return BigDecimal.valueOf(coinReserve)
@@ -99,7 +99,7 @@ public final class AmmCalculator {
         return new AmmResult(
             ammCost, fee[0], fee[1], userPays,
             newPool,
-            // Issue #9: userPays 湲곗??쇰줈 ?됯퇏媛 怨꾩궛 ??ammCost???섏닔猷??쒖쇅 湲덉븸?대씪 ?ㅼ젣 吏遺덉븸蹂대떎 1.5% ??쓬
+        // Issue #9: avgPrice is computed from userPays (not ammCost) because the 1.5% fee is included in what the user actually pays
             avgPrice(userPays, qty),
             price(newPool[0], newPool[1])
         );

@@ -71,10 +71,10 @@ public class AccountLinkService {
         userShareRepository.updateUserId(guestUid, googleUid);
         orderRepository.updateUserId(guestUid, googleUid);
 
-        // Issue #14: 寃뚯뒪?몄쓽 user_shares? orders???대? googleUid濡??댁쟾?먯쑝誘濡?寃뚯뒪??User ?덉퐫?쒕쭔 ??젣??(CASCADE ?놁쓬)
+        // Issue #14: migrate user_shares and orders to googleUid first, then delete guest User (no CASCADE)
         userRepository.deleteById(guestUid);
 
-        // 罹먯떆 臾댄슚?붾뒗 而ㅻ컠 ?꾩뿉 ?ㅽ뻾 ??而ㅻ컠 ??臾댄슚?????ㅻⅨ ?ㅻ젅?쒓? 援щ쾭?꾩쓣 ?ъ틦?깊븯??臾몄젣 諛⑹?
+        // Cache eviction runs after commit to avoid evicting before the transaction is visible to other threads
         registerAfterCommit(() -> {
             tradeEngine.evictUserCache(guestUid);
             tradeEngine.evictUserCache(googleUid);

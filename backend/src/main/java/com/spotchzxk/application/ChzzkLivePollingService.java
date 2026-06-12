@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
@@ -69,7 +69,7 @@ public class ChzzkLivePollingService {
             return;
         }
 
-        // Issue #15: CompletableFuture濡?蹂묐젹 API ?몄텧 ???쒖감 ?몄텧? 醫낅ぉ ??利앷? ???대쭅 媛꾧꺽 珥덇낵
+        // Issue #15: parallel API calls via CompletableFuture; live stocks polled first to minimize delay
         List<Stock> pollingOrder = stocks.stream()
                 .filter(stock -> !isEventStock(stock))
                 .sorted(Comparator.comparing(Stock::isLive).reversed())

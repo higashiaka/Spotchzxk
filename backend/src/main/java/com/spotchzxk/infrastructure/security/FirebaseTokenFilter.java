@@ -1,4 +1,4 @@
-package com.spotchzxk.infrastructure.security;
+﻿package com.spotchzxk.infrastructure.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -33,8 +33,8 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
     private final AccountLinkService accountLinkService;
 
-    // Issue #32: Caffeine TTL 罹먯떆濡?援먯껜 ??ConcurrentHashMap? JVM ?ъ떆???꾧퉴吏 臾댄븳 利앷?
-    // 30遺?TTL: 寃뚯뒪?멤넂?깅줉 ?꾪솚 ???ы솗?몄쓣 ?덉슜?섎㈃??硫붾え由??꾩닔 諛⑹?
+    // Issue #32: ConcurrentHashMap never expires; use Caffeine with TTL to avoid unbounded JVM heap growth
+    // 30-min TTL: guest accounts refresh frequently — shorter than session lifetime but sufficient to avoid hammering Firebase
     private final Cache<String, Boolean> checkedUids = Caffeine.newBuilder()
             .expireAfterWrite(30, TimeUnit.MINUTES)
             .build();

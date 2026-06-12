@@ -1,4 +1,4 @@
-package com.spotchzxk.domain.order.repository;
+﻿package com.spotchzxk.domain.order.repository;
 
 import com.spotchzxk.domain.order.entity.Order;
 import jakarta.persistence.LockModeType;
@@ -23,10 +23,10 @@ public interface OrderRepository extends JpaRepository<Order, String> {
 
     List<Order> findTop200ByStreamerIdOrderByCreatedAtDesc(String streamerId);
 
-    // 泥닿껐 ?댁뿭? 泥닿껐 ?쒓컖(executedAt) 湲곗? ?뺣젹 ??吏?뺢? 二쇰Ц???섏쨷??泥닿껐?쇰룄 ?щ컮瑜??쒖꽌濡??쒖떆??
+    // Sort by trade time (executedAt) when filled, fallback to created_at for pending limit orders
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND status = :status ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 200", nativeQuery = true)
     List<Order> findTop200ByStreamerIdAndStatusOrderByTradedAtDesc(@Param("streamerId") String streamerId, @Param("status") String status);
-    // 罹붾뱾 ?쒕퉬?ㅼ슜: COALESCE(executed_at, created_at)???ㅺ굅???쒓컖?쇰줈 ?ъ슜
+    // Fallback rationale: COALESCE(executed_at, created_at) gives a consistent timestamp column for both states
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) >= :fromMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
     List<Order> findByStreamerIdTradedAtGreaterThanEqual(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs);
 

@@ -32,7 +32,7 @@ public class ShopItemService {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
-        // Issue #16: API 紐낆꽭(nickname_ticket, stock_ticket)? ?대? ??nickname-change-ticket, stock-add-ticket) 紐⑤몢 ?덉슜
+        // Issue #16: accept both snake_case (nickname_ticket, stock_ticket) and kebab-case API aliases
         BigDecimal price = switch (item) {
             case "nickname-change-ticket", "nickname_ticket" -> NICKNAME_TICKET_PRICE;
             case "stock-add-ticket", "stock_ticket" -> STOCK_ADD_TICKET_PRICE;

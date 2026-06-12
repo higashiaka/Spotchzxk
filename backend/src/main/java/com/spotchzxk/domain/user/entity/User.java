@@ -1,4 +1,4 @@
-package com.spotchzxk.domain.user.entity;
+﻿package com.spotchzxk.domain.user.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -127,7 +127,7 @@ public class User {
         this.isBot = true;
     }
 
-    // Issue #33: DonationController??userRepository.addToBalance/addToDonationTotal??吏곸젒 ?몄텧 ????硫붿꽌?쒕뒗 誘몄궗??    @Deprecated
+    // Issue #33: DonationController calls userRepository directly; this method is kept for tests only
     public void addDonation(BigDecimal amount) {
         this.coinBalance = this.coinBalance.subtract(amount);
         this.donationTotal = this.donationTotal.add(amount);

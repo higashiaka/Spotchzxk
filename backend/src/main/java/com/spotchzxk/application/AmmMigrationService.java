@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
@@ -16,8 +16,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.List;
 
 /**
- * 踰좏? 留덉씠洹몃젅?댁뀡: 湲곗〈 醫낅ぉ??AMM ????꾩옱媛 湲곗??쇰줈 珥덇린??
- * 7??1???쒖쫵 由ъ뀑 ?꾩뿉???붾줈??湲곕컲 怨듭떇?쇰줈 ?泥대맖.
+ * One-time migration: initializes AMM pools for existing stocks using current price as seed.
+ * Runs at startup before July 1 launch; becomes a no-op once all stocks are migrated.
  */
 @Service
 @RequiredArgsConstructor
@@ -66,13 +66,13 @@ public class AmmMigrationService implements ApplicationRunner {
         int tier = calcLiquidityTier(stock.getFollowerCount());
         long tierReserve = calcTierShareReserve(stock.getFollowerCount());
 
-        // 湲곗〈 蹂댁쑀?됱쓽 2諛곗? ?곗뼱 湲곗? 以?????媛??ъ슜 (留ㅻ룄 ?뺣젰 媛먮떦)
+        // Use 2x current held quantity as share reserve floor (generous headroom for sells)
         long shareReserve = Math.max(totalHeld * 2, tierReserve);
         if (shareReserve < 100) shareReserve = 100; // 理쒖냼 蹂댁옣
         long coinReserve = currentPrice * shareReserve;
 
         stock.initAmmPool(coinReserve, shareReserve, tier);
-        // issuedShares媛 user_shares ?ㅻ낫?좊웾怨??щ씪吏????덉쑝誘濡?留덉씠洹몃젅?댁뀡 ???숆린??        stock.syncIssuedShares(totalHeld);
+        // issuedShares must match user_shares sum after migration, not the stale DB value
         stockRepository.save(stock);
         String channelId = stock.getChannelId();
         registerAfterCommit(() -> tradeEngine.evictStockCache(channelId));

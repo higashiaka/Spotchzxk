@@ -34,7 +34,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 public class TradeEngine {
 
-    // Issue #4: 珥덇린 ?붿븸 10,000,000?먯쑝濡??섏젙 (湲곗〈 1,000,000? 寃뚯엫 寃쎌젣 ?뚭눼 ?섏?)
+    // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to match megaphone/stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
 
     private final UserRepository userRepository;
@@ -72,7 +72,7 @@ public class TradeEngine {
                     if ("limit".equals(req.getOrderMode())) {
                         return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice());
                     }
-                    // Issue #5: ?щ━?쇱? 蹂댄샇 ?뚮씪誘명꽣瑜?executeMarketOrder???꾨떖
+        // Issue #5: pass slippage parameters directly to executeMarketOrder
                     return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
                             req.getMaxCoinIn(), req.getMinCoinOut());
                 } catch (RuntimeException e) {
@@ -150,8 +150,8 @@ public class TradeEngine {
         });
     }
 
-    // Issue #5: maxCoinIn/minCoinOut ?뚮씪誘명꽣 異붽?濡??щ━?쇱? 蹂댄샇 援ы쁽
-    // Issue #1: orderId瑜?誘몃━ ?앹꽦??persistTrade? ?묐떟?먯꽌 ?숈씪 ID ?ъ슜 (湲곗〈?먮뒗 2媛쒖쓽 UUID媛 ?앹꽦??
+        // Issue #5: validate slippage bounds (maxCoinIn / minCoinOut) before executing
+        // Issue #1: pre-generate orderId so persistTrade and the caller share one stable ID (previously two UUIDs were created)
     private TradeResponse executeMarketOrder(String userId, String channelId,
                                              boolean isBuy, long qty,
                                              BigDecimal fallbackPrice,
@@ -208,7 +208,7 @@ public class TradeEngine {
                 : currentPrice.compareTo(limitPrice) >= 0;
     }
 
-    // 吏?뺢? 泥닿껐 媛???щ? ?뺤씤 + AMM 怨꾩궛. ?щ━?쇱?媛 ?덉빟湲?珥덇낵?섎㈃ null 諛섑솚.
+        // Check whether current price is within limit; returns null if not yet executable
     private AmmCalculator.AmmResult calcAmmTradeForLimit(String channelId, boolean isBuy, long qty,
                                                           BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calculateAmmTrade(channelId, isBuy, qty);
@@ -520,7 +520,7 @@ public class TradeEngine {
         });
     }
 
-    // Issue #11: 媛?二쇰Ц 泥닿껐 ?ъ씠??理쒖떊 AMM 媛寃?濡쒕뱶 (罹먯떆???댁쟾 泥닿껐 吏곹썑 媛깆떊??
+        // Issue #11: re-evaluate AMM price after each fill so later orders see updated reserves
     private void processPendingLimitOrders(String channelId) {
         try {
             for (Order order : orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(channelId, "pending")) {
@@ -545,7 +545,7 @@ public class TradeEngine {
         }
     }
 
-    // Issue #2: AMM 怨꾩궛???몃옖??뀡 ?대??먯꽌 DB-fresh ? 湲곗??쇰줈 ?섑뻾 (湲곗〈 罹먯떆 湲곕컲 ?몃? 怨꾩궛? race condition ?좊컻)
+        // Issue #2: recalculate with DB-fresh reserves inside the transaction (cache may lag behind DB writes)
     private void executePendingLimitOrder(Order order) {
         boolean isBuy = "buy".equals(order.getType());
         long executedAt = System.currentTimeMillis();
@@ -561,7 +561,7 @@ public class TradeEngine {
             User user = userRepository.findById(freshOrder.getUserId())
                     .orElseThrow(() -> new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
 
-            // DB-fresh ?濡?AMM ?ш퀎??(罹먯떆? DB ?ъ씠 ?ㅻⅨ ?ㅻ젅??嫄곕옒濡?????щ씪吏????덉쓬)
+        // Recalculate AMM with DB-fresh reserves; cache may be stale after concurrent trades
             AmmCalculator.AmmResult amm = freshIsBuy
                     ? AmmCalculator.calcBuy(stock.getCoinReserve(), stock.getShareReserve(), freshOrder.getQuantity())
                     : AmmCalculator.calcSell(stock.getCoinReserve(), stock.getShareReserve(), freshOrder.getQuantity());
@@ -569,7 +569,7 @@ public class TradeEngine {
             BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
             BigDecimal reservation = freshOrder.getLimitPrice().multiply(BigDecimal.valueOf(freshOrder.getQuantity()));
 
-            // ?ш퀎?????щ━?쇱? ?ы솗??            if (freshIsBuy && userNet.compareTo(reservation) > 0) return;
+        // Skip if limit condition is no longer met after recalculation
             if (!freshIsBuy && userNet.compareTo(reservation) < 0) return;
 
             if (freshIsBuy) {

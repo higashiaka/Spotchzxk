@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.infrastructure.config.GuestAbuseProperties;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,7 +30,7 @@ public class GuestAbuseProtectionService {
 
     private final GuestAbuseProperties properties;
     private final StringRedisTemplate redisTemplate;
-    // Issue #22: Caffeine TTL 罹먯떆濡?援먯껜 ??ConcurrentHashMap? 留뚮즺 ??ぉ???먮룞 ?쒓굅?섏? ?딆븘 Redis ?μ븷 ??硫붾え由??꾩닔
+    // Issue #22: ConcurrentHashMap entries never expire, so use Caffeine with TTL instead of a plain map; Redis is the authoritative store
     private final Cache<String, LocalCounter> localCounters = Caffeine.newBuilder()
             .expireAfterAccess(1, TimeUnit.HOURS)
             .build();
@@ -109,7 +109,7 @@ public class GuestAbuseProtectionService {
 
     private AbuseCheckResult checkAndRecordLocally(String key) {
         long now = Instant.now().getEpochSecond();
-        // Issue #22: Caffeine 罹먯떆 ?ъ슜 ??get+put ???asMap().compute濡??먯옄??媛깆떊
+    // Issue #22: use asMap().compute() instead of get+put to keep Caffeine cache updates atomic
         LocalCounter counter = localCounters.asMap().compute(key, (counterKey, current) -> {
             if (current == null || current.expiresAt <= now) {
                 return new LocalCounter(1, now + properties.windowSeconds());

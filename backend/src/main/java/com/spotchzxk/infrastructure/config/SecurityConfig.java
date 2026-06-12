@@ -1,4 +1,4 @@
-package com.spotchzxk.infrastructure.config;
+﻿package com.spotchzxk.infrastructure.config;
 
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.infrastructure.security.FirebaseTokenFilter;
@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/guest/precheck").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-google").hasRole("GOOGLE")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
-                // Issue #27/#20: /api/admin/** ??Google ?몄쬆 ?꾩닔 ??anyRequest().authenticated()留뚯쑝濡쒕뒗 寃뚯뒪?몃룄 ?묎렐 媛??
+            // Issue #27/#20: /api/admin/** requires Google auth; anyRequest().authenticated() would allow guest tokens
                 .requestMatchers("/api/admin/**").hasRole("GOOGLE")
                 .anyRequest().authenticated()
             )

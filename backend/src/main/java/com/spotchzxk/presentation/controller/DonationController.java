@@ -37,7 +37,7 @@ public class DonationController {
             return ResponseEntity.badRequest().body(Map.of("error", "로그인이 필요합니다."));
         }
 
-        // Issue #29: body.get("amount")媛 null?대㈃ NullPointerException 諛쒖깮 ??紐낆떆??null 泥댄겕
+        // Issue #29: body.get("amount") can be null — explicit null check before casting to avoid NPE
         Object amountObj = body.get("amount");
         if (amountObj == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "금액을 올바르게 입력해주세요."));

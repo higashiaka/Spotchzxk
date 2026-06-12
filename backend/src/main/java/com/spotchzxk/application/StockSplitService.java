@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.entity.StockSplitEvent;
@@ -80,7 +80,7 @@ public class StockSplitService {
             orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
         }
         stockRepository.saveAll(targets);
-        // 罹먯떆 臾댄슚?붾뒗 而ㅻ컠 ?꾩뿉 ?ㅽ뻾 ???몃옖??뀡 ??臾댄슚?????ㅻⅨ ?ㅻ젅?쒓? 援щ쾭?꾩쓣 ?ъ틦?깊븯??臾몄젣 諛⑹?
+        // Evict caches after commit so other threads never read stale pre-split state
         registerAfterCommit(() -> {
             splitChannelIds.forEach(id -> {
                 tradeEngine.evictStockCache(id);

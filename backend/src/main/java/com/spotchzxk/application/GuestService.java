@@ -1,4 +1,4 @@
-package com.spotchzxk.application;
+﻿package com.spotchzxk.application;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
@@ -13,7 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GuestService {
 
-    // Issue #4: 珥덇린 ?붿븸 10,000,000??(湲곗〈 1,000,000? ?뺤꽦湲?醫낅ぉ異붽?沅?援щℓ 遺덇? ?섏?)
+    // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to accommodate megaphone and stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
 
     private final UserRepository userRepository;

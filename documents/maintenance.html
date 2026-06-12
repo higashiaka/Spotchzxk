@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>점검 중 - Spotchzxk</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #0f1117;
+      color: #f4f7fb;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    }
+
+    main {
+      max-width: 480px;
+      text-align: center;
+    }
+
+    .mark {
+      width: 56px;
+      height: 56px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #8bd3ff;
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin-bottom: 12px;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    p {
+      color: #aab4c3;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .time {
+      margin-top: 22px;
+      color: #768195;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">S</div>
+    <h1>서비스 점검 중입니다</h1>
+    <p>더 안정적인 이용을 위해 잠시 점검을 진행하고 있습니다.</p>
+    <p>잠시 후 다시 접속해 주세요.</p>
+    <p class="time" id="time"></p>
+  </main>
+  <script>
+    const el = document.getElementById('time');
+    // 예상 종료 시각을 표시하려면 아래 주석을 해제하고 시간을 수정하세요.
+    // const end = new Date('2026-01-01T03:00:00+09:00');
+    // if (end > new Date()) el.textContent = '예상 종료: ' + end.toLocaleString('ko-KR');
+  </script>
+</body>
+</html>

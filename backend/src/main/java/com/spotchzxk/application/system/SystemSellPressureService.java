@@ -1,4 +1,4 @@
-package com.spotchzxk.application.system;
+﻿package com.spotchzxk.application.system;
 
 import com.spotchzxk.presentation.dto.TradeRequest;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -315,7 +315,7 @@ public class SystemSellPressureService {
         return Math.max(0, Math.min(100, value));
     }
 
-    // Issue #12: volatile/AtomicInteger濡??꾨뱶 ?묎렐 ?덉쟾??蹂댁옣
+    // Issue #12: use volatile/AtomicInteger fields instead of a plain object to avoid visibility issues
     static class PressureState {
         volatile int startGainPercent;
         volatile int stopGainPercent;

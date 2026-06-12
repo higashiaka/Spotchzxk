@@ -78,7 +78,7 @@ public class StockService {
                 .listedAt(java.time.LocalDateTime.now())
                 .build();
 
-        // Issue #21: Chzzk API ?몄텧? ?좉툑 ?대?????踰덉㎏ existsById 寃???댄썑濡??대룞 (TOCTOU)
+        // Issue #21: wrap addStock in a user lock to prevent TOCTOU between existsById check and insert
         AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
         tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
                 addStockIfNewLocked(userId, channelId, stock))));
@@ -93,7 +93,7 @@ public class StockService {
             return Optional.empty();
         }
 
-        // Issue #21: Chzzk API????踰덉㎏ existsById ?댄썑 ???대? ?깅줉??梨꾨꼸???ㅽ듃?뚰겕 ?붿껌????퉬?섏? ?딆쓬
+        // Issue #21: re-fetch channel info inside the lock; swallow nothing — let ChannelNotFoundException propagate
         if (!chzzkApiClient.populateChannelInfo(stock)) {
             throw new ChannelNotFoundException(channelId);
         }

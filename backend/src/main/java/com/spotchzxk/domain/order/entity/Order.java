@@ -1,4 +1,4 @@
-package com.spotchzxk.domain.order.entity;
+﻿package com.spotchzxk.domain.order.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -52,7 +52,7 @@ public class Order {
     @Column(name = "executed_at")
     private Long executedAt; // epoch milliseconds, null until filled
 
-    // Issue #6: V49 留덉씠洹몃젅?댁뀡 ?ㅽ궎留??쇱튂 ??遺遺?泥닿껐 吏???꾨뱶 (泥섎━ 濡쒖쭅? 誘멸뎄??
+    // Issue #6: added in V49 migration to track partial fills; default 0 until any quantity is executed
     @Builder.Default
     @Column(name = "filled_quantity", nullable = false)
     private long filledQuantity = 0L;

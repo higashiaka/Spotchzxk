@@ -1,4 +1,4 @@
-package com.spotchzxk.presentation.dto;
+﻿package com.spotchzxk.presentation.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.*;
@@ -10,7 +10,7 @@ import java.math.BigDecimal;
 @Getter @Setter
 public class TradeRequest {
 
-    // Issue #3: ?대씪?댁뼵??JSON?먯꽌 userId ??쭅?ы솕 李⑤떒 ??而⑦듃濡ㅻ윭?먯꽌 SecurityContext 媛믪쑝濡쒕쭔 ?ㅼ젙
+    // Issue #3: userId must not come from the JSON body; always resolved from SecurityContext to prevent spoofing
     @JsonIgnore
     private String userId;
 
@@ -34,15 +34,15 @@ public class TradeRequest {
     @DecimalMin("0.01")
     private BigDecimal limitPrice;
 
-    /** 留ㅼ닔 ?щ━?쇱? 蹂댄샇: ??湲덉븸 珥덇낵 ??泥닿껐 嫄곕? (null = 臾댁젣?? */
+    /** Buy slippage guard: max coins to spend; order is rejected if actual cost exceeds this (null = no limit) */
     @Min(1)
     private Long maxCoinIn;
 
-    /** 留ㅻ룄 ?щ━?쇱? 蹂댄샇: ??湲덉븸 誘몃쭔 ??泥닿껐 嫄곕? (null = 臾댁젣?? */
+    /** Sell slippage guard: min coins to receive; order is rejected if proceeds fall below this (null = no limit) */
     @Min(1)
     private Long minCoinOut;
 
-    /** 遺遺?泥닿껐 ?덉슜 ?щ? (吏?뺢? ?꾩슜) */
+    /** Allow partial fill (limit orders only) */
     private boolean allowPartial = false;
 }
 
