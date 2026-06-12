@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
-import { fmt, fmtCompact, changePct, priceColor, avatarColor, grade } from '../../utils';
+import { fmt, fmtCompact, changePct, priceColor, avatarColor, grade, fmtPct } from '../../utils';
 import { Ticker } from '../Ticker';
 import { useVisibleMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
@@ -115,7 +115,7 @@ export const HomeView = ({
               </button>
               <p className="text-sm font-bold mt-1" style={{ color: priceColor(holdingsPnLPct) }}>
                 {holdingsPnL >= 0 ? '+' : ''}{fmt(holdingsPnL)}&nbsp;
-                ({holdingsPnLPct >= 0 ? '+' : ''}{holdingsPnLPct.toFixed(2)}%)
+                ({fmtPct(holdingsPnLPct)})
                 <span className="ml-1 font-normal" style={{ color: 'var(--text-dim)' }}>매입 대비</span>
               </p>
               {userGrade && (
@@ -160,7 +160,7 @@ export const HomeView = ({
                     <div className="text-right shrink-0">
                       <p className="font-mono font-bold text-sm text-white">{fmt(value)}</p>
                       <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(pct) }}>
-                        {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                        {fmtPct(pct)}
                       </p>
                     </div>
                   </div>
@@ -183,7 +183,7 @@ export const HomeView = ({
         <div style={{ borderBottom: sectionBorder }}>
           {([
             { label: '주문내역', value: `총 ${history.length}건`, sub: '자세히', action: () => setShowOrderHistory(true) },
-            { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmt(holdingsPnL)}` : fmt(holdingsPnL), sub: `${holdingsPnLPct >= 0 ? '+' : ''}${holdingsPnLPct.toFixed(2)}%` },
+            { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmt(holdingsPnL)}` : fmt(holdingsPnL), sub: fmtPct(holdingsPnLPct) },
             { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
             <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
@@ -211,7 +211,7 @@ export const HomeView = ({
                       className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-white">{s.name}</span>
                       <span className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
-                        {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                        {fmtPct(pct, 1)}
                       </span>
                     </button>
                     {/* Remove from recently viewed */}
@@ -308,7 +308,7 @@ export const HomeView = ({
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold" style={{ color: priceColor(pct) }}>
-                      {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                      {fmtPct(pct)}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                       {fmtCompact(s.totalVolume)}

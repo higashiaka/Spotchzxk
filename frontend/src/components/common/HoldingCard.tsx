@@ -1,5 +1,5 @@
 import { Stock } from '../../hooks/useStocks';
-import { fmt, priceColorClass, avatarColorClass } from '../../utils';
+import { fmt, priceColorClass, avatarColorClass, fmtPct } from '../../utils';
 
 /** Holding position card component.
  *  Renders either compact (single-row list) or detail (card box) layout based on variant */
@@ -44,7 +44,7 @@ export const HoldingCard = ({
           <div className="text-right">
             <p className="font-bold text-sm font-mono text-white">{fmt(streamer.price)}</p>
             <p className={`text-xs font-bold mt-1 ${priceColorClass(pct)}`}>
-              {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+              {fmtPct(pct)}
             </p>
           </div>
         </div>

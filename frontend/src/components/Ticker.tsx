@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { Stock } from '../hooks/useStocks';
 import { LiveTrade } from '../types';
-import { changePct, priceColorClass } from '../utils';
+import { changePct, priceColorClass, fmtPct } from '../utils';
 
 /** Horizontal infinite-scroll ticker at the top of the screen.
  *  Prioritizes recently traded stocks, falling back to volume/change-sorted stocks
@@ -51,7 +51,7 @@ export const Ticker = ({ streamers, liveTrades }: { streamers: Stock[]; liveTrad
             <span key={i} className="inline-flex items-center gap-1.5 px-4">
               <span className="text-xs font-bold text-secondary-token">{s.name}</span>
               <span className={`text-xs font-bold font-mono ${priceColorClass(pct)}`}>
-                {pct >= 0 ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+                {pct >= 0 ? '▲' : '▼'} {fmtPct(Math.abs(pct)).replace(/^\+/, '')}
               </span>
               <span className="text-xs text-[var(--border-secondary)]">|</span>
             </span>

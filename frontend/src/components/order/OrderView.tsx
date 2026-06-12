@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
-import { changePct, priceColorClass, fmt, fmtCompact } from '../../utils';
+import { changePct, priceColorClass, fmt, fmtCompact, fmtPct } from '../../utils';
 import { OrderForm } from './OrderForm';
 
 /** Order screen component.
@@ -98,7 +98,7 @@ export const OrderView = ({
               <div className="text-right ml-3 shrink-0">
                 <p className={`font-mono font-bold text-sm ${priceColorClass(pct)}`}>{fmt(s.price)}</p>
                 <p className={`text-xs font-bold mt-0.5 ${priceColorClass(pct)}`}>
-                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                  {fmtPct(pct, 1)}
                 </p>
               </div>
             </div>

@@ -7,7 +7,7 @@ import { usePortfolio } from '../../hooks/usePortfolio';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { apiFetch } from '../../lib/api';
 import { LiveTrade } from '../../types';
-import { avatarColor, fmt, fmtCompact, changePct, priceColor } from '../../utils';
+import { avatarColor, fmt, fmtCompact, changePct, priceColor, fmtPct } from '../../utils';
 import { InteractiveChart } from '../chart/InteractiveChart';
 import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
@@ -276,7 +276,7 @@ export const StockDetail = ({
               {fmt(currentPrice)}
             </span>
             <span className="text-sm md:text-lg font-bold" style={{ color: priceColor(pct) }}>
-              {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+              {fmtPct(pct)}
             </span>
             {direction !== 'none' && (
               <span className="text-xs md:text-sm" style={{ color: priceColor(pct) }}>
@@ -398,7 +398,7 @@ export const StockDetail = ({
                     {holdingPnL >= 0 ? '+' : ''}{fmt(holdingPnL)}
                   </p>
                   <p className="text-xs font-bold mt-0.5" style={{ color: priceColor(holdingPnLPct) }}>
-                    {holdingPnLPct >= 0 ? '+' : ''}{holdingPnLPct.toFixed(2)}%
+                    {fmtPct(holdingPnLPct)}
                   </p>
                 </div>
               </div>
@@ -413,7 +413,7 @@ export const StockDetail = ({
             <div className="rounded-xl border p-3 md:p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
               <p className="text-xs md:text-sm" style={{ color: 'var(--text-muted)' }}>시초가 대비</p>
               <p className="font-bold font-mono mt-1 md:text-lg" style={{ color: priceColor(pct) }}>
-                {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
+                {fmtPct(pct)}
               </p>
             </div>
           </div>

@@ -4,7 +4,7 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { avatarColor, fmt, changePct, priceColorClass, tradeColorClass } from '../../utils';
+import { avatarColor, fmt, changePct, priceColorClass, tradeColorClass, fmtPct } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 

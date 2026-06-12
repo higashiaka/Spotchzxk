@@ -7,8 +7,10 @@ export const fmt = (value: number): string => {
   return `${Math.round(value).toLocaleString('ko-KR')}원`;
 };
 
-/** Abbreviates large numbers with K/M suffix (e.g. 1,200 → 1.2K) */
+/** Abbreviates large numbers with K/M/B/T suffix (e.g. 1,200 → 1.2K) */
 export const fmtCompact = (n: number): string => {
+  if (n >= 1_000_000_000_000) return `${(n / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`;
   return String(n);
@@ -17,19 +19,21 @@ export const fmtCompact = (n: number): string => {
 /** Abbreviates large KRW amounts with Korean-style short units (e.g. 140,000,000 KRW → "1.4 hundred million") */
 export const fmtCompactWon = (value: number): string => {
   const rounded = Math.round(value);
-  if (Math.abs(rounded) >= 100_000_000) {
-    return `${(rounded / 100_000_000).toFixed(1).replace(/\.0$/, '')}억`;
-  }
-  if (Math.abs(rounded) >= 10_000) {
-    return `${(rounded / 10_000).toFixed(1).replace(/\.0$/, '')}만`;
-  }
+  const abs = Math.abs(rounded);
+  if (abs >= 1e20) return `${(rounded / 1e20).toFixed(1).replace(/\.0$/, '')}해`;
+  if (abs >= 1e16) return `${(rounded / 1e16).toFixed(1).replace(/\.0$/, '')}경`;
+  if (abs >= 1_000_000_000_000) return `${(rounded / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}조`;
+  if (abs >= 100_000_000) return `${(rounded / 100_000_000).toFixed(1).replace(/\.0$/, '')}억`;
+  if (abs >= 10_000) return `${(rounded / 10_000).toFixed(1).replace(/\.0$/, '')}만`;
   return fmt(rounded);
 };
 
-/** Formats a KRW amount with Korean units: 조 / 억 / 천만 / 만 (e.g. 123,456,789 → "1.23억원") */
+/** Formats a KRW amount with Korean units: 해 / 경 / 조 / 억 / 천만 / 만 (e.g. 123,456,789 → "1.23억원") */
 export const fmtKorean = (value: number): string => {
   const abs = Math.abs(Math.round(value));
   const trim = (s: string) => s.replace(/\.?0+$/, '');
+  if (abs >= 1e20)              return `${trim((value / 1e20).toFixed(2))}해원`;
+  if (abs >= 1e16)              return `${trim((value / 1e16).toFixed(2))}경원`;
   if (abs >= 1_000_000_000_000) return `${trim((value / 1_000_000_000_000).toFixed(2))}조원`;
   if (abs >= 100_000_000)       return `${trim((value / 100_000_000).toFixed(2))}억원`;
   if (abs >= 10_000_000)        return `${trim((value / 10_000_000).toFixed(2))}천만원`;
@@ -40,6 +44,19 @@ export const fmtKorean = (value: number): string => {
 /** Calculates percentage return relative to the base price */
 export const changePct = (price: number, basePrice: number = BASE_PRICE) =>
   ((price - basePrice) / basePrice) * 100;
+
+/** Formats a percentage with sign and abbreviation for large values */
+export const fmtPct = (pct: number, decimals: number = 2): string => {
+  const sign = pct >= 0 ? '+' : '';
+  const abs = Math.abs(pct);
+  const trim = (s: string) => s.replace(/\.?0+$/, '');
+  if (abs >= 1e20)              return `${sign}${trim((pct / 1e20).toFixed(2))}해%`;
+  if (abs >= 1e16)              return `${sign}${trim((pct / 1e16).toFixed(2))}경%`;
+  if (abs >= 1_000_000_000_000) return `${sign}${trim((pct / 1_000_000_000_000).toFixed(2))}조%`;
+  if (abs >= 100_000_000)       return `${sign}${trim((pct / 100_000_000).toFixed(2))}억%`;
+  if (abs >= 10_000)            return `${sign}${trim((pct / 10_000).toFixed(2))}만%`;
+  return `${sign}${pct.toFixed(decimals)}%`;
+};
 
 /** Returns LoL-style tier label and color based on relative rank among all users */
 export const grade = (rank: number, total: number): { label: string; color: string } => {

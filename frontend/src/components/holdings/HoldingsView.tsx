@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
-import { fmt, priceColor, avatarColor } from '../../utils';
+import { fmt, priceColor, avatarColor, fmtPct } from '../../utils';
 import { useHoldings } from '../../hooks/useHoldings';
 import { OrderHistory } from '../../hooks/useTransactionHistory';
 
@@ -129,7 +129,7 @@ export const HoldingsView = ({
               color: priceColor(totalPnLPct),
             }}
           >
-            {totalPnLPct >= 0 ? '+' : ''}{totalPnLPct.toFixed(2)}%
+            {fmtPct(totalPnLPct)}
           </span>
           <span className="text-xs" style={{ color: 'var(--text-dim)' }}>매입 대비</span>
         </div>
@@ -232,7 +232,7 @@ export const HoldingsView = ({
                   <p className="text-xs font-bold font-mono" style={{ color: priceColor(pct) }}>
                     {pnlTotal >= 0 ? '+' : ''}{fmt(pnlTotal)}&nbsp;
                     <span className="font-normal">
-                      ({pct >= 0 ? '+' : ''}{pct.toFixed(2)}%)
+                      ({fmtPct(pct)})
                     </span>
                   </p>
                 </div>

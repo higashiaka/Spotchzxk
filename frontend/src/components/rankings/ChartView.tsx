@@ -1,6 +1,6 @@
 import { UIEvent, useEffect, useMemo, useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
-import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor } from '../../utils';
+import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor, fmtPct } from '../../utils';
 
 /** Category types selectable in the chart screen */
 type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
@@ -259,7 +259,7 @@ export const ChartView = ({
                 {category !== 'dividend' && (
                   <div className="w-16 md:w-24 text-right shrink-0">
                     <p className="text-xs md:text-base font-bold" style={{ color: priceColor(pct) }}>
-                      {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                      {fmtPct(pct, 1)}
                     </p>
                   </div>
                 )}

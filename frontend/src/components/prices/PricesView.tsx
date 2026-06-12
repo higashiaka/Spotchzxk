@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { LiveTrade } from '../../types';
-import { changePct, priceColor, avatarColor, fmt } from '../../utils';
+import { changePct, priceColor, avatarColor, fmt, fmtPct } from '../../utils';
 import { StockDetail } from './StockDetail';
 
 /** Prices screen component.
@@ -122,7 +122,7 @@ export const PricesView = ({
               </div>
               <div className="w-16 text-right">
                 <p className="text-xs font-bold" style={{ color: priceColor(pct) }}>
-                  {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                  {fmtPct(pct, 1)}
                 </p>
               </div>
             </div>
