@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { fetchStock, fetchAllStocks } from '@/lib/serverApi';
+import { fetchStock } from '@/lib/serverApi';
 import { StockDetailPage } from '@/components/stocks/StockDetailPage';
 import { fmt, changePct, priceColor } from '@/utils';
 
@@ -30,11 +30,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: stock.profileImageUrl ? [stock.profileImageUrl] : [],
     },
   };
-}
-
-export async function generateStaticParams() {
-  const stocks = await fetchAllStocks();
-  return stocks.map(s => ({ id: s.id }));
 }
 
 export default async function StockPage({ params }: Props) {
