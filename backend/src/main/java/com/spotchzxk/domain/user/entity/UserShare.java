@@ -52,6 +52,9 @@ public class UserShare {
 
     public void updateOnSell(long newQuantity) {
         this.quantity = newQuantity;
+        if (this.preStreamQuantity > newQuantity) {
+            this.preStreamQuantity = newQuantity;
+        }
     }
 
 }
