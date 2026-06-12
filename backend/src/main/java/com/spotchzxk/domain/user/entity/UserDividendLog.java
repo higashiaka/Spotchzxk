@@ -33,10 +33,10 @@ public class UserDividendLog {
     @Column(nullable = false)
     private long quantity;
 
-    @Column(nullable = false, precision = 20, scale = 4)
+    @Column(nullable = false, precision = 65, scale = 4)
     private BigDecimal ratePerShare;
 
-    @Column(nullable = false, precision = 20, scale = 2)
+    @Column(nullable = false, precision = 65, scale = 2)
     private BigDecimal amount;
 
     @Column

@@ -26,10 +26,10 @@ public class Stock {
     private String profileImageUrl;
 
     @Column
-    private int followerCount;
+    private long followerCount;
 
     @Column
-    private int baseBroadcastHours;
+    private long baseBroadcastHours;
 
     @Column(nullable = false)
     private long totalSupply;
@@ -74,8 +74,8 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long feePool;
 
-    @Column(nullable = false, columnDefinition = "INT DEFAULT 1")
-    private int liquidityTier;
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 1")
+    private long liquidityTier;
 
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -135,7 +135,7 @@ public class Stock {
         this.profileImageUrl = profileImageUrl;
     }
 
-    public void updateFollowerCount(int followerCount) {
+    public void updateFollowerCount(long followerCount) {
         this.followerCount = followerCount;
     }
 
@@ -147,7 +147,7 @@ public class Stock {
         this.issuedShares = 0;
     }
 
-    public void initAmmPool(long coinReserve, long shareReserve, int liquidityTier) {
+    public void initAmmPool(long coinReserve, long shareReserve, long liquidityTier) {
         this.coinReserve = coinReserve;
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;

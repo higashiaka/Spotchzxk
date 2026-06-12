@@ -72,7 +72,7 @@ public class ChzzkApiClient {
                 stock.updateProfileImageUrl(data.get("channelImageUrl").asText());
             }
             if (data.has("followerCount")) {
-                stock.updateFollowerCount(data.get("followerCount").asInt());
+                stock.updateFollowerCount(data.get("followerCount").asLong());
             }
             return true;
         } catch (Exception e) {

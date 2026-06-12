@@ -28,10 +28,10 @@ public class Order {
     @Column(nullable = false)
     private long quantity;
 
-    @Column(name = "estimated_price", nullable = false, precision = 20, scale = 2)
+    @Column(name = "estimated_price", nullable = false, precision = 65, scale = 2)
     private BigDecimal estimatedPrice;
 
-    @Column(name = "executed_price", precision = 20, scale = 2)
+    @Column(name = "executed_price", precision = 65, scale = 2)
     private BigDecimal executedPrice;
 
     @Column(nullable = false, length = 20)
@@ -43,7 +43,7 @@ public class Order {
     private String orderMode = "market";
 
     /** Limit price (set only for limit orders) */
-    @Column(name = "limit_price", precision = 20, scale = 2)
+    @Column(name = "limit_price", precision = 65, scale = 2)
     private BigDecimal limitPrice;
 
     @Column(name = "created_at", nullable = false)

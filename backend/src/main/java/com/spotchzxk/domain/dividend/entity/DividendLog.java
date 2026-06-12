@@ -23,7 +23,7 @@ public class DividendLog {
     @JoinColumn(name = "channel_id")
     private Stock stock;
 
-    @Column(nullable = false, precision = 20, scale = 2)
+    @Column(nullable = false, precision = 65, scale = 2)
     private BigDecimal totalDividendPool;
 
     @Column

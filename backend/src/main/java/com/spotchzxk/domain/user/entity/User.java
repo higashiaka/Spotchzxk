@@ -18,13 +18,13 @@ public class User {
     @Column(length = 128)
     private String id;
 
-    @Column(nullable = false, precision = 20, scale = 2)
+    @Column(nullable = false, precision = 65, scale = 2)
     private BigDecimal coinBalance;
 
     @Column(name = "display_name", length = 20)
     private String displayName;
 
-    @Column(name = "realized_profit", nullable = false, precision = 20, scale = 2)
+    @Column(name = "realized_profit", nullable = false, precision = 65, scale = 2)
     @Builder.Default
     private BigDecimal realizedProfit = BigDecimal.ZERO;
 
@@ -34,24 +34,24 @@ public class User {
 
     @Column(name = "nickname_change_tickets", nullable = false)
     @Builder.Default
-    private int nicknameChangeTickets = 0;
+    private long nicknameChangeTickets = 0;
 
     @Column(name = "stock_add_tickets", nullable = false)
     @Builder.Default
-    private int stockAddTickets = 0;
+    private long stockAddTickets = 0;
 
     @Column(nullable = false)
     @Builder.Default
-    private int resetCount = 0;
+    private long resetCount = 0;
 
     @Column(nullable = true)
     private LocalDate lastResetDate;
 
-    @Column(nullable = false, precision = 20, scale = 2)
+    @Column(nullable = false, precision = 65, scale = 2)
     @Builder.Default
     private BigDecimal dividendTotal = BigDecimal.ZERO;
 
-    @Column(name = "donation_total", nullable = false, precision = 20, scale = 2)
+    @Column(name = "donation_total", nullable = false, precision = 65, scale = 2)
     @Builder.Default
     private BigDecimal donationTotal = BigDecimal.ZERO;
 
