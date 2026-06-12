@@ -91,11 +91,11 @@ public class AmmMigrationService implements ApplicationRunner {
     }
 
     public static long calcTierShareReserve(long followerCount) {
-        if (followerCount < 2_000)     return 8_000L;
-        if (followerCount < 20_000)    return 12_000L;
-        if (followerCount < 200_000)   return 18_000L;
-        if (followerCount < 1_000_000) return 30_000L;
-        return 80_000L;
+        if (followerCount < 2_000)     return 50_000L;
+        if (followerCount < 20_000)    return 100_000L;
+        if (followerCount < 200_000)   return 200_000L;
+        if (followerCount < 1_000_000) return 400_000L;
+        return 800_000L;
     }
 
     private void registerAfterCommit(Runnable task) {
