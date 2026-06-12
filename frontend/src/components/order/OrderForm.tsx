@@ -4,11 +4,10 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { avatarColor, fmt, changePct, priceColorClass, tradeColorClass, fmtPct } from '../../utils';
+import { avatarColor, fmt, fmtBigInt, changePct, priceColorClass, tradeColorClass } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
-const FEE_RATE = 0.015;
 const FEE_RATE_NUMERATOR = 15n;
 const FEE_RATE_DENOMINATOR = 1000n;
 
@@ -27,15 +26,10 @@ const ceilDiv = (num: bigint, den: bigint): bigint => {
   return num % den > 0n ? q + 1n : q;
 };
 
-const toDisplayNumber = (value: bigint): number => {
-  const max = BigInt(Number.MAX_SAFE_INTEGER);
-  return Number(value > max ? max : value);
-};
-
-const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): number => {
-  if (currentPrice <= 0 || quantity <= 0) return 0;
-  const gross = currentPrice * quantity;
-  const fee = Math.ceil(gross * FEE_RATE);
+const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): bigint => {
+  if (currentPrice <= 0 || quantity <= 0) return 0n;
+  const gross = BigInt(Math.round(currentPrice)) * BigInt(quantity);
+  const fee = ceilDiv(gross * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
   return isBuy ? gross + fee : gross - fee;
 };
 
@@ -45,20 +39,19 @@ const ammTradeAmount = (
   shareReserve: bigint | undefined,
   isBuy: boolean,
   quantity: number,
-): number => {
-  if (quantity <= 0) return 0;
+): bigint => {
+  if (quantity <= 0) return 0n;
   if (!coinReserve || !shareReserve) {
     return fallbackTradeAmount(currentPrice, isBuy, quantity);
   }
   const qty = BigInt(quantity);
-  if (isBuy && qty >= shareReserve) return Number.POSITIVE_INFINITY;
+  if (isBuy && qty >= shareReserve) return BigInt(Number.MAX_SAFE_INTEGER) * 1000n;
 
   const ammAmount = isBuy
     ? ceilDiv(coinReserve * qty, shareReserve - qty)
     : (coinReserve * qty) / (shareReserve + qty);
   const fee = ceilDiv(ammAmount * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
-  const net = isBuy ? ammAmount + fee : ammAmount - fee;
-  return toDisplayNumber(net);
+  return isBuy ? ammAmount + fee : ammAmount - fee;
 };
 
 const averageAmmPrice = (
@@ -68,9 +61,9 @@ const averageAmmPrice = (
   isBuy: boolean,
   quantity: number,
 ): number => {
+  if (quantity <= 0) return 0;
   const userNetAmount = ammTradeAmount(currentPrice, coinReserve, shareReserve, isBuy, quantity);
-  if (!Number.isFinite(userNetAmount) || quantity <= 0) return userNetAmount;
-  return Math.max(1, Math.round(userNetAmount / quantity));
+  return Math.max(1, Number(userNetAmount / BigInt(quantity)));
 };
 
 const maxAffordableMarketBuyQuantity = (
@@ -86,10 +79,11 @@ const maxAffordableMarketBuyQuantity = (
     const poolMax = shareReserve - 1n;
     if (poolMax < BigInt(high)) high = Number(poolMax);
   }
+  const balanceBigInt = BigInt(Math.floor(balance));
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
     const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
-    if (cost <= balance) {
+    if (cost <= balanceBigInt) {
       low = mid;
     } else {
       high = mid - 1;
@@ -137,13 +131,14 @@ export const OrderForm = ({
     qty,
   );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
-  const limitGrossAmount = estimatedExecutionPrice * qty;
-  const limitFee = Math.ceil(limitGrossAmount * FEE_RATE);
+  const limitGrossAmount = BigInt(estimatedExecutionPrice) * BigInt(qty);
+  const limitFee = ceilDiv(limitGrossAmount * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
 
-  const totalCost = orderMode === 'market'
+  const totalCost: bigint = orderMode === 'market'
     ? marketExecutionAmount
-    : orderType === 'buy' ? limitGrossAmount + limitFee : Math.max(0, limitGrossAmount - limitFee);
-  const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
+    : orderType === 'buy' ? limitGrossAmount + limitFee : limitGrossAmount > limitFee ? limitGrossAmount - limitFee : 0n;
+  const balanceBigInt = BigInt(Math.floor(balance));
+  const postBalance: bigint = orderType === 'buy' ? balanceBigInt - totalCost : balanceBigInt + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
   const maxBuy = orderMode === 'market'
@@ -156,7 +151,7 @@ export const OrderForm = ({
     setQtyStr(String(Math.max(1, Math.floor(max * ratio))));
   };
 
-  const canBuy = !!user && qty > 0 && balance >= totalCost;
+  const canBuy = !!user && qty > 0 && balanceBigInt >= totalCost;
   const canSell = !!user && qty > 0 && held >= qty;
   const hasValidLimit = orderMode === 'market' || limitPrice > 0;
   const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
@@ -177,7 +172,7 @@ export const OrderForm = ({
       quantity: qty,
       estimatedPrice: currentPrice,
       estimatedExecutionPrice,
-      estimatedTotalAmount: totalCost,
+      estimatedTotalAmount: Number(totalCost),
       orderMode,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
     });
@@ -281,12 +276,12 @@ export const OrderForm = ({
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs text-[var(--text-muted)]">주문 총액</span>
           <span className={`font-mono text-lg font-extrabold ${tradeColorClass(orderType)}`}>
-            {fmt(totalCost)}
+            {fmtBigInt(totalCost)}
           </span>
         </div>
         <div className="flex justify-between items-center mb-1">
           <span className="text-xs text-[var(--text-muted)]">주문 후 예상 잔액</span>
-          <span className="text-xs font-mono font-bold text-white">{fmt(Math.max(0, postBalance))}</span>
+          <span className="text-xs font-mono font-bold text-white">{fmtBigInt(postBalance > 0n ? postBalance : 0n)}</span>
         </div>
         {orderType === 'sell' && (
           <div className="flex justify-between items-center">
@@ -296,7 +291,7 @@ export const OrderForm = ({
         )}
       </div>
 
-      {orderType === 'buy' && !!user && qty > 0 && balance < totalCost && (
+      {orderType === 'buy' && !!user && qty > 0 && balanceBigInt < totalCost && (
         <p className="text-xs text-center mb-3 text-[#FF5252]">
           잔고가 부족합니다 (보유: {fmt(balance)})
         </p>

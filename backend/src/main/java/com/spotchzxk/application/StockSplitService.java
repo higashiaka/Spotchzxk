@@ -9,7 +9,6 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
-import com.spotchzxk.application.system.SystemSellPressureService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -46,7 +45,6 @@ public class StockSplitService {
     private final SimpMessagingTemplate messagingTemplate;
     private final TradeEngine tradeEngine;
     private final CandleService candleService;
-    private final SystemSellPressureService systemSellPressureService;
 
     @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
     @Transactional
@@ -85,7 +83,6 @@ public class StockSplitService {
             splitChannelIds.forEach(id -> {
                 tradeEngine.evictStockCache(id);
                 candleService.evictStockCache(id);
-                systemSellPressureService.evictStockState(id);
             });
             tradeEngine.evictAllPortfolioCaches();
         });

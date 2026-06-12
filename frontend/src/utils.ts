@@ -7,6 +7,11 @@ export const fmt = (value: number): string => {
   return `${Math.round(value).toLocaleString('ko-KR')}원`;
 };
 
+/** Formats a bigint as Korean KRW string, safe for values above Number.MAX_SAFE_INTEGER */
+export const fmtBigInt = (value: bigint): string => {
+  return `${value.toLocaleString('ko-KR')}원`;
+};
+
 /** Abbreviates large numbers with K/M/B/T suffix (e.g. 1,200 → 1.2K) */
 export const fmtCompact = (n: number): string => {
   if (n >= 1_000_000_000_000) return `${(n / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;
