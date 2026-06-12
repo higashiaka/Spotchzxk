@@ -25,7 +25,6 @@ public class TradeRequest {
     private long quantity;
 
     @NotNull
-    @DecimalMin("0.01")
     private BigDecimal estimatedPrice;
 
     @Pattern(regexp = "market|limit")
