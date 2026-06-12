@@ -5,7 +5,7 @@ spring:
     password: wjsrhd47!
 
 app:
-  cors-origin: http://localhost:5173
+  cors-origin: http://localhost:5173,http://localhost:3000
   admin-api-key: local-admin-key
   firebase:
     service-account-path: serviceAccountKey.json

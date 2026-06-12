@@ -23,7 +23,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Value("${app.cors-origin}")
-    private String corsOrigin;
+    private String corsOriginRaw;
 
     @Bean
     public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService) {
@@ -54,7 +54,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(corsOrigin));
+        config.setAllowedOrigins(List.of(corsOriginRaw.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
