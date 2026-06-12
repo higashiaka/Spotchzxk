@@ -22,8 +22,6 @@ import java.util.concurrent.atomic.AtomicReference;
 public class DonationController {
 
     private static final BigDecimal MIN_DONATION = BigDecimal.valueOf(1_000);
-    private static final BigDecimal MAX_DONATION = BigDecimal.valueOf(100_000_000);
-
     private final PortfolioService portfolioService;
     private final UserRepository userRepository;
     private final TradeEngine tradeEngine;
@@ -52,10 +50,6 @@ public class DonationController {
         if (amount.compareTo(MIN_DONATION) < 0) {
             return ResponseEntity.badRequest().body(Map.of("error", "최소 후원 금액은 1,000원입니다."));
         }
-        if (amount.compareTo(MAX_DONATION) > 0) {
-            return ResponseEntity.badRequest().body(Map.of("error", "최대 후원 금액은 1억원입니다."));
-        }
-
         AtomicReference<Map<String, Object>> result = new AtomicReference<>();
         final BigDecimal finalAmount = amount;
         try {

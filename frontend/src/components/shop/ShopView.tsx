@@ -192,10 +192,15 @@ function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId
   const [pending, setPending] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
+  const minDonation = 1_000;
   const parsedAmount = parseInt(amount.replace(/,/g, '') || '0', 10);
-  const isValid = parsedAmount >= 1_000 && parsedAmount <= balance;
+  const isValid = parsedAmount >= minDonation && parsedAmount <= balance;
 
-  const presets = [10_000, 100_000, 1_000_000, 10_000_000];
+  const presets = [10, 25, 50, 100];
+
+  function amountFromPercent(percent: number) {
+    return Math.floor(balance * (percent / 100));
+  }
 
   function handleAmountChange(raw: string) {
     const digits = raw.replace(/[^0-9]/g, '');
@@ -251,22 +256,25 @@ function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        {presets.map((p) => (
-          <button
-            key={p}
-            type="button"
-            disabled={!isLoggedIn}
-            onClick={() => { setAmount(p.toLocaleString('ko-KR')); setError(''); setSuccessMsg(''); }}
-            className="h-9 rounded-lg text-xs font-bold transition-colors disabled:opacity-40"
-            style={{
-              background: parsedAmount === p ? 'var(--accent)' : 'var(--bg-card)',
-              color: parsedAmount === p ? 'var(--accent-foreground)' : 'var(--text-muted)',
-              border: '1px solid var(--border-primary)',
-            }}
-          >
-            {p >= 1_000_000 ? `${p / 1_000_000}백만` : `${p / 10_000}만`}
-          </button>
-        ))}
+        {presets.map((p) => {
+          const presetAmount = amountFromPercent(p);
+          return (
+            <button
+              key={p}
+              type="button"
+              disabled={!isLoggedIn || presetAmount < minDonation}
+              onClick={() => { setAmount(presetAmount.toLocaleString('ko-KR')); setError(''); setSuccessMsg(''); }}
+              className="h-9 rounded-lg text-xs font-bold transition-colors disabled:opacity-40"
+              style={{
+                background: parsedAmount === presetAmount ? 'var(--accent)' : 'var(--bg-card)',
+                color: parsedAmount === presetAmount ? 'var(--accent-foreground)' : 'var(--text-muted)',
+                border: '1px solid var(--border-primary)',
+              }}
+            >
+              {p}%
+            </button>
+          );
+        })}
       </div>
 
       <div className="flex gap-2">
