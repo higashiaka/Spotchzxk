@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -116,8 +117,8 @@ public class StockService {
 
         int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());
         long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
-        long coinReserve = (long) listingPrice * shareReserve;
-        stock.initAmmPool(coinReserve, shareReserve, tier);
+        BigInteger coinReserve = BigInteger.valueOf(listingPrice).multiply(BigInteger.valueOf(shareReserve));
+        stock.initAmmPool(coinReserve, BigInteger.valueOf(shareReserve), tier);
 
         stockRepository.save(stock);
 

@@ -34,12 +34,12 @@ public class TradeRequest {
     private BigDecimal limitPrice;
 
     /** Buy slippage guard: max coins to spend; order is rejected if actual cost exceeds this (null = no limit) */
-    @Min(1)
-    private Long maxCoinIn;
+    @DecimalMin("1")
+    private BigDecimal maxCoinIn;
 
     /** Sell slippage guard: min coins to receive; order is rejected if proceeds fall below this (null = no limit) */
-    @Min(1)
-    private Long minCoinOut;
+    @DecimalMin("1")
+    private BigDecimal minCoinOut;
 
     /** Allow partial fill (limit orders only) */
     private boolean allowPartial = false;

@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
+import java.math.BigInteger;
 
 /**
  * One-time migration: initializes AMM pools for existing stocks using current price as seed.
@@ -40,7 +41,7 @@ public class AmmMigrationService implements ApplicationRunner {
         int synced = 0;
         for (Stock stock : stocks) {
             try {
-                if (stock.getCoinReserve() > 0 && stock.getShareReserve() > 0) {
+                if (stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0) {
                     long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
                     if (stock.getIssuedShares() != totalHeld) {
                         new TransactionTemplate(txManager).executeWithoutResult(s -> {
@@ -69,9 +70,9 @@ public class AmmMigrationService implements ApplicationRunner {
         // Use 2x current held quantity as share reserve floor (generous headroom for sells)
         long shareReserve = Math.max(totalHeld * 2, tierReserve);
         if (shareReserve < 100) shareReserve = 100; // 理쒖냼 蹂댁옣
-        long coinReserve = currentPrice * shareReserve;
+        BigInteger coinReserve = BigInteger.valueOf(currentPrice).multiply(BigInteger.valueOf(shareReserve));
 
-        stock.initAmmPool(coinReserve, shareReserve, tier);
+        stock.initAmmPool(coinReserve, BigInteger.valueOf(shareReserve), tier);
         // issuedShares must match user_shares sum after migration, not the stale DB value
         stockRepository.save(stock);
         String channelId = stock.getChannelId();

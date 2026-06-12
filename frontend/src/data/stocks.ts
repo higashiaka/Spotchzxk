@@ -31,9 +31,9 @@ export interface Stock {
   /** Float supply before live started */
   preStreamFloat?: number;
   /** AMM coin reserve used for client-side market order estimates */
-  coinReserve?: number;
+  coinReserve?: string;
   /** AMM share reserve used for client-side market order estimates */
-  shareReserve?: number;
+  shareReserve?: string;
   /** Listing date in ISO 8601 */
   listedAt?: string;
 }

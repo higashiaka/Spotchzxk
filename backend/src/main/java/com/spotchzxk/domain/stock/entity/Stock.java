@@ -3,7 +3,11 @@ package com.spotchzxk.domain.stock.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicUpdate;
+import com.fasterxml.jackson.annotation.JsonFormat;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Entity
@@ -65,14 +69,20 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long preStreamFloat;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long coinReserve;
+    @Builder.Default
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigInteger coinReserve = BigInteger.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long shareReserve;
+    @Builder.Default
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigInteger shareReserve = BigInteger.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long feePool;
+    @Builder.Default
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigInteger feePool = BigInteger.ZERO;
 
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 1")
     private long liquidityTier;
@@ -147,45 +157,32 @@ public class Stock {
         this.issuedShares = 0;
     }
 
-    public void initAmmPool(long coinReserve, long shareReserve, long liquidityTier) {
+    public void initAmmPool(BigInteger coinReserve, BigInteger shareReserve, long liquidityTier) {
         this.coinReserve = coinReserve;
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;
-        this.currentPrice = Math.max(1L, java.math.BigDecimal.valueOf(coinReserve)
-                .divide(java.math.BigDecimal.valueOf(shareReserve), 0, java.math.RoundingMode.HALF_UP)
-                .longValue());
+        this.currentPrice = toLongPrice(new BigDecimal(coinReserve)
+                .divide(new BigDecimal(shareReserve), 0, RoundingMode.HALF_UP));
+    }
+
+    public void initAmmPool(long coinReserve, long shareReserve, long liquidityTier) {
+        initAmmPool(BigInteger.valueOf(coinReserve), BigInteger.valueOf(shareReserve), liquidityTier);
     }
 
     public void syncIssuedShares(long totalHeld) {
         this.issuedShares = Math.max(0, totalHeld);
     }
 
-    public void applyAmmTrade(long newCoinReserve, long newShareReserve, long fee) {
-        this.currentPrice = java.math.BigDecimal.valueOf(newCoinReserve)
-                .divide(java.math.BigDecimal.valueOf(newShareReserve), 0, java.math.RoundingMode.HALF_UP)
-                .longValue();
+    public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {
+        this.currentPrice = toLongPrice(new BigDecimal(newCoinReserve)
+                .divide(new BigDecimal(newShareReserve), 0, RoundingMode.HALF_UP));
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
-        this.feePool += fee;
+        this.feePool = nonNull(this.feePool).add(fee);
     }
 
-    public void drainFeePool(long amount) {
-        this.feePool = Math.max(0, this.feePool - amount);
-    }
-
-    public boolean rebalancePoolIfNeeded(long targetShareReserve) {
-        if (targetShareReserve <= 0) {
-            return false;
-        }
-        if (listingPrice <= 0 || currentPrice < listingPrice * 10) {
-            return false;
-        }
-        if (shareReserve >= targetShareReserve) {
-            return false;
-        }
-        this.coinReserve = currentPrice * targetShareReserve;
-        this.shareReserve = targetShareReserve;
-        return true;
+    public void drainFeePool(BigInteger amount) {
+        this.feePool = nonNull(this.feePool).subtract(amount).max(BigInteger.ZERO);
     }
 
     public void applyStockSplit(int ratio) {
@@ -200,7 +197,7 @@ public class Stock {
         this.issuedShares *= ratio;
         this.preStreamFloat *= ratio;
         // AMM: more shares at lower price ??coinReserve unchanged so price halves naturally
-        this.shareReserve *= ratio;
+        this.shareReserve = nonNull(this.shareReserve).multiply(BigInteger.valueOf(ratio));
     }
 
     private long splitPrice(long price, int ratio) {
@@ -208,6 +205,15 @@ public class Stock {
                 .divide(java.math.BigDecimal.valueOf(ratio), 0, java.math.RoundingMode.HALF_UP)
                 .longValue());
     }
+
+    private long toLongPrice(BigDecimal price) {
+        if (price.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) {
+            return Long.MAX_VALUE;
+        }
+        return Math.max(1L, price.longValue());
+    }
+
+    private BigInteger nonNull(BigInteger value) {
+        return value != null ? value : BigInteger.ZERO;
+    }
 }
-
-

@@ -17,6 +17,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -44,10 +45,10 @@ public class DividendService {
         long eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
         if (eligibleShares <= 0) return;
 
-        long feePool = stock.getFeePool();
-        if (feePool <= 0) return;
+        BigInteger feePool = stock.getFeePool();
+        if (feePool.signum() <= 0) return;
 
-        BigDecimal totalPayout = BigDecimal.valueOf(feePool)
+        BigDecimal totalPayout = new BigDecimal(feePool)
                 .multiply(FEE_POOL_PAYOUT_RATIO)
                 .setScale(0, RoundingMode.FLOOR);
         if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) return;
@@ -60,7 +61,7 @@ public class DividendService {
         int updatedUsers = userShareRepository.distributeDividends(stock.getChannelId(), ratePerShare);
 
         if (updatedUsers > 0) {
-            stock.drainFeePool(totalPayout.longValue());
+            stock.drainFeePool(totalPayout.toBigIntegerExact());
             stockRepository.save(stock);
 
             List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(stock.getChannelId());

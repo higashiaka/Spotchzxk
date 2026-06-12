@@ -9,39 +9,27 @@ import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
 const FEE_RATE = 0.015;
+const FEE_RATE_NUMERATOR = 15n;
+const FEE_RATE_DENOMINATOR = 1000n;
 
-const tierShareReserve = (followers?: number): number => {
-  const count = followers ?? 0;
-  if (count < 2_000) return 3_000;
-  if (count < 20_000) return 5_000;
-  if (count < 200_000) return 12_000;
-  if (count < 1_000_000) return 30_000;
-  return 80_000;
+const parseReserve = (value?: string): bigint | undefined => {
+  if (!value) return undefined;
+  try {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
-const effectiveAmmPool = (
-  streamer: Stock,
-  currentPrice: number,
-  isBuy: boolean,
-  quantity: number,
-): { coinReserve?: number; shareReserve?: number } => {
-  const targetShareReserve = tierShareReserve(streamer.followers);
-  const listingPrice = streamer.listingPrice ?? 0;
-  const shareReserve = streamer.shareReserve ?? 0;
-  if (isBuy
-      && quantity >= shareReserve
-      && listingPrice > 0
-      && currentPrice >= listingPrice * 10
-      && shareReserve < targetShareReserve) {
-    return {
-      coinReserve: currentPrice * targetShareReserve,
-      shareReserve: targetShareReserve,
-    };
-  }
-  return {
-    coinReserve: streamer.coinReserve,
-    shareReserve: streamer.shareReserve,
-  };
+const ceilDiv = (num: bigint, den: bigint): bigint => {
+  const q = num / den;
+  return num % den > 0n ? q + 1n : q;
+};
+
+const toDisplayNumber = (value: bigint): number => {
+  const max = BigInt(Number.MAX_SAFE_INTEGER);
+  return Number(value > max ? max : value);
 };
 
 const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): number => {
@@ -53,28 +41,30 @@ const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: num
 
 const ammTradeAmount = (
   currentPrice: number,
-  coinReserve: number | undefined,
-  shareReserve: number | undefined,
+  coinReserve: bigint | undefined,
+  shareReserve: bigint | undefined,
   isBuy: boolean,
   quantity: number,
 ): number => {
   if (quantity <= 0) return 0;
-  if (!coinReserve || !shareReserve || coinReserve <= 0 || shareReserve <= 0) {
+  if (!coinReserve || !shareReserve) {
     return fallbackTradeAmount(currentPrice, isBuy, quantity);
   }
-  if (isBuy && quantity >= shareReserve) return Number.POSITIVE_INFINITY;
+  const qty = BigInt(quantity);
+  if (isBuy && qty >= shareReserve) return Number.POSITIVE_INFINITY;
 
   const ammAmount = isBuy
-    ? Math.ceil((coinReserve * quantity) / (shareReserve - quantity))
-    : Math.floor((coinReserve * quantity) / (shareReserve + quantity));
-  const fee = Math.ceil(ammAmount * FEE_RATE);
-  return isBuy ? ammAmount + fee : ammAmount - fee;
+    ? ceilDiv(coinReserve * qty, shareReserve - qty)
+    : (coinReserve * qty) / (shareReserve + qty);
+  const fee = ceilDiv(ammAmount * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
+  const net = isBuy ? ammAmount + fee : ammAmount - fee;
+  return toDisplayNumber(net);
 };
 
 const averageAmmPrice = (
   currentPrice: number,
-  coinReserve: number | undefined,
-  shareReserve: number | undefined,
+  coinReserve: bigint | undefined,
+  shareReserve: bigint | undefined,
   isBuy: boolean,
   quantity: number,
 ): number => {
@@ -86,14 +76,15 @@ const averageAmmPrice = (
 const maxAffordableMarketBuyQuantity = (
   balance: number,
   currentPrice: number,
-  coinReserve?: number,
-  shareReserve?: number,
+  coinReserve?: bigint,
+  shareReserve?: bigint,
 ): number => {
   if (balance <= 0 || currentPrice <= 0) return 0;
   let low = 0;
   let high = Math.max(0, Math.floor(balance / currentPrice));
-  if (shareReserve && shareReserve > 0) {
-    high = Math.min(high, shareReserve - 1);
+  if (shareReserve && shareReserve > 0n) {
+    const poolMax = shareReserve - 1n;
+    if (poolMax < BigInt(high)) high = Number(poolMax);
   }
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
@@ -129,7 +120,8 @@ export const OrderForm = ({
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
   const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
-  const { coinReserve, shareReserve } = effectiveAmmPool(streamer, currentPrice, orderType === 'buy', qty);
+  const coinReserve = parseReserve(streamer.coinReserve);
+  const shareReserve = parseReserve(streamer.shareReserve);
   const marketExecutionPrice = averageAmmPrice(
     currentPrice,
     coinReserve,
@@ -154,9 +146,8 @@ export const OrderForm = ({
   const postBalance = orderType === 'buy' ? balance - totalCost : balance + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
-  const maxBuyPool = effectiveAmmPool(streamer, currentPrice, true, Math.max(1, streamer.shareReserve ?? 0));
   const maxBuy = orderMode === 'market'
-    ? maxAffordableMarketBuyQuantity(balance, currentPrice, maxBuyPool.coinReserve, maxBuyPool.shareReserve)
+    ? maxAffordableMarketBuyQuantity(balance, currentPrice, coinReserve, shareReserve)
     : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
   const maxSell = held;
 

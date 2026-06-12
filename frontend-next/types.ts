@@ -17,9 +17,9 @@ export interface LiveTrade {
   /** Executed trading value */
   tradingValue?: number;
   /** Updated AMM coin reserve after the trade */
-  coinReserve?: number;
+  coinReserve?: string;
   /** Updated AMM share reserve after the trade */
-  shareReserve?: number;
+  shareReserve?: string;
   /** Execution timestamp in Unix ms */
   timestamp: number;
 }

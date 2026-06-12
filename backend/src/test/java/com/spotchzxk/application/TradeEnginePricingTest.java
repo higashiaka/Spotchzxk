@@ -14,6 +14,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -28,10 +29,12 @@ class TradeEnginePricingTest {
 
     private static final long COIN_RESERVE = 100_000_000L;
     private static final long SHARE_RESERVE = 10_000L;
+    private static final BigInteger COIN_RESERVE_BIG = BigInteger.valueOf(COIN_RESERVE);
+    private static final BigInteger SHARE_RESERVE_BIG = BigInteger.valueOf(SHARE_RESERVE);
 
     @Test
     void buySlippage_avgPriceExceedsInitialPrice() {
-        AmmCalculator.AmmResult result = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
+        AmmCalculator.AmmResult result = AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, 700);
 
         // avg fill price > initial price due to slippage
         assertThat(result.avgPrice()).isGreaterThan(BigDecimal.valueOf(10_000));
@@ -44,8 +47,8 @@ class TradeEnginePricingTest {
     @Test
     void pumpThenDump_notProfitableDueToFeeAndSlippage() {
         // 700二?留ㅼ닔
-        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
-        long[] poolAfterBuy = buy.newPool();
+        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, 700);
+        BigInteger[] poolAfterBuy = buy.newPool();
 
         // 700二?留ㅻ룄
         AmmCalculator.AmmResult sell = AmmCalculator.calcSell(poolAfterBuy[0], poolAfterBuy[1], 700);
@@ -56,17 +59,17 @@ class TradeEnginePricingTest {
 
     @Test
     void kConstant_maintainedAfterBuyWithCeilingRounding() {
-        long k = COIN_RESERVE * SHARE_RESERVE;
-        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, 700);
-        long[] pool = buy.newPool();
+        BigInteger k = COIN_RESERVE_BIG.multiply(SHARE_RESERVE_BIG);
+        AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, 700);
+        BigInteger[] pool = buy.newPool();
 
         // ?щ┝ 泥섎━濡?k???쎄컙 利앷??????덉쓬 (???먮낯 k)
-        assertThat(pool[0] * pool[1]).isGreaterThanOrEqualTo(k);
+        assertThat(pool[0].multiply(pool[1])).isGreaterThanOrEqualTo(k);
     }
 
     @Test
     void poolDepthLimit_throwsWhenQtyExceedsShareReserve() {
-        assertThatThrownBy(() -> AmmCalculator.calcBuy(COIN_RESERVE, SHARE_RESERVE, SHARE_RESERVE))
+        assertThatThrownBy(() -> AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, SHARE_RESERVE))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AMM");
     }
@@ -93,8 +96,8 @@ class TradeEnginePricingTest {
                 .totalSupply(10_000)
                 .issuedShares(0)
                 .currentPrice(1_000)
-                .coinReserve(10_000_000L)
-                .shareReserve(10_000L)
+                .coinReserve(BigInteger.valueOf(10_000_000L))
+                .shareReserve(BigInteger.valueOf(10_000L))
                 .build()));
         when(orderRepository.sumPendingBuyQuantity(userId, stockId)).thenReturn(80L);
 
@@ -143,8 +146,8 @@ class TradeEnginePricingTest {
                 .channelId(stockId)
                 .streamerName("streamer")
                 .currentPrice(10_000)
-                .coinReserve(COIN_RESERVE)
-                .shareReserve(SHARE_RESERVE)
+                .coinReserve(COIN_RESERVE_BIG)
+                .shareReserve(SHARE_RESERVE_BIG)
                 .build()));
         when(orderRepository.findByStreamerIdAndStatusOrderByCreatedAtAsc(stockId, "pending"))
                 .thenReturn(List.of(pendingOrder));
@@ -178,8 +181,8 @@ class TradeEnginePricingTest {
                 .channelId(stockId)
                 .streamerName("streamer")
                 .currentPrice(10_000)
-                .coinReserve(COIN_RESERVE)
-                .shareReserve(SHARE_RESERVE)
+                .coinReserve(COIN_RESERVE_BIG)
+                .shareReserve(SHARE_RESERVE_BIG)
                 .build();
 
         when(userShareRepository.findByUserIdAndStockChannelId(userId, stockId))

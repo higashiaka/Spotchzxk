@@ -20,6 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -49,7 +50,7 @@ public class TradeEngine {
     private final ConcurrentHashMap<String, Map<String, Long>> sharesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BigDecimal> priceCache = new ConcurrentHashMap<>();
     // {coinReserve, shareReserve}
-    private final ConcurrentHashMap<String, long[]> ammPoolCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, BigInteger[]> ammPoolCache = new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<String, ReentrantLock> userLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ReentrantLock> stockLocks = new ConcurrentHashMap<>();
@@ -156,18 +157,17 @@ public class TradeEngine {
                                              boolean isBuy, long qty,
                                              BigDecimal fallbackPrice,
                                              boolean processPendingAfterExecution,
-                                             Long maxCoinIn, Long minCoinOut) {
+                                             BigDecimal maxCoinIn, BigDecimal minCoinOut) {
         AmmCalculator.AmmResult amm = calculateAmmTrade(channelId, isBuy, qty);
-        long userNetAmount = amm.userNetAmount();
+        BigDecimal userNet = new BigDecimal(amm.userNetAmount());
 
-        if (isBuy && maxCoinIn != null && userNetAmount > maxCoinIn) {
-            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 비용 " + userNetAmount + " > 최대 허용 " + maxCoinIn + ")");
+        if (isBuy && maxCoinIn != null && userNet.compareTo(maxCoinIn) > 0) {
+            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 비용 " + userNet + " > 최대 허용 " + maxCoinIn + ")");
         }
-        if (!isBuy && minCoinOut != null && userNetAmount < minCoinOut) {
-            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 수령 " + userNetAmount + " < 최소 허용 " + minCoinOut + ")");
+        if (!isBuy && minCoinOut != null && userNet.compareTo(minCoinOut) < 0) {
+            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 수령 " + userNet + " < 최소 허용 " + minCoinOut + ")");
         }
 
-        BigDecimal userNet = BigDecimal.valueOf(userNetAmount);
         long executedAt = System.currentTimeMillis();
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
@@ -213,7 +213,7 @@ public class TradeEngine {
                                                           BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calculateAmmTrade(channelId, isBuy, qty);
         BigDecimal reservation = limitReservationAmount(limitPrice, qty, isBuy);
-        BigDecimal userNetAmount = BigDecimal.valueOf(amm.userNetAmount());
+        BigDecimal userNetAmount = new BigDecimal(amm.userNetAmount());
 
         if (isBuy && userNetAmount.compareTo(reservation) > 0) {
             return null;
@@ -228,7 +228,7 @@ public class TradeEngine {
                                                      BigDecimal fallbackPrice, BigDecimal limitPrice) {
         AmmCalculator.AmmResult amm = calcAmmTradeForLimit(channelId, isBuy, qty, limitPrice);
         if (amm == null) throw new IllegalStateException("현재 시장가가 지정가보다 많이 벗어났습니다.");
-        BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
+        BigDecimal userNet = new BigDecimal(amm.userNetAmount());
         long executedAt = System.currentTimeMillis();
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
@@ -268,50 +268,30 @@ public class TradeEngine {
 
     private BigDecimal limitReservationAmount(BigDecimal limitPrice, long qty, boolean isBuy) {
         BigDecimal gross = limitPrice.multiply(BigDecimal.valueOf(qty)).setScale(0, RoundingMode.CEILING);
-        long grossAmount = gross.longValueExact();
-        long[] fee = AmmCalculator.fee(grossAmount);
-        long totalFee = fee[0] + fee[1];
-        return BigDecimal.valueOf(isBuy ? grossAmount + totalFee : Math.max(0L, grossAmount - totalFee));
+        BigInteger grossAmount = gross.toBigIntegerExact();
+        BigInteger[] fee = AmmCalculator.fee(grossAmount);
+        BigInteger totalFee = fee[0].add(fee[1]);
+        BigInteger amount = isBuy ? grossAmount.add(totalFee) : grossAmount.subtract(totalFee).max(BigInteger.ZERO);
+        return new BigDecimal(amount);
     }
 
     private BigDecimal loadPrice(String channelId, BigDecimal fallbackPrice) {
-        long[] pool = loadAmmPool(channelId);
+        BigInteger[] pool = loadAmmPool(channelId);
         return AmmCalculator.price(pool[0], pool[1]);
     }
 
-    private long[] loadAmmPool(String channelId) {
+    private BigInteger[] loadAmmPool(String channelId) {
         return ammPoolCache.computeIfAbsent(channelId, k ->
                 stockRepository.findById(k)
-                        .map(s -> new long[]{s.getCoinReserve(), s.getShareReserve()})
+                        .map(s -> new BigInteger[]{s.getCoinReserve(), s.getShareReserve()})
                         .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다.")));
     }
 
     AmmCalculator.AmmResult calculateAmmTrade(String channelId, boolean isBuy, long qty) {
-        long[] pool = loadAmmPool(channelId);
-        if (isBuy && qty >= pool[1]) {
-            pool = rebalanceCachedPoolIfNeeded(channelId, pool);
-        }
+        BigInteger[] pool = loadAmmPool(channelId);
         return isBuy
                 ? AmmCalculator.calcBuy(pool[0], pool[1], qty)
                 : AmmCalculator.calcSell(pool[0], pool[1], qty);
-    }
-
-    private long[] rebalanceCachedPoolIfNeeded(String channelId, long[] currentPool) {
-        long[] rebalancedPool = new TransactionTemplate(txManager).execute(status -> {
-            Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
-            long targetReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
-            if (!stock.rebalancePoolIfNeeded(targetReserve)) {
-                return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
-            }
-            stockRepository.save(stock);
-            return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
-        });
-        if (rebalancedPool == null) {
-            return currentPool;
-        }
-        ammPoolCache.put(channelId, rebalancedPool);
-        return rebalancedPool;
     }
 
     private void validateTrade(String userId, String channelId, boolean isBuy, long qty, BigDecimal cost,
@@ -366,13 +346,13 @@ public class TradeEngine {
     private TradePersistenceResult persistTrade(String userId, String channelId, AmmCalculator.AmmResult amm,
                                                 boolean isBuy, long qty, BigDecimal fallbackPrice, long executedAt,
                                                 String orderId, String orderMode, BigDecimal limitPrice) {
-        BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
+        BigDecimal userNet = new BigDecimal(amm.userNetAmount());
         return new TransactionTemplate(txManager).execute(status -> {
             Stock stock = stockRepository.findById(channelId)
                     .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             User user = getOrCreateUser(userId);
 
-            long[] poolForCache = updateStock(stock, isBuy, qty, amm, userNet);
+            BigInteger[] poolForCache = updateStock(stock, isBuy, qty, amm, userNet);
             BigDecimal realizedProfit = updateUserShareAndCalculateProfit(user, stock, channelId, isBuy, qty, userNet);
             addToUserBalance(userId, isBuy ? userNet.negate() : userNet);
             if (!isBuy) {
@@ -389,15 +369,11 @@ public class TradeEngine {
                 .orElseGet(() -> userRepository.save(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build()));
     }
 
-    private long[] updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
+    private BigInteger[] updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
-        stock.applyTrade(amm.newPrice().longValue(), isBuy, qty, userNet.longValue());
-        long targetReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
-        if (stock.rebalancePoolIfNeeded(targetReserve)) {
-            ammPoolCache.remove(stock.getChannelId());
-        }
+        stock.applyTrade(toLongCap(amm.newPrice()), isBuy, qty, toLongCap(userNet));
         stockRepository.save(stock);
-        return new long[]{stock.getCoinReserve(), stock.getShareReserve()};
+        return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};
     }
 
     private BigDecimal updateUserShareAndCalculateProfit(User user, Stock stock, String channelId, boolean isBuy,
@@ -467,6 +443,16 @@ public class TradeEngine {
         if (userRepository.addToRealizedProfit(userId, delta) != 1) {
             throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
+    }
+
+    private long toLongCap(BigDecimal value) {
+        if (value.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) {
+            return Long.MAX_VALUE;
+        }
+        if (value.compareTo(BigDecimal.valueOf(Long.MIN_VALUE)) < 0) {
+            return Long.MIN_VALUE;
+        }
+        return value.longValue();
     }
 
     private void saveOrder(String userId, String channelId, boolean isBuy, long qty,
@@ -551,7 +537,7 @@ public class TradeEngine {
         long executedAt = System.currentTimeMillis();
 
         AmmCalculator.AmmResult[] resultHolder = new AmmCalculator.AmmResult[1];
-        long[][] poolHolder = new long[1][];
+        BigInteger[][] poolHolder = new BigInteger[1][];
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             Order freshOrder = orderRepository.findByIdForUpdate(order.getId()).orElse(null);
             if (freshOrder == null || !"pending".equals(freshOrder.getStatus())) return;
@@ -566,7 +552,7 @@ public class TradeEngine {
                     ? AmmCalculator.calcBuy(stock.getCoinReserve(), stock.getShareReserve(), freshOrder.getQuantity())
                     : AmmCalculator.calcSell(stock.getCoinReserve(), stock.getShareReserve(), freshOrder.getQuantity());
 
-            BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
+            BigDecimal userNet = new BigDecimal(amm.userNetAmount());
             BigDecimal reservation = freshOrder.getLimitPrice().multiply(BigDecimal.valueOf(freshOrder.getQuantity()));
 
         // Skip if limit condition is no longer met after recalculation
@@ -614,7 +600,7 @@ public class TradeEngine {
         }
 
         AmmCalculator.AmmResult amm = resultHolder[0];
-        long[] poolForCache = poolHolder[0] != null ? poolHolder[0] : amm.newPool();
+        BigInteger[] poolForCache = poolHolder[0] != null ? poolHolder[0] : amm.newPool();
         ammPoolCache.put(order.getStreamerId(), poolForCache);
         priceCache.put(order.getStreamerId(), amm.newPrice());
         evictUserCache(order.getUserId());
@@ -622,18 +608,18 @@ public class TradeEngine {
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), amm.newPrice(), executedAt,
-                BigDecimal.valueOf(amm.userNetAmount()), poolForCache[0], poolForCache[1]);
+                new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1]);
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
 
     private BigDecimal updateCaches(String userId, String channelId, boolean isBuy, long qty,
-                                    AmmCalculator.AmmResult amm, long[] poolForCache, BigDecimal currentBalance,
+                                    AmmCalculator.AmmResult amm, BigInteger[] poolForCache, BigDecimal currentBalance,
                                     Map<String, Long> shares, long heldQty) {
         ammPoolCache.put(channelId, poolForCache);
         priceCache.put(channelId, amm.newPrice());
 
-        BigDecimal userNet = BigDecimal.valueOf(amm.userNetAmount());
+        BigDecimal userNet = new BigDecimal(amm.userNetAmount());
         BigDecimal newBalance = isBuy
                 ? currentBalance.subtract(userNet)
                 : currentBalance.add(userNet);
@@ -643,13 +629,13 @@ public class TradeEngine {
         return newBalance;
     }
 
-    private record TradePersistenceResult(String streamerName, long[] poolForCache) {
+    private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache) {
     }
 
     // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, long qty,
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
-                                long coinReserve, long shareReserve) {
+                                BigInteger coinReserve, BigInteger shareReserve) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt));
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
@@ -660,8 +646,8 @@ public class TradeEngine {
                 "quantity", qty,
                 "price", executedPrice,
                 "tradingValue", cost.longValue(),
-                "coinReserve", coinReserve,
-                "shareReserve", shareReserve,
+                "coinReserve", coinReserve.toString(),
+                "shareReserve", shareReserve.toString(),
                 "timestamp", executedAt
         ));
     }
