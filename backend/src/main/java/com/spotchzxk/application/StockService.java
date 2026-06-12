@@ -124,7 +124,7 @@ public class StockService {
         return Optional.of(stockRepository.findById(channelId).orElseThrow());
     }
 
-    private static long calcListingPrice(int followerCount) {
+    private static long calcListingPrice(long followerCount) {
         if (followerCount <= 0) {
             return 10_000L;
         }

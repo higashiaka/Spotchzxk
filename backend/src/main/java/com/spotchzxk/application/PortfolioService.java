@@ -160,7 +160,8 @@ public class PortfolioService {
         if (!todayKst.equals(p.getLastResetDate())) {
             return MAX_DAILY_RESETS;
         }
-        return Math.max(0, MAX_DAILY_RESETS - p.getResetCount());
+        long remaining = MAX_DAILY_RESETS - p.getResetCount();
+        return (int) Math.max(0, remaining);
     }
 }
 

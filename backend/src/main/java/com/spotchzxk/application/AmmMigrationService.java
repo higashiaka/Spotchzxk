@@ -81,7 +81,7 @@ public class AmmMigrationService implements ApplicationRunner {
                 stock.getStreamerName(), currentPrice, totalHeld, shareReserve, coinReserve, tier);
     }
 
-    public static int calcLiquidityTier(int followerCount) {
+    public static int calcLiquidityTier(long followerCount) {
         if (followerCount < 2_000)     return 1;
         if (followerCount < 20_000)    return 2;
         if (followerCount < 200_000)   return 3;
@@ -89,7 +89,7 @@ public class AmmMigrationService implements ApplicationRunner {
         return 5;
     }
 
-    public static long calcTierShareReserve(int followerCount) {
+    public static long calcTierShareReserve(long followerCount) {
         if (followerCount < 2_000)     return 3_000L;
         if (followerCount < 20_000)    return 5_000L;
         if (followerCount < 200_000)   return 12_000L;
