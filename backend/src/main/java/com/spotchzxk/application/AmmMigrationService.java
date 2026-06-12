@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.application;
+package com.spotchzxk.application;
 
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;

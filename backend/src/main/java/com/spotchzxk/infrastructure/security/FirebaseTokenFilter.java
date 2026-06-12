@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.infrastructure.security;
+package com.spotchzxk.infrastructure.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

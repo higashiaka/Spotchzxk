@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.presentation.controller;
+package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.presentation.dto.TradeRequest;
 import com.spotchzxk.presentation.dto.TradeResponse;

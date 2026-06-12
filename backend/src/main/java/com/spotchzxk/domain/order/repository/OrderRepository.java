@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.domain.order.repository;
+package com.spotchzxk.domain.order.repository;
 
 import com.spotchzxk.domain.order.entity.Order;
 import jakarta.persistence.LockModeType;

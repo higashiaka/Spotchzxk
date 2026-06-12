@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.domain.trading.service;
+package com.spotchzxk.domain.trading.service;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -45,7 +45,7 @@ public final class AmmCalculator {
         BigInteger num = BigInteger.valueOf(coinReserve).multiply(BigInteger.valueOf(qty));
         BigInteger den = BigInteger.valueOf(shareReserve + qty);
         try {
-        // Exact division: sell proceeds have no fractional remainder by construction
+            return num.divide(den).longValueExact();
         } catch (ArithmeticException e) {
             throw new IllegalStateException("충분한 코인이 없습니다. 수량을 줄여주세요.");
         }
@@ -55,6 +55,7 @@ public final class AmmCalculator {
     public static long[] fee(long ammAmount) {
         long total = (long) Math.ceil(ammAmount * FEE_RATE);
         // Integer arithmetic for 2/3 split; remainder goes to burn
+        long poolShare = total * 2 / 3;
         return new long[]{poolShare, total - poolShare};
     }
 

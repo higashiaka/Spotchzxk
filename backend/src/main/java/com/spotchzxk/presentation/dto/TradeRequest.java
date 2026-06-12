@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.presentation.dto;
+package com.spotchzxk.presentation.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.*;

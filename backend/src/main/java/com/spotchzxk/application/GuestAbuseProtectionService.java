@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.application;
+package com.spotchzxk.application;
 
 import com.spotchzxk.infrastructure.config.GuestAbuseProperties;
 import jakarta.servlet.http.HttpServletRequest;

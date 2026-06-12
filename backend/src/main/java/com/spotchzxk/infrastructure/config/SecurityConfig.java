@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.infrastructure.config;
+package com.spotchzxk.infrastructure.config;
 
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.infrastructure.security.FirebaseTokenFilter;

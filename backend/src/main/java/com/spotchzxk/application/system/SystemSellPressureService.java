@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.application.system;
+package com.spotchzxk.application.system;
 
 import com.spotchzxk.presentation.dto.TradeRequest;
 import com.spotchzxk.domain.stock.entity.Stock;

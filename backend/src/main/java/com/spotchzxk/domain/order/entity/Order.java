@@ -1,4 +1,4 @@
-﻿package com.spotchzxk.domain.order.entity;
+package com.spotchzxk.domain.order.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
