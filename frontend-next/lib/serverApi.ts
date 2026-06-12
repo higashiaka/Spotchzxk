@@ -26,7 +26,7 @@ function mapRaw(r: any): Stock {
 }
 
 export async function fetchAllStocks(): Promise<Stock[]> {
-  const res = await fetch(`${SERVER_API}/api/stocks`, { cache: 'no-store' });
+  const res = await fetch(`${SERVER_API}/api/stocks`, { next: { revalidate: 30 } });
   if (!res.ok) return [];
   const data = await res.json();
   return (data as any[]).map(mapRaw);
