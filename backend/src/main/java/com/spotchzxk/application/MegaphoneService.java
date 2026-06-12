@@ -28,7 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MegaphoneService {
 
-    private static final int DAILY_LIMIT = 3;
+    private static final int DAILY_LIMIT = 5;
     private static final int MAX_MESSAGE_LENGTH = 50;
     private static final BigDecimal MEGAPHONE_PRICE = new BigDecimal("30000000");
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -59,7 +59,7 @@ public class MegaphoneService {
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         long usesToday = megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
         if (usesToday >= DAILY_LIMIT) {
-            throw new IllegalStateException("오늘 확성기 사용 횟수를 모두 사용했습니다. (1일 최대 3회)");
+            throw new IllegalStateException("오늘 확성기 사용 횟수를 모두 사용했습니다. (1일 최대 5회)");
         }
 
         Stock stock = stockRepository.findById(channelId)
