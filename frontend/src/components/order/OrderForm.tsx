@@ -182,9 +182,10 @@ export const OrderForm = ({
   const handleSubmit = () => {
     if (!canSubmit) return;
     const currentPriceAmount = fallbackTradeAmount(currentPrice, orderType === 'buy', qty);
-    const protectionBaseAmount = orderMode === 'market'
+    const marketProtectionAmount = orderType === 'buy'
       ? Math.max(totalCost, currentPriceAmount)
-      : totalCost;
+      : Math.min(totalCost, currentPriceAmount);
+    const protectionBaseAmount = orderMode === 'market' ? marketProtectionAmount : totalCost;
     const maxCoinIn = Math.ceil(protectionBaseAmount * (1 + MARKET_SLIPPAGE_TOLERANCE));
     const minCoinOut = Math.floor(protectionBaseAmount * (1 - MARKET_SLIPPAGE_TOLERANCE));
     tradeMutation.mutate({
