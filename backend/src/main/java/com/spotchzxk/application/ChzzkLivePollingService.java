@@ -32,7 +32,7 @@ public class ChzzkLivePollingService {
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
     private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
-    private static final int SUSPEND_THRESHOLD = 10;
+    private static final int SUSPEND_THRESHOLD = 1;
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
