@@ -42,10 +42,14 @@ public class DividendService {
 
     @Transactional
     public void payIntervalDividend(Stock stock) {
-        long eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(stock.getChannelId());
+        // Re-fetch within transaction to avoid draining a stale feePool from cache
+        Stock fresh = stockRepository.findById(stock.getChannelId())
+                .orElseThrow(() -> new IllegalStateException("종목을 찾을 수 없습니다."));
+
+        long eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
         if (eligibleShares <= 0) return;
 
-        BigInteger feePool = stock.getFeePool();
+        BigInteger feePool = fresh.getFeePool();
         if (feePool.signum() <= 0) return;
 
         BigDecimal totalPayout = new BigDecimal(feePool)
@@ -58,13 +62,13 @@ public class DividendService {
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
 
-        int updatedUsers = userShareRepository.distributeDividends(stock.getChannelId(), ratePerShare);
+        int updatedUsers = userShareRepository.distributeDividends(fresh.getChannelId(), ratePerShare);
 
         if (updatedUsers > 0) {
-            stock.drainFeePool(totalPayout.toBigIntegerExact());
-            stockRepository.save(stock);
+            fresh.drainFeePool(totalPayout.toBigIntegerExact());
+            stockRepository.save(fresh);
 
-            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(stock.getChannelId());
+            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
             List<UserDividendLog> logs = shares.stream()
                     .filter(us -> us.getPreStreamQuantity() > 0
                             && !"__house__".equals(us.getUser().getId())
@@ -73,9 +77,9 @@ public class DividendService {
                         long dividendQty = us.getPreStreamQuantity();
                         return UserDividendLog.builder()
                                 .userId(us.getUser().getId())
-                                .channelId(stock.getChannelId())
-                                .streamerName(stock.getStreamerName())
-                                .profileImageUrl(stock.getProfileImageUrl())
+                                .channelId(fresh.getChannelId())
+                                .streamerName(fresh.getStreamerName())
+                                .profileImageUrl(fresh.getProfileImageUrl())
                                 .quantity(dividendQty)
                                 .ratePerShare(ratePerShare)
                                 .amount(ratePerShare.multiply(BigDecimal.valueOf(dividendQty))
@@ -100,14 +104,14 @@ public class DividendService {
             dividendLogRepository.save(logEntry);
 
             log.info("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
-                    stock.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
+                    fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
 
             // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
             final String now = LocalDateTime.now().toString();
             final Map<String, Object> globalPayload = Map.of(
-                    "channelId", stock.getChannelId(),
-                    "streamerName", stock.getStreamerName(),
-                    "profileImageUrl", stock.getProfileImageUrl() != null ? stock.getProfileImageUrl() : "",
+                    "channelId", fresh.getChannelId(),
+                    "streamerName", fresh.getStreamerName(),
+                    "profileImageUrl", fresh.getProfileImageUrl() != null ? fresh.getProfileImageUrl() : "",
                     "totalDividendPool", actualPaid,
                     "streamMinutes", 0L,
                     "createdAt", now

@@ -63,7 +63,10 @@ public class AmmMigrationService implements ApplicationRunner {
     }
 
     private void migrateStock(Stock stock) {
-        long currentPrice = Math.max(1, stock.getCurrentPrice());
+        long rawPrice = stock.getCurrentPrice();
+        long currentPrice = (rawPrice <= 0 || rawPrice >= Long.MAX_VALUE)
+                ? Math.max(1, stock.getListingPrice())
+                : rawPrice;
         long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
         int tier = calcLiquidityTier(stock.getFollowerCount());
         long tierReserve = calcTierShareReserve(stock.getFollowerCount());

@@ -296,6 +296,12 @@ public class TradeEngine {
 
     private void validateTrade(String userId, String channelId, boolean isBuy, long qty, BigDecimal cost,
                                BigDecimal currentBalance, long heldQty) {
+        Stock stock = stockRepository.findById(channelId)
+                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
+        if (stock.isTradingSuspended()) {
+            throw new IllegalStateException("현재 거래가 정지된 종목입니다.");
+        }
+
         if (!isBuy) {
             long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
             if (heldQty - pendingSellQty < qty) {
@@ -306,12 +312,6 @@ public class TradeEngine {
 
         if (currentBalance.compareTo(cost) < 0) {
             throw new IllegalStateException("잔고가 부족합니다.");
-        }
-
-        Stock stock = stockRepository.findById(channelId)
-                .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
-        if (stock.isTradingSuspended()) {
-            throw new IllegalStateException("현재 거래가 정지된 종목입니다.");
         }
         boolean isNewListing = stock.getListedAt() != null
                 && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
@@ -351,7 +351,7 @@ public class TradeEngine {
                                                 String orderId, String orderMode, BigDecimal limitPrice) {
         BigDecimal userNet = new BigDecimal(amm.userNetAmount());
         return new TransactionTemplate(txManager).execute(status -> {
-            Stock stock = stockRepository.findById(channelId)
+            Stock stock = stockRepository.findByIdForUpdate(channelId)
                     .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             User user = getOrCreateUser(userId);
 

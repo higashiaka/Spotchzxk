@@ -40,6 +40,9 @@ public class DonationController {
         if (amountObj == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "금액을 올바르게 입력해주세요."));
         }
+        if (!(amountObj instanceof Number)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "금액을 올바르게 입력해주세요."));
+        }
         BigDecimal amount;
         try {
             amount = new BigDecimal(amountObj.toString());
