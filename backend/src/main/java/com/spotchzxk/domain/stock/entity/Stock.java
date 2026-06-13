@@ -203,12 +203,20 @@ public class Stock {
         this.currentPrice = splitPrice(this.currentPrice, ratio);
         this.basePrice = splitPrice(this.basePrice, ratio);
         this.listingPrice = splitPrice(this.listingPrice, ratio);
-        this.totalSupply *= ratio;
-        this.dailyVolume *= ratio;
-        this.issuedShares *= ratio;
-        this.preStreamFloat *= ratio;
+        this.totalSupply = saturatingMultiply(this.totalSupply, ratio);
+        this.dailyVolume = saturatingMultiply(this.dailyVolume, ratio);
+        this.issuedShares = saturatingMultiply(this.issuedShares, ratio);
+        this.preStreamFloat = saturatingMultiply(this.preStreamFloat, ratio);
         // AMM: more shares at lower price ??coinReserve unchanged so price halves naturally
         this.shareReserve = nonNull(this.shareReserve).multiply(BigInteger.valueOf(ratio));
+    }
+
+    private static long saturatingMultiply(long value, int ratio) {
+        try {
+            return Math.multiplyExact(value, ratio);
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
+        }
     }
 
     private long splitPrice(long price, int ratio) {

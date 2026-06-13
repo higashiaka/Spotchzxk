@@ -52,6 +52,17 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE user_shares
+            SET quantity = LEAST(quantity, 9223372036854775807 / :ratio),
+                pre_stream_quantity = LEAST(pre_stream_quantity, 9223372036854775807 / :ratio)
+            WHERE channel_id = :channelId
+              AND (quantity > 9223372036854775807 / :ratio
+                   OR pre_stream_quantity > 9223372036854775807 / :ratio)
+            """, nativeQuery = true)
+    int capOverflowQuantities(@Param("channelId") String channelId, @Param("ratio") int ratio);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE user_shares
             SET quantity = quantity * :ratio,
                 pre_stream_quantity = pre_stream_quantity * :ratio,
                 avg_price = CASE WHEN avg_price IS NULL THEN NULL ELSE avg_price / :ratio END

@@ -77,7 +77,8 @@ public class AmmMigrationService implements ApplicationRunner {
         long tierReserve = calcTierShareReserve(stock.getFollowerCount());
 
         // Use 2x current held quantity as share reserve floor (generous headroom for sells)
-        long shareReserve = Math.max(totalHeld * 2, tierReserve);
+        long doubled = (totalHeld > Long.MAX_VALUE / 2) ? Long.MAX_VALUE : totalHeld * 2;
+        long shareReserve = Math.max(doubled, tierReserve);
         if (shareReserve < 100) shareReserve = 100; // 理쒖냼 蹂댁옣
         BigInteger coinReserve = BigInteger.valueOf(currentPrice).multiply(BigInteger.valueOf(shareReserve));
 

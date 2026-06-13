@@ -100,7 +100,8 @@ public class StockSplitService {
         List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
         for (Stock stock : targets) {
             stock.applyStockSplit(SPLIT_RATIO);
-            userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
+            userShareRepository.capOverflowQuantities(stock.getChannelId(), SPLIT_RATIO);
+                userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
             orderRepository.deleteAllPendingOrders(stock.getChannelId());
                 orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
         }
@@ -175,6 +176,7 @@ public class StockSplitService {
             List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
             for (Stock stock : targets) {
                 stock.applyStockSplit(SPLIT_RATIO);
+                userShareRepository.capOverflowQuantities(stock.getChannelId(), SPLIT_RATIO);
                 userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
                 orderRepository.deleteAllPendingOrders(stock.getChannelId());
                 orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
