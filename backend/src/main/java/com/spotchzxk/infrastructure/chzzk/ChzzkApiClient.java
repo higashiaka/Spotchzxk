@@ -117,7 +117,13 @@ public class ChzzkApiClient {
                 return null;
             }
 
-            String status = objectMapper.readTree(response.body()).path("content").path("status").asText("");
+            JsonNode content = objectMapper.readTree(response.body()).path("content");
+            if (content.isNull() || content.isMissingNode()) {
+                // content:null means channel is deleted or has not streamed for a long time
+                log.warn("Chzzk API content null for channel {} — treating as inactive", channelId);
+                return null;
+            }
+            String status = content.path("status").asText("");
             return status.isEmpty() ? "CLOSE" : status.toUpperCase();
         } catch (Exception e) {
             log.warn("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
