@@ -8,7 +8,17 @@
       "Bash(java -version)",
       "Bash(gradle -version)",
       "Bash(mvn -version)",
-      "Bash(curl --version)"
+      "Bash(curl --version)",
+      "Bash(npx create-next-app@latest frontend-next --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --no-turbopack)",
+      "Bash(cp -r \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend/src/components\" \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend-next/components\")",
+      "Bash(cp -r \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend/src/hooks\" \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend-next/hooks\")",
+      "Bash(cp -r \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend/src/lib\" \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend-next/lib\")",
+      "Bash(cp -r \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend/src/contexts\" \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend-next/contexts\")",
+      "Bash(cp -r \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend/src/data\" \"C:/Users/KIMDH/Documents/Higashiaka/Spotchzxk/frontend-next/data\")",
+      "Bash(xargs sed -i -e 's|from '\\\\''\\\\.\\\\./firebase'\\\\''|from '\\\\''@/lib/firebase'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./firebase'\\\\''|from '\\\\''@/lib/firebase'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./lib/api'\\\\''|from '\\\\''@/lib/api'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./lib/api'\\\\''|from '\\\\''@/lib/api'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./lib/stompClient'\\\\''|from '\\\\''@/lib/stompClient'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./lib/stompClient'\\\\''|from '\\\\''@/lib/stompClient'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./types'\\\\''|from '\\\\''@/types'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./types'\\\\''|from '\\\\''@/types'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./utils'\\\\''|from '\\\\''@/utils'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./utils'\\\\''|from '\\\\''@/utils'\\\\''|g' -e 's|from '\\\\''\\\\.\\\\./contexts/|from '\\\\''@/contexts/|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./contexts/|from '\\\\''@/contexts/|g' -e 's|from '\\\\''\\\\.\\\\./hooks/|from '\\\\''@/hooks/|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./hooks/|from '\\\\''@/hooks/|g' -e 's|from '\\\\''\\\\.\\\\./components/|from '\\\\''@/components/|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./components/|from '\\\\''@/components/|g' -e 's|from '\\\\''\\\\.\\\\./data/|from '\\\\''@/data/|g' -e 's|from '\\\\''\\\\.\\\\./\\\\.\\\\./data/|from '\\\\''@/data/|g')",
+      "Bash(npm i *)",
+      "Bash(grep -v \"^.*Controller.java$\")",
+      "Bash(./gradlew compileJava -x test)"
     ]
   }
 }

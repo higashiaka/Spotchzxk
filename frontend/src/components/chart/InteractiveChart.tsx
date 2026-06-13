@@ -169,15 +169,18 @@ export const InteractiveChart = ({
     if (seriesRef.current) chart.removeSeries(seriesRef.current);
 
     const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
+    const priceFormat = { type: 'price' as const, precision: 0, minMove: 1 };
     if (chartType === 'candle') {
       seriesRef.current = chart.addCandlestickSeries({
         upColor: '#FF3B30', downColor: '#007AFF',
         borderUpColor: '#FF3B30', borderDownColor: '#007AFF',
         wickUpColor: '#FF3B30', wickDownColor: '#007AFF',
+        priceFormat,
       });
     } else {
       seriesRef.current = chart.addAreaSeries({
         lineColor, topColor: lineColor + '40', bottomColor: lineColor + '00', lineWidth: 2,
+        priceFormat,
       });
     }
 

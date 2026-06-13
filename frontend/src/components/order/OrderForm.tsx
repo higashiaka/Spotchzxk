@@ -1,4 +1,5 @@
 import { User } from 'firebase/auth';
+import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
@@ -179,8 +180,16 @@ export const OrderForm = ({
     });
   };
 
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    handleSubmit();
+  };
+
   return (
-    <div className={`${embedded ? 'h-auto p-0' : 'h-full overflow-y-auto p-4 pb-24 surface-sidebar'} hide-scrollbar text-white`}>
+    <form
+      onSubmit={handleFormSubmit}
+      className={`${embedded ? 'h-auto p-0' : 'h-full overflow-y-auto p-4 pb-24 surface-sidebar'} hide-scrollbar text-white`}
+    >
       <div className="rounded-xl p-1 flex mb-4 surface-card-secondary">
         <button type="button" onClick={() => setOrderType('buy')}
           className={`flex-1 py-2 rounded-lg text-xs font-extrabold transition-all ${orderType === 'buy' ? 'bg-danger text-white' : 'bg-transparent text-dim-token'}`}>
@@ -304,7 +313,7 @@ export const OrderForm = ({
         </p>
       )}
 
-      <button type="button" onClick={handleSubmit}
+      <button type="submit"
         disabled={tradeMutation.isPending || !canSubmit}
         className={`w-full rounded-xl py-3.5 text-white font-extrabold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99] ${orderType === 'buy' ? 'bg-danger' : 'bg-info'}`}>
         {tradeMutation.isPending
@@ -321,6 +330,6 @@ export const OrderForm = ({
           <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
         </div>
       )}
-    </div>
+    </form>
   );
 };
