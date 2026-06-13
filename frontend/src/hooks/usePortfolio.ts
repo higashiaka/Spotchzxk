@@ -34,7 +34,7 @@ export const usePortfolio = (userId: string | undefined): UseQueryResult<Portfol
       return res.json();
     },
     enabled: !!userId,
-    /** Poll every 12s as a safety net for changes not covered by STOMP (dividends, admin adjustments) */
-    refetchInterval: 12000,
+    /** Poll every 60s as a safety net for changes not covered by STOMP (dividends, admin adjustments) */
+    refetchInterval: 60000,
   });
 };
