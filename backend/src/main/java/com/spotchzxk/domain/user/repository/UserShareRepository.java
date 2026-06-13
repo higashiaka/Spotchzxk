@@ -22,7 +22,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
 
     @Modifying(clearAutomatically = true)
-    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = LEAST(u.coin_balance + FLOOR(s.pre_stream_quantity * :calculatedRate), 9223372036854775807), u.dividend_total = LEAST(u.dividend_total + FLOOR(s.pre_stream_quantity * :calculatedRate), 9223372036854775807) WHERE s.channel_id = :activeChannelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
+    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + FLOOR(s.pre_stream_quantity * :calculatedRate), u.dividend_total = u.dividend_total + FLOOR(s.pre_stream_quantity * :calculatedRate) WHERE s.channel_id = :activeChannelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
     int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
 
     @Modifying
@@ -49,18 +49,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM user_shares WHERE channel_id = :channelId AND user_id != '__house__'", nativeQuery = true)
     long sumQuantityByStock(@Param("channelId") String channelId);
 
-    @Modifying(clearAutomatically = true)
-    @Query(value = """
-            UPDATE user_shares
-            SET quantity = LEAST(quantity, 9223372036854775807 / :ratio),
-                pre_stream_quantity = LEAST(pre_stream_quantity, 9223372036854775807 / :ratio)
-            WHERE channel_id = :channelId
-              AND (quantity > 9223372036854775807 / :ratio
-                   OR pre_stream_quantity > 9223372036854775807 / :ratio)
-            """, nativeQuery = true)
-    int capOverflowQuantities(@Param("channelId") String channelId, @Param("ratio") int ratio);
-
-    @Modifying(clearAutomatically = true)
+@Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE user_shares
             SET quantity = quantity * :ratio,
