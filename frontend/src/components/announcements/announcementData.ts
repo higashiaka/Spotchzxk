@@ -18,6 +18,23 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_trading_suspension_20260613',
+    title: '거래 정지 제도 도입 안내',
+    date: '운영 정책 업데이트',
+    summary: '채널이 삭제되거나 장기간 방송이 없어 API 응답이 불가능한 종목은 자동으로 거래가 정지됩니다.',
+    sections: [
+      {
+        title: '거래 정지 조건',
+        rows: [
+          { label: '정지 조건', value: '10분 이상 연속으로 API 응답 없음', tone: 'danger' },
+          { label: '해당 사례', value: '채널 삭제 · 채널 정지 · 장기 미방송', tone: 'danger' },
+          { label: '자동 해제', value: 'API 응답 복구 시 즉시 거래 재개', tone: 'accent' },
+        ],
+        note: '거래 정지 중에는 매수·매도가 모두 차단됩니다. 종목 화면에서 "거래 정지" 배너로 확인할 수 있습니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_dividend_volume_based_20260611',
     title: '배당률 산정 방식 변경 안내',
     date: '운영 정책 업데이트',
