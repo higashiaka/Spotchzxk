@@ -29,6 +29,7 @@ const chartColors = {
  *  and automatically distinguishes incremental (last-candle) vs full data updates */
 export const InteractiveChart = ({
   candles,
+  splitEvents = [],
   chartType,
   color,
   interval,
@@ -38,6 +39,7 @@ export const InteractiveChart = ({
   className = '',
 }: {
   candles: Candle[];
+  splitEvents?: { executedAt: number; splitRatio: number }[];
   chartType: 'candle' | 'line';
   color: string;
   interval: string;
@@ -217,6 +219,34 @@ export const InteractiveChart = ({
     prevCandlesRef.current = candles;
     setActive(candles[candles.length - 1]);
   }, [candles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Render split markers whenever candles or splitEvents change
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series || candles.length === 0 || splitEvents.length === 0) {
+      seriesRef.current?.setMarkers?.([]);
+      return;
+    }
+    const candleTimes = candles.map(c => Number(c.time));
+    const markers = splitEvents
+      .map(e => {
+        const targetSec = Math.floor(e.executedAt / 1000) + 9 * 3600;
+        // Snap to the nearest candle time
+        const nearest = candleTimes.reduce((a, b) =>
+          Math.abs(b - targetSec) < Math.abs(a - targetSec) ? b : a
+        );
+        return {
+          time: nearest as UTCTimestamp,
+          position: 'aboveBar' as const,
+          color: '#F59E0B',
+          shape: 'arrowDown' as const,
+          text: `${e.splitRatio}:1`,
+          size: 1,
+        };
+      })
+      .sort((a, b) => Number(a.time) - Number(b.time));
+    series.setMarkers?.(markers);
+  }, [candles, splitEvents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const displayActive = active ?? (candles.length > 0 ? candles[candles.length - 1] : null);
   const isUp = displayActive ? displayActive.close >= displayActive.open : true;

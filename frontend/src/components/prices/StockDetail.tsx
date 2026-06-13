@@ -51,6 +51,7 @@ export const StockDetail = ({
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [splitEvents, setSplitEvents] = useState<{ executedAt: number; splitRatio: number }[]>([]);
   const [hasMoreCandles, setHasMoreCandles] = useState(true);
   const [isLoadingMoreCandles, setIsLoadingMoreCandles] = useState(false);
   const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
@@ -86,9 +87,10 @@ export const StockDetail = ({
 
     return apiFetch(`/api/stocks/${stockId}/candles?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
-      .then((data: { bucketStart: number; open: number; high: number; low: number; close: number }[] | null) => {
+      .then((data: { candles: { bucketStart: number; open: number; high: number; low: number; close: number }[]; splitEvents: { executedAt: number; splitRatio: number }[] } | null) => {
         if (!data) return;
-        const next = data.map(toChartCandle);
+        const next = data.candles.map(toChartCandle);
+        setSplitEvents(data.splitEvents ?? []);
         setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
         if (options.prepend) {
           setCandles(prev => {
@@ -320,6 +322,7 @@ export const StockDetail = ({
           </div>
           <InteractiveChart
             candles={candles}
+            splitEvents={splitEvents}
             chartType={chartType}
             color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
             interval={interval}
