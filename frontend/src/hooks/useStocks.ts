@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DEFAULT_STOCKS, Stock } from '../data/stocks';
-import { subscribeStomp } from '../lib/stompClient';
+import { subscribeStomp, registerOnConnect } from '../lib/stompClient';
 import { apiFetch } from '../lib/api';
 import { LiveTrade } from '../types';
 
@@ -38,15 +38,18 @@ function mapRawToStock(r: any): Stock {
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
 
-  // Initial load: fetch all stocks from the REST API
+  // Fetch stocks on initial connect and every reconnect to pick up daily resets
   useEffect(() => {
-    apiFetch('/api/stocks')
-      .then(res => res.ok ? res.json() : null)
-      .then((rawStocks: any[] | null) => {
-        if (!rawStocks || rawStocks.length === 0) return;
-        setStocks(rawStocks.map(mapRawToStock));
-      })
-      .catch(() => {/* Keep DEFAULT_STOCKS when offline */});
+    const fetchStocks = () => {
+      apiFetch('/api/stocks')
+        .then(res => res.ok ? res.json() : null)
+        .then((rawStocks: any[] | null) => {
+          if (!rawStocks || rawStocks.length === 0) return;
+          setStocks(rawStocks.map(mapRawToStock));
+        })
+        .catch(() => {});
+    };
+    return registerOnConnect(fetchStocks);
   }, []);
 
   // Real-time update: subscribe to STOMP /topic/streamers

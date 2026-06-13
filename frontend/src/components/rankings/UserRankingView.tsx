@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
-import { subscribeStomp } from '../../lib/stompClient';
+import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { avatarColor, fmt, fmtKorean, priceColor } from '../../utils';
 
 type RankingType = 'realized' | 'dividend' | 'donation';
@@ -45,6 +45,13 @@ export function UserRankingView() {
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
     });
     return () => sub.unsubscribe();
+  }, [queryClient]);
+
+  // Re-fetch rankings on STOMP reconnect to pick up resets missed while disconnected
+  useEffect(() => {
+    return registerOnConnect(() => {
+      queryClient.invalidateQueries({ queryKey: ['rankings'] });
+    });
   }, [queryClient]);
 
   return (
