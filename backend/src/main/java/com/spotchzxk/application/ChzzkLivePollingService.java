@@ -49,6 +49,10 @@ public class ChzzkLivePollingService {
     public void initLiveStockCache() {
         stockRepository.findByIsLiveTrue().forEach(s -> liveStockCache.put(s.getChannelId(), s));
         log.info("Live stock cache initialized: {} stocks", liveStockCache.size());
+        // Restore failure counters for already-suspended channels so they stay suspended across restarts
+        stockRepository.findAll().stream()
+                .filter(s -> s.isTradingSuspended() && !isEventStock(s))
+                .forEach(s -> apiFailureCount.put(s.getChannelId(), SUSPEND_THRESHOLD));
     }
 
     @PreDestroy
@@ -239,7 +243,7 @@ public class ChzzkLivePollingService {
     private void handleApiFailure(Stock stock) {
         String channelId = stock.getChannelId();
         int failures = apiFailureCount.merge(channelId, 1, Integer::sum);
-        if (failures == SUSPEND_THRESHOLD) {
+        if (failures >= SUSPEND_THRESHOLD) {
             transactionTemplate.executeWithoutResult(tx ->
                     stockRepository.findById(channelId).ifPresent(s -> {
                         if (!s.isTradingSuspended()) {
