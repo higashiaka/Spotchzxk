@@ -82,7 +82,9 @@ public class ChzzkApiClient {
     }
 
     /**
-     * @return "OPEN", "CLOSE", "BLOCK", or null if the API call failed.
+     * @return "OPEN", "CLOSE", "BLOCK" on success;
+     *         "AUTH_FAILED" on 401/403 (system-wide cookie issue — do not count toward suspension);
+     *         null on timeout or channel-specific failure.
      */
     public String fetchChannelStatus(String channelId) {
         String nidAut = envResolver.get("NID_AUT");
@@ -105,15 +107,20 @@ public class ChzzkApiClient {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                log.warn("Chzzk API returned {} for channel {}", response.statusCode(), channelId);
+            int httpStatus = response.statusCode();
+            if (httpStatus == 401 || httpStatus == 403) {
+                log.warn("Chzzk API auth failure ({}) for channel {} — NID cookie may be expired", httpStatus, channelId);
+                return "AUTH_FAILED";
+            }
+            if (httpStatus != 200) {
+                log.warn("Chzzk API returned {} for channel {}", httpStatus, channelId);
                 return null;
             }
 
             String status = objectMapper.readTree(response.body()).path("content").path("status").asText("");
             return status.isEmpty() ? "CLOSE" : status.toUpperCase();
         } catch (Exception e) {
-            log.debug("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
+            log.warn("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
             return null;
         }
     }

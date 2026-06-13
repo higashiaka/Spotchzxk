@@ -84,6 +84,10 @@ public class ChzzkLivePollingService {
                 .map(stock -> CompletableFuture.runAsync(() -> {
                     try {
                         String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
+                        if ("AUTH_FAILED".equals(status)) {
+                            // System-wide cookie expiry — don't penalize individual channels
+                            return;
+                        }
                         if (status == null) {
                             handleApiFailure(stock);
                             return;
@@ -146,7 +150,7 @@ public class ChzzkLivePollingService {
 
             try {
                 String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                if (!"OPEN".equals(status)) {
+                if (!("OPEN".equals(status))) {
                     continue;
                 }
                 Stock paidStock = transactionTemplate.execute(tx ->
