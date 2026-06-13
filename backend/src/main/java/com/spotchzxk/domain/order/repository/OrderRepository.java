@@ -92,7 +92,6 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Object[]> findBidLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
 
     @Modifying(clearAutomatically = true)
-    @Modifying
     @Query(value = """
             DELETE FROM orders
             WHERE streamer_id = :streamerId
