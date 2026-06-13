@@ -101,7 +101,8 @@ public class StockSplitService {
         for (Stock stock : targets) {
             stock.applyStockSplit(SPLIT_RATIO);
             userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
-            orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
+            orderRepository.deleteOverflowPendingOrders(stock.getChannelId(), SPLIT_RATIO);
+                orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
         }
         stockRepository.saveAll(targets);
         // Evict caches after commit so other threads never read stale pre-split state
@@ -175,6 +176,7 @@ public class StockSplitService {
             for (Stock stock : targets) {
                 stock.applyStockSplit(SPLIT_RATIO);
                 userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
+                orderRepository.deleteOverflowPendingOrders(stock.getChannelId(), SPLIT_RATIO);
                 orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
             }
             stockRepository.saveAll(targets);

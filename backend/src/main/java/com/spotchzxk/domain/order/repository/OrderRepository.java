@@ -92,6 +92,16 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Object[]> findBidLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
 
     @Modifying(clearAutomatically = true)
+    @Modifying
+    @Query(value = """
+            DELETE FROM orders
+            WHERE streamer_id = :streamerId
+              AND status = 'pending'
+              AND quantity > 9223372036854775807 / :ratio
+            """, nativeQuery = true)
+    int deleteOverflowPendingOrders(@Param("streamerId") String streamerId, @Param("ratio") int ratio);
+
+    @Modifying
     @Query(value = """
             UPDATE orders
             SET quantity = quantity * :ratio,
