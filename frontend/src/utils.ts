@@ -12,6 +12,33 @@ export const fmtBigInt = (value: bigint): string => {
   return `${value.toLocaleString('ko-KR')}원`;
 };
 
+/** Parses a balance string (from backend) to bigint, dropping fractional part */
+export const parseBigBalance = (value: string | number | undefined | null): bigint => {
+  if (value == null) return 0n;
+  const s = String(value).split('.')[0];
+  try { return BigInt(s); } catch { return 0n; }
+};
+
+/** Formats a bigint as Korean units (자/해/경/조/억/만원), safe for any magnitude */
+export const fmtKoreanBigInt = (value: bigint): string => {
+  const neg = value < 0n;
+  const abs = neg ? -value : value;
+  const sign = neg ? '-' : '';
+  const divFmt = (divisor: bigint, unit: string) => {
+    const whole = abs / divisor;
+    const frac = (abs % divisor) * 10n / divisor;
+    return `${sign}${frac === 0n ? whole : `${whole}.${frac}`}${unit}`;
+  };
+  if (abs >= 10n ** 36n) return divFmt(10n ** 36n, '간원');
+  if (abs >= 10n ** 32n) return divFmt(10n ** 32n, '구원');
+  if (abs >= 10n ** 28n) return divFmt(10n ** 28n, '양원');
+  if (abs >= 10n ** 24n) return divFmt(10n ** 24n, '자원');
+  if (abs >= 10n ** 20n) return divFmt(10n ** 20n, '해원');
+  if (abs >= 10n ** 16n) return divFmt(10n ** 16n, '경원');
+  // Below 경, precision is safe with Number
+  return fmtKorean(Number(value));
+};
+
 /** Abbreviates large numbers with K/M/B/T suffix (e.g. 1,200 → 1.2K) */
 export const fmtCompact = (n: number): string => {
   if (n >= 1_000_000_000_000) return `${(n / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;

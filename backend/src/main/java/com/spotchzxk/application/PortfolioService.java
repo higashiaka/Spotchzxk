@@ -64,13 +64,13 @@ public class PortfolioService {
                         s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
                 ));
         Map<String, Object> response = new HashMap<>();
-        response.put("balance", p.getCoinBalance());
+        response.put("balance", p.getCoinBalance().toPlainString());
         response.put("shares", shares);
         response.put("avgPrices", avgPrices);
-        response.put("dividendTotal", p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO);
-        response.put("donationTotal", p.getDonationTotal() != null ? p.getDonationTotal() : BigDecimal.ZERO);
+        response.put("dividendTotal", (p.getDividendTotal() != null ? p.getDividendTotal() : BigDecimal.ZERO).toPlainString());
+        response.put("donationTotal", (p.getDonationTotal() != null ? p.getDonationTotal() : BigDecimal.ZERO).toPlainString());
         response.put("displayName", p.getDisplayName());
-        response.put("realizedProfit", p.getRealizedProfit() != null ? p.getRealizedProfit() : BigDecimal.ZERO);
+        response.put("realizedProfit", (p.getRealizedProfit() != null ? p.getRealizedProfit() : BigDecimal.ZERO).toPlainString());
         response.put("rankingNicknamePublic", p.isRankingNicknamePublic());
         response.put("nicknameChangeTickets", p.getNicknameChangeTickets());
         response.put("stockAddTickets", p.getStockAddTickets());

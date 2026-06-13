@@ -51,23 +51,23 @@ export const useTrade = (userId: string) => {
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
         const estimatedAmount = newTrade.estimatedTotalAmount
           ?? (newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * newTrade.quantity;
-        const state = old || { balance: 10000000, shares: {} };
+        const state = old || { balance: '10000000', shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
-        let newBalance = state.balance ?? 10000000;
+        let newBalanceNum = Number(state.balance ?? '10000000');
 
         if (newTrade.type === 'buy') {
-          newBalance -= estimatedAmount;
+          newBalanceNum -= estimatedAmount;
           if (newTrade.orderMode !== 'limit') {
             newShares[newTrade.streamerId] = (newShares[newTrade.streamerId] || 0) + newTrade.quantity;
           }
         } else {
           if (newTrade.orderMode !== 'limit') {
-            newBalance += estimatedAmount;
+            newBalanceNum += estimatedAmount;
             newShares[newTrade.streamerId] = Math.max(0, (newShares[newTrade.streamerId] || 0) - newTrade.quantity);
           }
         }
 
-        return { ...state, balance: newBalance, shares: newShares };
+        return { ...state, balance: String(Math.round(newBalanceNum)), shares: newShares };
       });
 
       return { previousPortfolio };

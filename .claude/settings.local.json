@@ -21,7 +21,8 @@
       "Bash(./gradlew compileJava -x test)",
       "Bash(head -65 src/main/java/com/spotchzxk/application/AmmMigrationService.java)",
       "Bash(tail -n +86 src/main/java/com/spotchzxk/application/AmmMigrationService.java)",
-      "Bash(cat)"
+      "Bash(cat)",
+      "Bash(./backend/gradlew -p backend compileJava -x test)"
     ]
   }
 }

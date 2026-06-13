@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
-import { fmtKorean, fmtShares, grade } from '../../utils';
+import { fmtKorean, fmtKoreanBigInt, parseBigBalance, fmtShares, grade } from '../../utils';
 import { apiFetch } from '../../lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHoldings } from '../../hooks/useHoldings';
@@ -34,7 +34,7 @@ export const ProfileView = ({
   const userGrade = !user?.isAnonymous && portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
-  const holdingsValue = totalAssets - (portfolio?.balance ?? 0);
+  const holdingsValue = totalAssets - Number(portfolio?.balance ?? 0);
   const orderCount = history?.length ?? 0;
   const { holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
 
@@ -260,7 +260,7 @@ export const ProfileView = ({
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
           { label: '총 스트리머 자산', value: fmtKorean(totalAssets) },
-          { label: '캐시', value: fmtKorean(portfolio?.balance ?? 0) },
+          { label: '캐시', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
           { label: '주식 평가액', value: fmtKorean(holdingsValue) },
           { label: '누적 매매 횟수', value: `${orderCount}회` },
         ].map(row => (

@@ -3,18 +3,18 @@ import { apiFetch } from '../lib/api';
 
 /** Portfolio data structure returned by the backend */
 export interface Portfolio {
-  /** Cash balance in KRW */
-  balance: number;
+  /** Cash balance as string to preserve precision beyond Number.MAX_SAFE_INTEGER */
+  balance: string;
   /** Shares held per stock (channelId → quantity) */
   shares: Record<string, number>;
   /** Average purchase price per stock */
   avgPrices: Record<string, number>;
   /** Total dividends received to date */
-  dividendTotal: number;
+  dividendTotal: string;
   /** Total amount donated (for 후원왕 ranking) */
-  donationTotal?: number;
+  donationTotal?: string;
   displayName?: string | null;
-  realizedProfit?: number;
+  realizedProfit?: string;
   rankingNicknamePublic?: boolean;
   nicknameChangeTickets?: number;
   stockAddTickets?: number;

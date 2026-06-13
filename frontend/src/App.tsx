@@ -84,7 +84,7 @@ function App() {
       const s = streamers.find(st => st.id === id);
       return sum + (s?.price ?? 0) * qty;
     }, 0);
-    return portfolio.balance + held;
+    return Number(portfolio.balance) + held;
   }, [portfolio, streamers]);
 
   const handleReset = () => {
