@@ -8,13 +8,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface StockRepository extends JpaRepository<Stock, String> {
     List<Stock> findByIsLiveTrue();
-    List<Stock> findByCurrentPriceGreaterThan(long currentPrice);
+    List<Stock> findByCurrentPriceGreaterThan(BigDecimal currentPrice);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Stock s WHERE s.channelId = :channelId")

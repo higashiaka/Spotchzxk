@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.Optional;
@@ -29,9 +30,10 @@ public class OgController {
         }
 
         Stock stock = opt.get();
-        long price = stock.getCurrentPrice();
-        long base = stock.getBasePrice() > 0 ? stock.getBasePrice() : price;
-        double pct = base > 0 ? (price - base) * 100.0 / base : 0;
+        BigDecimal price = stock.getCurrentPrice();
+        BigDecimal base = stock.getBasePrice().compareTo(BigDecimal.ZERO) > 0 ? stock.getBasePrice() : price;
+        double pct = base.compareTo(BigDecimal.ZERO) > 0
+                ? price.subtract(base).multiply(BigDecimal.valueOf(100)).divide(base, 2, java.math.RoundingMode.HALF_UP).doubleValue() : 0;
         String sign = pct >= 0 ? "+" : "";
         String formattedPrice = NumberFormat.getNumberInstance(Locale.KOREA).format(price);
         String formattedFollowers = NumberFormat.getNumberInstance(Locale.KOREA).format(stock.getFollowerCount());

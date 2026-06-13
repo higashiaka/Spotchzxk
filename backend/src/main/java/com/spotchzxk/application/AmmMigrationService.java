@@ -13,8 +13,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.List;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 
 /**
  * One-time migration: initializes AMM pools for existing stocks using current price as seed.
@@ -42,9 +43,9 @@ public class AmmMigrationService implements ApplicationRunner {
         for (Stock stock : stocks) {
             try {
                 if (stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0
-                        && stock.getCurrentPrice() < Long.MAX_VALUE) {
+                        && stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
                     long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
-                    if (stock.getIssuedShares() != totalHeld) {
+                    if (stock.getIssuedShares().compareTo(BigDecimal.valueOf(totalHeld)) != 0) {
                         new TransactionTemplate(txManager).executeWithoutResult(s -> {
                             stock.syncIssuedShares(totalHeld);
                             stockRepository.save(stock);
@@ -63,25 +64,22 @@ public class AmmMigrationService implements ApplicationRunner {
     }
 
     private void migrateStock(Stock stock) {
-        long rawPrice = stock.getCurrentPrice();
-        long currentPrice;
-        if (rawPrice > 0 && rawPrice < Long.MAX_VALUE) {
+        BigDecimal rawPrice = stock.getCurrentPrice();
+        BigDecimal currentPrice;
+        if (rawPrice.compareTo(BigDecimal.ZERO) > 0) {
             currentPrice = rawPrice;
-        } else if (stock.getBasePrice() > 0 && stock.getBasePrice() < Long.MAX_VALUE) {
+        } else if (stock.getBasePrice().compareTo(BigDecimal.ZERO) > 0) {
             currentPrice = stock.getBasePrice();
         } else {
-            currentPrice = Math.max(1, stock.getListingPrice());
+            currentPrice = stock.getListingPrice().max(BigDecimal.ONE);
         }
         long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
         int tier = calcLiquidityTier(stock.getFollowerCount());
         long tierReserve = calcTierShareReserve(stock.getFollowerCount());
 
-        // Use 2x current held quantity as share reserve floor (generous headroom for sells)
-        long doubled = (totalHeld > Long.MAX_VALUE / 2) ? Long.MAX_VALUE : totalHeld * 2;
-        long shareReserve = Math.max(doubled, tierReserve);
-        if (shareReserve < 100) shareReserve = 100; // 理쒖냼 蹂댁옣
-        BigInteger coinReserve = BigInteger.valueOf(currentPrice).multiply(BigInteger.valueOf(shareReserve));
-
+        long shareReserve = Math.max(totalHeld * 2, tierReserve);
+        if (shareReserve < 100) shareReserve = 100;
+        BigInteger coinReserve = currentPrice.toBigInteger().multiply(BigInteger.valueOf(shareReserve));
         stock.initAmmPool(coinReserve, BigInteger.valueOf(shareReserve), tier);
         // issuedShares must match user_shares sum after migration, not the stale DB value
         stockRepository.save(stock);

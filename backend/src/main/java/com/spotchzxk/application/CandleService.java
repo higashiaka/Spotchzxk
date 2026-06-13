@@ -119,7 +119,7 @@ public class CandleService {
             // If a trade occurred this minute, it was already broadcast by onTrade ??skip
             if (tradedStockIds.contains(stockId)) continue;
 
-            double price = stock.getCurrentPrice();
+            double price = stock.getCurrentPrice().doubleValue();
             Map<String, OhlcCandle> update = new HashMap<>();
             for (String interval : ALL_INTERVALS) {
                 long bms = INTERVAL_MS.get(interval);

@@ -35,23 +35,29 @@ public class Stock {
     @Column
     private long baseBroadcastHours;
 
-    @Column(nullable = false)
-    private long totalSupply;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigDecimal totalSupply = BigDecimal.ZERO;
 
-    @Column(nullable = false)
-    private long dailyVolume;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigDecimal dailyVolume = BigDecimal.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long dailyTradingValue;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    private BigDecimal dailyTradingValue = BigDecimal.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long basePrice;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    private BigDecimal basePrice = BigDecimal.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 10000")
-    private long listingPrice;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 10000.00")
+    private BigDecimal listingPrice = BigDecimal.valueOf(10_000);
 
-    @Column(columnDefinition = "BIGINT DEFAULT 0")
-    private long currentPrice;
+    @Builder.Default
+    @Column(precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    private BigDecimal currentPrice = BigDecimal.ZERO;
 
     @Column
     @com.fasterxml.jackson.annotation.JsonProperty("isLive")
@@ -63,11 +69,13 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
     private long dividendAccumulationCount;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long issuedShares;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigDecimal issuedShares = BigDecimal.ZERO;
 
-    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
-    private long preStreamFloat;
+    @Builder.Default
+    @Column(nullable = false, precision = 65, scale = 0, columnDefinition = "DECIMAL(65,0) DEFAULT 0")
+    private BigDecimal preStreamFloat = BigDecimal.ZERO;
 
     @Builder.Default
     @JsonFormat(shape = JsonFormat.Shape.STRING)
@@ -100,24 +108,26 @@ public class Stock {
     public void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (listedAt == null)  listedAt  = LocalDateTime.now();
-        if (listingPrice <= 0) listingPrice = Math.max(10_000, currentPrice);
+        if (listingPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            listingPrice = currentPrice.max(BigDecimal.valueOf(10_000));
+        }
     }
 
-    public void applyTrade(long executedPrice, boolean isBuy, long qty, long tradingValue) {
+    public void applyTrade(BigDecimal executedPrice, boolean isBuy, long qty, BigDecimal tradingValue) {
         this.currentPrice = executedPrice;
-        this.dailyVolume = saturatingAdd(this.dailyVolume, qty);
-        this.dailyTradingValue = saturatingAdd(this.dailyTradingValue, tradingValue);
+        this.dailyVolume = this.dailyVolume.add(BigDecimal.valueOf(qty));
+        this.dailyTradingValue = this.dailyTradingValue.add(tradingValue.abs());
         if (isBuy) {
-            this.issuedShares = saturatingAdd(this.issuedShares, qty);
+            this.issuedShares = this.issuedShares.add(BigDecimal.valueOf(qty));
         } else {
-            this.issuedShares = Math.max(0, this.issuedShares - qty);
+            this.issuedShares = this.issuedShares.subtract(BigDecimal.valueOf(qty)).max(BigDecimal.ZERO);
         }
     }
 
     public void applyDailyReset() {
         this.basePrice = this.currentPrice;
-        this.dailyVolume = 0;
-        this.dailyTradingValue = 0;
+        this.dailyVolume = BigDecimal.ZERO;
+        this.dailyTradingValue = BigDecimal.ZERO;
     }
 
     public void startLive(LocalDateTime startedAt) {
@@ -137,7 +147,7 @@ public class Stock {
     }
 
     public void updatePreStreamFloat(long preStreamFloat) {
-        this.preStreamFloat = preStreamFloat;
+        this.preStreamFloat = BigDecimal.valueOf(preStreamFloat);
     }
 
     public void updateStreamerName(String streamerName) {
@@ -153,19 +163,19 @@ public class Stock {
     }
 
     public void finalizeListing(long listingPrice, long totalSupply) {
-        this.currentPrice = listingPrice;
-        this.basePrice = listingPrice;
-        this.listingPrice = listingPrice;
-        this.totalSupply = totalSupply;
-        this.issuedShares = 0;
+        this.currentPrice = BigDecimal.valueOf(listingPrice);
+        this.basePrice = BigDecimal.valueOf(listingPrice);
+        this.listingPrice = BigDecimal.valueOf(listingPrice);
+        this.totalSupply = BigDecimal.valueOf(totalSupply);
+        this.issuedShares = BigDecimal.ZERO;
     }
 
     public void initAmmPool(BigInteger coinReserve, BigInteger shareReserve, long liquidityTier) {
         this.coinReserve = coinReserve;
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;
-        this.currentPrice = toLongPrice(new BigDecimal(coinReserve)
-                .divide(new BigDecimal(shareReserve), 0, RoundingMode.HALF_UP));
+        this.currentPrice = new BigDecimal(coinReserve)
+                .divide(new BigDecimal(shareReserve), 2, RoundingMode.HALF_UP);
     }
 
     public void initAmmPool(long coinReserve, long shareReserve, long liquidityTier) {
@@ -173,12 +183,12 @@ public class Stock {
     }
 
     public void syncIssuedShares(long totalHeld) {
-        this.issuedShares = Math.max(0, totalHeld);
+        this.issuedShares = BigDecimal.valueOf(Math.max(0, totalHeld));
     }
 
     public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {
-        this.currentPrice = toLongPrice(new BigDecimal(newCoinReserve)
-                .divide(new BigDecimal(newShareReserve), 0, RoundingMode.HALF_UP));
+        this.currentPrice = new BigDecimal(newCoinReserve)
+                .divide(new BigDecimal(newShareReserve), 2, RoundingMode.HALF_UP);
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
         this.feePool = nonNull(this.feePool).add(fee);
@@ -200,44 +210,16 @@ public class Stock {
         if (ratio <= 1) {
             throw new IllegalArgumentException("Split ratio must be greater than 1.");
         }
-        this.currentPrice = splitPrice(this.currentPrice, ratio);
-        this.basePrice = splitPrice(this.basePrice, ratio);
-        this.listingPrice = splitPrice(this.listingPrice, ratio);
-        this.totalSupply = saturatingMultiply(this.totalSupply, ratio);
-        this.dailyVolume = saturatingMultiply(this.dailyVolume, ratio);
-        this.issuedShares = saturatingMultiply(this.issuedShares, ratio);
-        this.preStreamFloat = saturatingMultiply(this.preStreamFloat, ratio);
-        // AMM: more shares at lower price ??coinReserve unchanged so price halves naturally
+        BigDecimal ratioDecimal = BigDecimal.valueOf(ratio);
+        this.currentPrice = this.currentPrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
+        this.basePrice = this.basePrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
+        this.listingPrice = this.listingPrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
+        this.totalSupply = this.totalSupply.multiply(ratioDecimal);
+        this.dailyVolume = this.dailyVolume.multiply(ratioDecimal);
+        this.issuedShares = this.issuedShares.multiply(ratioDecimal);
+        this.preStreamFloat = this.preStreamFloat.multiply(ratioDecimal);
+        // AMM: more shares at lower price — coinReserve unchanged so price halves naturally
         this.shareReserve = nonNull(this.shareReserve).multiply(BigInteger.valueOf(ratio));
-    }
-
-    private static long saturatingMultiply(long value, int ratio) {
-        try {
-            return Math.multiplyExact(value, ratio);
-        } catch (ArithmeticException e) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private static long saturatingAdd(long a, long b) {
-        try {
-            return Math.addExact(a, b);
-        } catch (ArithmeticException e) {
-            return Long.MAX_VALUE;
-        }
-    }
-
-    private long splitPrice(long price, int ratio) {
-        return Math.max(1L, java.math.BigDecimal.valueOf(price)
-                .divide(java.math.BigDecimal.valueOf(ratio), 0, java.math.RoundingMode.HALF_UP)
-                .longValue());
-    }
-
-    private long toLongPrice(BigDecimal price) {
-        if (price.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) {
-            return Long.MAX_VALUE;
-        }
-        return Math.max(1L, price.longValue());
     }
 
     private BigInteger nonNull(BigInteger value) {

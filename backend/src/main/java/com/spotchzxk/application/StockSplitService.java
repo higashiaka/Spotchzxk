@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.time.LocalDate;
@@ -35,7 +36,7 @@ import java.util.stream.Collectors;
 public class StockSplitService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final long SPLIT_THRESHOLD_PRICE = 1_000_000L;
+    private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
@@ -79,8 +80,8 @@ public class StockSplitService {
                 .filter(stock -> !isEventStock(stock))
                 .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
                 .filter(stock -> {
-                    long postSplitPrice = stock.getCurrentPrice() / SPLIT_RATIO;
-                    if (postSplitPrice < 100) {
+                    BigDecimal postSplitPrice = stock.getCurrentPrice().divide(BigDecimal.valueOf(SPLIT_RATIO), 2, java.math.RoundingMode.HALF_UP);
+                    if (postSplitPrice.compareTo(BigDecimal.valueOf(100)) < 0) {
                         log.warn("Skipping split for {} (channelId={}): post-split price {} is too low.",
                                 stock.getStreamerName(), stock.getChannelId(), postSplitPrice);
                         return false;
@@ -162,7 +163,7 @@ public class StockSplitService {
             List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
                     .filter(stock -> !isEventStock(stock))
                     .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
-                    .filter(stock -> stock.getCurrentPrice() / SPLIT_RATIO >= 100)
+                    .filter(stock -> stock.getCurrentPrice().divide(BigDecimal.valueOf(SPLIT_RATIO), 2, java.math.RoundingMode.HALF_UP).compareTo(BigDecimal.valueOf(100)) >= 0)
                     .sorted(Comparator.comparing(Stock::getStreamerName))
                     .toList();
 
@@ -239,7 +240,7 @@ public class StockSplitService {
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
                 .splitHour(splitHour)
-                .thresholdPrice((int) SPLIT_THRESHOLD_PRICE)
+                .thresholdPrice(SPLIT_THRESHOLD_PRICE.intValue())
                 .splitRatio(SPLIT_RATIO)
                 .stockCount(targets.size())
                 .stockNames(stockNames)

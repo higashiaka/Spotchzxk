@@ -322,7 +322,8 @@ public class TradeEngine {
             }
         }
 
-        if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + qty > stock.getTotalSupply()) {
+        if (stock.getTotalSupply().compareTo(BigDecimal.ZERO) > 0
+                && stock.getIssuedShares().add(BigDecimal.valueOf(qty)).compareTo(stock.getTotalSupply()) > 0) {
             throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
         }
     }
@@ -334,7 +335,8 @@ public class TradeEngine {
             Stock stock = stockRepository.findById(channelId)
                     .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
             long pendingBuyQty = orderRepository.sumPendingBuyQuantityByStreamerId(channelId);
-            if (stock.getTotalSupply() > 0 && stock.getIssuedShares() + pendingBuyQty + qty > stock.getTotalSupply()) {
+            if (stock.getTotalSupply().compareTo(BigDecimal.ZERO) > 0
+                    && stock.getIssuedShares().add(BigDecimal.valueOf(pendingBuyQty + qty)).compareTo(stock.getTotalSupply()) > 0) {
                 throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
             }
             return;
@@ -374,7 +376,7 @@ public class TradeEngine {
 
     private BigInteger[] updateStock(Stock stock, boolean isBuy, long qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
-        stock.applyTrade(toLongCap(amm.newPrice()), isBuy, qty, toLongCap(userNet));
+        stock.applyTrade(amm.newPrice(), isBuy, qty, userNet);
         stockRepository.save(stock);
         return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};
     }
@@ -562,8 +564,8 @@ public class TradeEngine {
             if (!freshIsBuy && userNet.compareTo(reservation) < 0) return;
 
             if (freshIsBuy) {
-                if (stock.getTotalSupply() > 0
-                        && stock.getIssuedShares() + freshOrder.getQuantity() > stock.getTotalSupply()) {
+                if (stock.getTotalSupply().compareTo(BigDecimal.ZERO) > 0
+                        && stock.getIssuedShares().add(BigDecimal.valueOf(freshOrder.getQuantity())).compareTo(stock.getTotalSupply()) > 0) {
                     BigDecimal refund = limitReservationAmount(freshOrder.getLimitPrice(), freshOrder.getQuantity(), true);
                     freshOrder.cancel();
                     orderRepository.save(freshOrder);

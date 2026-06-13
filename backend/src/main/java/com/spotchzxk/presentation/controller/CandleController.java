@@ -33,7 +33,7 @@ public class CandleController {
         long listedAtMs = stock != null && stock.getListedAt() != null
                 ? stock.getListedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 : 0L;
-        double fallbackPrice = stock != null ? (double) stock.getCurrentPrice() : 1000.0;
+        double fallbackPrice = stock != null ? stock.getCurrentPrice().doubleValue() : 1000.0;
 
         long beforeMs = before != null ? before : System.currentTimeMillis();
         List<OhlcCandle> candles = candleService.getCandles(stockId, interval, count, beforeMs, listedAtMs, fallbackPrice);

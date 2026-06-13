@@ -45,7 +45,7 @@ public class StockService {
         int safeDepth = Math.max(1, Math.min(depth, 20));
         return new OrderBookDto(
                 channelId,
-                BigDecimal.valueOf(stock.getCurrentPrice()),
+                stock.getCurrentPrice(),
                 toOrderBookEntries(orderRepository.findAskLevels(channelId, safeDepth)),
                 toOrderBookEntries(orderRepository.findBidLevels(channelId, safeDepth))
         );
@@ -71,10 +71,10 @@ public class StockService {
         Stock stock = Stock.builder()
                 .channelId(channelId)
                 .streamerName(channelId)
-                .totalSupply(0L)
-                .currentPrice(1000)
-                .basePrice(1000)
-                .listingPrice(1000)
+                .totalSupply(BigDecimal.ZERO)
+                .currentPrice(BigDecimal.valueOf(1000))
+                .basePrice(BigDecimal.valueOf(1000))
+                .listingPrice(BigDecimal.valueOf(1000))
                 .isLive(false)
                 .listedAt(java.time.LocalDateTime.now())
                 .build();
