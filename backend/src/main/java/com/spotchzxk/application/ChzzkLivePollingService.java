@@ -84,11 +84,12 @@ public class ChzzkLivePollingService {
                 .map(stock -> CompletableFuture.runAsync(() -> {
                     try {
                         String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                        if ("AUTH_FAILED".equals(status)) {
-                            // System-wide cookie expiry — don't penalize individual channels
+                        if ("AUTH_FAILED".equals(status) || "TIMEOUT".equals(status)) {
+                            // System-wide cookie expiry or network timeout — unrelated to channel state
                             return;
                         }
-                        if (status == null) {
+                        if ("INACTIVE".equals(status)) {
+                            // content:null = channel deleted or long-inactive
                             handleApiFailure(stock);
                             return;
                         }
