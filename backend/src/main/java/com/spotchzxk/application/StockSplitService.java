@@ -148,6 +148,80 @@ public class StockSplitService {
                 targets.stream().map(Stock::getStreamerName).collect(Collectors.joining(", ")));
     }
 
+    @Transactional
+    public String forcePerformSplit() {
+        splitInProgress.set(true);
+        try {
+            LocalDateTime now = LocalDateTime.now(KST);
+            LocalDate today = now.toLocalDate();
+            int splitHour = now.getHour();
+
+            LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
+            List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
+                    .filter(stock -> !isEventStock(stock))
+                    .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
+                    .filter(stock -> stock.getCurrentPrice() / SPLIT_RATIO >= 100)
+                    .sorted(Comparator.comparing(Stock::getStreamerName))
+                    .toList();
+
+            if (targets.isEmpty()) {
+                return "분할 대상 없음";
+            }
+
+            StockSplitNotice notice = createNotice(today, splitHour, targets);
+            stockSplitNoticeRepository.saveAndFlush(notice);
+
+            List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
+            for (Stock stock : targets) {
+                stock.applyStockSplit(SPLIT_RATIO);
+                userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
+                orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
+            }
+            stockRepository.saveAll(targets);
+            registerAfterCommit(() -> {
+                splitChannelIds.forEach(id -> {
+                    tradeEngine.evictStockCache(id);
+                    candleService.evictStockCache(id);
+                });
+                tradeEngine.evictAllPortfolioCaches();
+            });
+
+            long executedAt = System.currentTimeMillis();
+            List<StockSplitEvent> events = targets.stream()
+                    .map(stock -> StockSplitEvent.builder()
+                            .id(UUID.randomUUID().toString())
+                            .channelId(stock.getChannelId())
+                            .splitRatio(SPLIT_RATIO)
+                            .executedAt(executedAt)
+                            .createdAt(now)
+                            .build())
+                    .toList();
+            stockSplitEventRepository.saveAll(events);
+
+            List<Map<String, Object>> priceUpdates = targets.stream()
+                    .map(stock -> Map.<String, Object>of(
+                            "channelId", stock.getChannelId(),
+                            "price", stock.getCurrentPrice()
+                    ))
+                    .toList();
+            registerAfterCommit(() -> {
+                messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+                for (Map<String, Object> priceUpdate : priceUpdates) {
+                    String channelId = (String) priceUpdate.get("channelId");
+                    messagingTemplate.convertAndSend("/topic/prices/" + channelId,
+                            Map.of("streamerId", channelId, "price", priceUpdate.get("price")));
+                }
+                messagingTemplate.convertAndSend("/topic/stock-split-notices", notice);
+            });
+
+            String names = targets.stream().map(Stock::getStreamerName).collect(Collectors.joining(", "));
+            log.info("Force split applied to {} stocks: {}", targets.size(), names);
+            return String.format("액면분할 완료: %d개 종목", targets.size());
+        } finally {
+            splitInProgress.set(false);
+        }
+    }
+
     @Transactional(readOnly = true)
     public StockSplitNotice getLatestNotice() {
         return stockSplitNoticeRepository.findTopBySplitDateOrderByCreatedAtDesc(LocalDate.now(KST)).orElse(null);

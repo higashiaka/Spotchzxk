@@ -1,6 +1,7 @@
 package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.application.AmmMigrationService;
+import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,10 +18,21 @@ import java.math.BigInteger;
 public class AdminController {
 
     private final AmmMigrationService ammMigrationService;
+    private final StockSplitService stockSplitService;
     private final StockRepository stockRepository;
 
     @Value("${app.admin-api-key:}")
     private String adminApiKey;
+
+    @PostMapping("/stock-split/force")
+    public ResponseEntity<String> forceStockSplit(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        String result = stockSplitService.forcePerformSplit();
+        return ResponseEntity.ok(result);
+    }
 
     @PostMapping("/amm/migrate")
     public ResponseEntity<String> migrateAmm(
