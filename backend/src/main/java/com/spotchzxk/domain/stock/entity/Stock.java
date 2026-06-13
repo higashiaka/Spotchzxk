@@ -105,10 +105,10 @@ public class Stock {
 
     public void applyTrade(long executedPrice, boolean isBuy, long qty, long tradingValue) {
         this.currentPrice = executedPrice;
-        this.dailyVolume += qty;
-        this.dailyTradingValue += tradingValue;
+        this.dailyVolume = saturatingAdd(this.dailyVolume, qty);
+        this.dailyTradingValue = saturatingAdd(this.dailyTradingValue, tradingValue);
         if (isBuy) {
-            this.issuedShares += qty;
+            this.issuedShares = saturatingAdd(this.issuedShares, qty);
         } else {
             this.issuedShares = Math.max(0, this.issuedShares - qty);
         }
@@ -214,6 +214,14 @@ public class Stock {
     private static long saturatingMultiply(long value, int ratio) {
         try {
             return Math.multiplyExact(value, ratio);
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private static long saturatingAdd(long a, long b) {
+        try {
+            return Math.addExact(a, b);
         } catch (ArithmeticException e) {
             return Long.MAX_VALUE;
         }

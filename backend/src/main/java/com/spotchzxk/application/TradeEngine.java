@@ -648,7 +648,7 @@ public class TradeEngine {
                 "type", isBuy ? "buy" : "sell",
                 "quantity", qty,
                 "price", executedPrice,
-                "tradingValue", cost.longValue(),
+                "tradingValue", toLongCap(cost),
                 "coinReserve", coinReserve.toString(),
                 "shareReserve", shareReserve.toString(),
                 "timestamp", executedAt
