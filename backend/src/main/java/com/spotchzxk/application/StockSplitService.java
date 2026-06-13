@@ -101,7 +101,7 @@ public class StockSplitService {
         for (Stock stock : targets) {
             stock.applyStockSplit(SPLIT_RATIO);
             userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
-            orderRepository.deleteOverflowPendingOrders(stock.getChannelId(), SPLIT_RATIO);
+            orderRepository.deleteAllPendingOrders(stock.getChannelId());
                 orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
         }
         stockRepository.saveAll(targets);
@@ -176,7 +176,7 @@ public class StockSplitService {
             for (Stock stock : targets) {
                 stock.applyStockSplit(SPLIT_RATIO);
                 userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
-                orderRepository.deleteOverflowPendingOrders(stock.getChannelId(), SPLIT_RATIO);
+                orderRepository.deleteAllPendingOrders(stock.getChannelId());
                 orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
             }
             stockRepository.saveAll(targets);
