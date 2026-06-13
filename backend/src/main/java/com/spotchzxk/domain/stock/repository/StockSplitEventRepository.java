@@ -9,6 +9,7 @@ import java.util.List;
 @Repository
 public interface StockSplitEventRepository extends JpaRepository<StockSplitEvent, String> {
     List<StockSplitEvent> findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(String channelId, long executedAt);
+    List<StockSplitEvent> findByChannelIdOrderByExecutedAtDesc(String channelId);
 }
 
 

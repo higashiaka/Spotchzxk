@@ -30,6 +30,9 @@ public class CandleService {
     private static final long MS_1W  =   604_800_000L;
     private static final int  MAX_CANDLES = 300;
 
+    // Beyond this many splits, historical prices become meaninglessly small after adjustment
+    private static final int MAX_SPLIT_ADJUSTMENTS = 5;
+
     private static final Map<String, Long> INTERVAL_MS = Map.of(
             "1m", MS_1M, "5m", MS_5M, "1h", MS_1H, "1d", MS_1D, "1w", MS_1W
     );
@@ -54,6 +57,14 @@ public class CandleService {
         int limit = Math.max(1, Math.min(count, MAX_CANDLES));
         long safeBeforeMs = beforeMs > 0 ? beforeMs : System.currentTimeMillis();
         long from = Math.max(listedAtMs, safeBeforeMs - bucketMs * limit);
+
+        // If the stock has been split more than MAX_SPLIT_ADJUSTMENTS times, clamp `from` to the
+        // (MAX_SPLIT_ADJUSTMENTS+1)-th most recent split so adjusted prices never underflow to 1.0
+        List<StockSplitEvent> allSplitsDesc = stockSplitEventRepository.findByChannelIdOrderByExecutedAtDesc(stockId);
+        if (allSplitsDesc.size() > MAX_SPLIT_ADJUSTMENTS) {
+            long cutoff = allSplitsDesc.get(MAX_SPLIT_ADJUSTMENTS).getExecutedAt();
+            from = Math.max(from, cutoff);
+        }
 
         List<Order> orders = from < safeBeforeMs
                 ? orderRepository.findByStreamerIdAndTradedAtBetween(stockId, from, safeBeforeMs - 1)
