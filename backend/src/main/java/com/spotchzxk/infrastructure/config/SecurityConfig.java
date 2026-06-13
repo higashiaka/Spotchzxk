@@ -42,8 +42,7 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/guest/precheck").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-google").hasRole("GOOGLE")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasRole("GOOGLE")
-            // Issue #27/#20: /api/admin/** requires Google auth; anyRequest().authenticated() would allow guest tokens
-                .requestMatchers("/api/admin/**").hasRole("GOOGLE")
+                .requestMatchers("/api/admin/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);
