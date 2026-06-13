@@ -36,6 +36,8 @@ export interface Stock {
   shareReserve?: string;
   /** Listing date in ISO 8601 */
   listedAt?: string;
+  /** Whether trading is suspended due to repeated API failures */
+  tradingSuspended?: boolean;
 }
 
 /** Default empty stock list; actual data is fetched from the backend API */

@@ -310,6 +310,9 @@ public class TradeEngine {
 
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
+        if (stock.isTradingSuspended()) {
+            throw new IllegalStateException("현재 거래가 정지된 종목입니다.");
+        }
         boolean isNewListing = stock.getListedAt() != null
                 && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
         if (isNewListing) {

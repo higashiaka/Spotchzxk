@@ -151,8 +151,9 @@ export const OrderForm = ({
     setQtyStr(String(Math.max(1, Math.floor(max * ratio))));
   };
 
-  const canBuy = !!user && qty > 0 && balanceBigInt >= totalCost;
-  const canSell = !!user && qty > 0 && held >= qty;
+  const isSuspended = streamer.tradingSuspended ?? false;
+  const canBuy = !!user && qty > 0 && balanceBigInt >= totalCost && !isSuspended;
+  const canSell = !!user && qty > 0 && held >= qty && !isSuspended;
   const hasValidLimit = orderMode === 'market' || limitPrice > 0;
   const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
 
@@ -272,6 +273,12 @@ export const OrderForm = ({
         ))}
       </div>
 
+      {isSuspended && (
+        <div className="mb-4 rounded-xl px-3 py-2.5 text-xs font-bold text-center bg-[#FF525220] text-[#FF5252] border border-[#FF525240]">
+          거래 정지 종목 — API 응답 없음
+        </div>
+      )}
+
       <div className="pt-3 mb-5 border-t border-primary-token">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-xs text-[var(--text-muted)]">주문 총액</span>
@@ -302,6 +309,8 @@ export const OrderForm = ({
         className={`w-full rounded-xl py-3.5 text-white font-extrabold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.99] ${orderType === 'buy' ? 'bg-danger' : 'bg-info'}`}>
         {tradeMutation.isPending
           ? '주문 처리 중...'
+          : isSuspended
+          ? '거래 정지'
           : orderType === 'buy' && !!user && qty > 0 && balance < totalCost
           ? '잔고 부족'
           : `${orderType === 'buy' ? '매수' : '매도'} 주문하기`}

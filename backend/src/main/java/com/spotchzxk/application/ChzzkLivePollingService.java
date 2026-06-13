@@ -32,6 +32,7 @@ public class ChzzkLivePollingService {
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
     private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
+    private static final int SUSPEND_THRESHOLD = 10;
 
     private final StockRepository stockRepository;
     private final DividendService dividendService;
@@ -42,6 +43,7 @@ public class ChzzkLivePollingService {
 
     private final ExecutorService pollingExecutor = Executors.newFixedThreadPool(50);
     private final ConcurrentHashMap<String, Stock> liveStockCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Integer> apiFailureCount = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void initLiveStockCache() {
@@ -78,7 +80,11 @@ public class ChzzkLivePollingService {
                 .map(stock -> CompletableFuture.runAsync(() -> {
                     try {
                         String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                        if (status == null) return;
+                        if (status == null) {
+                            handleApiFailure(stock);
+                            return;
+                        }
+                        handleApiRecovery(stock);
                         boolean changed = Boolean.TRUE.equals(transactionTemplate.execute(tx ->
                                 handleLiveTransition(stock, status)));
                         if (changed) {
@@ -228,6 +234,39 @@ public class ChzzkLivePollingService {
 
     private long effectiveDividendIntervalCount(Stock stock) {
         return Math.min(stock.getDividendAccumulationCount(), completedDividendIntervals(stock));
+    }
+
+    private void handleApiFailure(Stock stock) {
+        String channelId = stock.getChannelId();
+        int failures = apiFailureCount.merge(channelId, 1, Integer::sum);
+        if (failures == SUSPEND_THRESHOLD) {
+            transactionTemplate.executeWithoutResult(tx ->
+                    stockRepository.findById(channelId).ifPresent(s -> {
+                        if (!s.isTradingSuspended()) {
+                            s.suspendTrading();
+                            stockRepository.save(s);
+                            messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
+                            log.warn("Trading suspended for channel {} after {} consecutive API failures.", channelId, failures);
+                        }
+                    }));
+        }
+    }
+
+    private void handleApiRecovery(Stock stock) {
+        String channelId = stock.getChannelId();
+        int prev = apiFailureCount.getOrDefault(channelId, 0);
+        apiFailureCount.remove(channelId);
+        if (prev >= SUSPEND_THRESHOLD) {
+            transactionTemplate.executeWithoutResult(tx ->
+                    stockRepository.findById(channelId).ifPresent(s -> {
+                        if (s.isTradingSuspended()) {
+                            s.resumeTrading();
+                            stockRepository.save(s);
+                            messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
+                            log.info("Trading resumed for channel {} (API recovered).", channelId);
+                        }
+                    }));
+        }
     }
 }
 

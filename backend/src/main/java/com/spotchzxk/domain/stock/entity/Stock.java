@@ -87,6 +87,9 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 1")
     private long liquidityTier;
 
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean tradingSuspended;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
@@ -179,6 +182,14 @@ public class Stock {
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
         this.feePool = nonNull(this.feePool).add(fee);
+    }
+
+    public void suspendTrading() {
+        this.tradingSuspended = true;
+    }
+
+    public void resumeTrading() {
+        this.tradingSuspended = false;
     }
 
     public void drainFeePool(BigInteger amount) {

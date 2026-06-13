@@ -28,6 +28,7 @@ function mapRawToStock(r: any): Stock {
     coinReserve: String(r.coinReserve ?? '0'),
     shareReserve: String(r.shareReserve ?? '0'),
     listedAt: r.listedAt ?? null,
+    tradingSuspended: r.tradingSuspended ?? false,
   };
 }
 
