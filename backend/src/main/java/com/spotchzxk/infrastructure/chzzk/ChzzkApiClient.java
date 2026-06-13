@@ -113,7 +113,7 @@ public class ChzzkApiClient {
             String status = objectMapper.readTree(response.body()).path("content").path("status").asText("");
             return status.isEmpty() ? "CLOSE" : status.toUpperCase();
         } catch (Exception e) {
-            log.error("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
+            log.debug("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
             return null;
         }
     }
