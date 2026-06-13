@@ -11,6 +11,8 @@ import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -52,6 +54,11 @@ public class StockSplitService {
 
     public boolean isSplitInProgress() {
         return splitInProgress.get();
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void runSplitOnStartup() {
+        performDailyStockSplit();
     }
 
     @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
