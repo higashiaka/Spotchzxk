@@ -180,7 +180,7 @@ public class TradeEngine {
         TradePersistenceResult savedTrade = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice, executedAt, orderId, "market", null);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
-                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1]);
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1], orderId);
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -241,7 +241,7 @@ public class TradeEngine {
                 executedAt, orderId, "limit", limitPrice);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
-                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1]);
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1], orderId);
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.avgPrice(), newBalance, BigDecimal.ZERO, orderId, "limit");
@@ -611,7 +611,7 @@ public class TradeEngine {
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), amm.newPrice(), executedAt,
-                new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1]);
+                new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1], order.getId());
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -638,11 +638,12 @@ public class TradeEngine {
     // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, long qty,
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
-                                BigInteger coinReserve, BigInteger shareReserve) {
+                                BigInteger coinReserve, BigInteger shareReserve, String orderId) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt));
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice));
         asyncBroadcast.send("/topic/trades", Map.of(
+                "id", orderId,
                 "streamerId", channelId,
                 "streamerName", streamerName != null ? streamerName : channelId,
                 "type", isBuy ? "buy" : "sell",
