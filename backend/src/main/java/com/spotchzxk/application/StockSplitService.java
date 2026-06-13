@@ -11,8 +11,6 @@ import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -56,11 +54,6 @@ public class StockSplitService {
         return splitInProgress.get();
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    public void runSplitOnStartup() {
-        performDailyStockSplit();
-    }
-
     @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyStockSplit() {
@@ -85,6 +78,15 @@ public class StockSplitService {
         List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
                 .filter(stock -> !isEventStock(stock))
                 .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
+                .filter(stock -> {
+                    long postSplitPrice = stock.getCurrentPrice() / SPLIT_RATIO;
+                    if (postSplitPrice < 100) {
+                        log.warn("Skipping split for {} (channelId={}): post-split price {} is too low.",
+                                stock.getStreamerName(), stock.getChannelId(), postSplitPrice);
+                        return false;
+                    }
+                    return true;
+                })
                 .sorted(Comparator.comparing(Stock::getStreamerName))
                 .toList();
         if (targets.isEmpty()) {
