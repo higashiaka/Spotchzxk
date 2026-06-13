@@ -40,6 +40,7 @@ public class ChzzkLivePollingService {
     private final UserShareRepository userShareRepository;
     private final ChzzkApiClient chzzkApiClient;
     private final TransactionTemplate transactionTemplate;
+    private final StockSplitService stockSplitService;
 
     private final ExecutorService pollingExecutor = Executors.newFixedThreadPool(50);
     private final ConcurrentHashMap<String, Stock> liveStockCache = new ConcurrentHashMap<>();
@@ -136,6 +137,9 @@ public class ChzzkLivePollingService {
 
     @Scheduled(fixedDelay = 1_000)
     public void payDueIntervalDividends() {
+        if (stockSplitService.isSplitInProgress()) {
+            return;
+        }
         int paidCount = 0;
         List<Stock> dueStocks = new ArrayList<>(liveStockCache.values()).stream()
                 .filter(stock -> !isEventStock(stock))

@@ -11,15 +11,14 @@ import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -49,10 +48,24 @@ public class StockSplitService {
     private final TradeEngine tradeEngine;
     private final CandleService candleService;
 
+    private final AtomicBoolean splitInProgress = new AtomicBoolean(false);
+
+    public boolean isSplitInProgress() {
+        return splitInProgress.get();
+    }
+
     @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
-    @Retryable(retryFor = CannotAcquireLockException.class, maxAttempts = 3, backoff = @Backoff(delay = 1000, multiplier = 2))
     @Transactional
     public void performDailyStockSplit() {
+        splitInProgress.set(true);
+        try {
+            doPerformSplit();
+        } finally {
+            splitInProgress.set(false);
+        }
+    }
+
+    private void doPerformSplit() {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalDate today = now.toLocalDate();
         int splitHour = now.getHour();
