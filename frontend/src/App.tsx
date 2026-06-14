@@ -118,7 +118,7 @@ function App() {
   }
 
   const rightTab: Exclude<AppTab, 'profile'> = activeTab === 'profile' ? 'home' : activeTab;
-  const balance = portfolio?.balance ?? 0;
+  const balance = Number(portfolio?.balance ?? 0);
 
   const sidebarProps = {
     user,

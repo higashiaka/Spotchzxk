@@ -28,7 +28,7 @@ export const usePortfolio = (userId: string | undefined): UseQueryResult<Portfol
   return useQuery({
     queryKey: ['portfolio', userId],
     queryFn: async (): Promise<Portfolio> => {
-      if (!userId) return { balance: 0, shares: {}, avgPrices: {}, dividendTotal: 0, remainingResets: 0 };
+      if (!userId) return { balance: '0', shares: {}, avgPrices: {}, dividendTotal: '0', remainingResets: 0 };
       const res = await apiFetch('/api/portfolio');
       if (!res.ok) throw new Error('포트폴리오 조회 실패');
       return res.json();

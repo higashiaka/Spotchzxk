@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
-import { avatarColor, fmt, fmtKorean, priceColor } from '../../utils';
+import { avatarColor, fmtKorean, priceColor } from '../../utils';
 
 type RankingType = 'realized' | 'dividend' | 'donation';
 

@@ -77,7 +77,7 @@ export const useTrade = (userId: string) => {
     onSuccess: (data) => {
       if (data?.newBalance !== undefined) {
         queryClient.setQueryData<Portfolio>(['portfolio', userId], (old) =>
-          old ? { ...old, balance: Number(data.newBalance) } : old
+          old ? { ...old, balance: String(data.newBalance) } : old
         );
       }
       queryClient.invalidateQueries({ queryKey: ['history', userId] });
