@@ -27,9 +27,9 @@ interface StockOrderHistoryItem {
 
 const CANDLE_PAGE_SIZE = 100;
 const KST_OFFSET_SECONDS = 9 * 3600;
-// lightweight-charts uses JS Number internally; prices above Number.MAX_SAFE_INTEGER (~9e15)
-// cause rendering freezes. Scale down OHLC values before passing to chart and restore in formatter.
-const CHART_SAFE_MAX = 1_000_000_000; // cap scaled prices at 1B for chart rendering
+// lightweight-charts uses JS Number internally; large prices cause rendering freezes.
+// Scale down OHLC values before passing to chart and restore in the price axis formatter.
+const CHART_SAFE_MAX = 1_000_000_000; // threshold above which scaling is applied
 
 const calcScaleFactor = (price: number): number => {
   if (!Number.isFinite(price) || price <= 0 || price <= CHART_SAFE_MAX) return 1;
@@ -38,7 +38,7 @@ const calcScaleFactor = (price: number): number => {
 
 const scalePrice = (price: number, sf: number): number => {
   const scaled = sf === 1 ? price : price / sf;
-  return Number.isFinite(scaled) ? Math.max(1, Math.min(CHART_SAFE_MAX, Math.round(scaled))) : 1;
+  return Number.isFinite(scaled) && scaled >= 1 ? Math.round(scaled) : 1;
 };
 
 const toChartCandle = (
