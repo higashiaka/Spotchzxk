@@ -48,6 +48,7 @@ public class Stock {
     private BigDecimal dailyTradingValue = BigDecimal.ZERO;
 
     @Builder.Default
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
     private BigDecimal basePrice = BigDecimal.ZERO;
 
@@ -56,6 +57,7 @@ public class Stock {
     private BigDecimal listingPrice = BigDecimal.valueOf(10_000);
 
     @Builder.Default
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     @Column(precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
     private BigDecimal currentPrice = BigDecimal.ZERO;
 

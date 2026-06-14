@@ -12,10 +12,10 @@ function mapRawToStock(r: any): Stock {
   return {
     id: r.channelId || r.id,
     name: r.streamerName || r.name,
-    price: r.currentPrice ?? r.price ?? 1000,
+    price: Number(r.currentPrice ?? r.price ?? 1000),
     totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
     dailyTradingValue: Number(r.dailyTradingValue ?? 0),
-    basePrice: r.basePrice ?? 1000,
+    basePrice: Number(r.basePrice ?? 1000),
     followers: Number(r.followerCount ?? r.followers ?? 0),
     listingPrice: Number(r.listingPrice ?? 0),
     profileImageUrl: r.profileImageUrl,

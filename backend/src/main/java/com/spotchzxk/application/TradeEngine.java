@@ -643,14 +643,14 @@ public class TradeEngine {
                                 BigInteger coinReserve, BigInteger shareReserve, String orderId) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt));
         asyncBroadcast.send("/topic/prices/" + channelId,
-                Map.of("streamerId", channelId, "price", executedPrice));
+                Map.of("streamerId", channelId, "price", executedPrice.toPlainString()));
         asyncBroadcast.send("/topic/trades", Map.of(
                 "id", orderId,
                 "streamerId", channelId,
                 "streamerName", streamerName != null ? streamerName : channelId,
                 "type", isBuy ? "buy" : "sell",
                 "quantity", qty,
-                "price", executedPrice,
+                "price", executedPrice.toPlainString(),
                 "tradingValue", toLongCap(cost),
                 "coinReserve", coinReserve.toString(),
                 "shareReserve", shareReserve.toString(),

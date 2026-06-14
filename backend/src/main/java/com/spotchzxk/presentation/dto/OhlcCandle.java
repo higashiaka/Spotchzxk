@@ -9,10 +9,10 @@ import lombok.*;
 @Builder
 public class OhlcCandle {
     private long bucketStart;
-    private double open;
-    private double high;
-    private double low;
-    private double close;
+    private long open;
+    private long high;
+    private long low;
+    private long close;
 }
 
 
