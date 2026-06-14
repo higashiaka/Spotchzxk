@@ -32,7 +32,7 @@ const KST_OFFSET_SECONDS = 9 * 3600;
 const CHART_SAFE_MAX = 1_000_000_000; // cap scaled prices at 1B for chart rendering
 
 const calcScaleFactor = (price: number): number => {
-  if (!Number.isFinite(price) || price <= 0 || price <= Number.MAX_SAFE_INTEGER) return 1;
+  if (!Number.isFinite(price) || price <= 0 || price <= CHART_SAFE_MAX) return 1;
   return Math.pow(10, Math.floor(Math.log10(price)) - 8);
 };
 
