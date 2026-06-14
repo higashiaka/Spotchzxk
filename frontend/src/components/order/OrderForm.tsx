@@ -74,13 +74,21 @@ const maxAffordableMarketBuyQuantity = (
   shareReserve?: bigint,
 ): number => {
   if (balance <= 0 || currentPrice <= 0) return 0;
-  let low = 0;
-  let high = Math.max(0, Math.floor(balance / currentPrice));
+  // Cap high at Number.MAX_SAFE_INTEGER to prevent infinite loop from IEEE 754 precision loss
+  // (mid - 1 === mid when mid > MAX_SAFE_INTEGER, causing binary search to never converge)
+  let high = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    Math.max(0, Math.floor(balance / currentPrice)),
+  );
   if (shareReserve && shareReserve > 0n) {
     const poolMax = shareReserve - 1n;
-    if (poolMax < BigInt(high)) high = Number(poolMax);
+    const poolMaxSafe = poolMax > BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number.MAX_SAFE_INTEGER
+      : Number(poolMax);
+    if (poolMaxSafe < high) high = poolMaxSafe;
   }
   const balanceBigInt = BigInt(Math.floor(balance));
+  let low = 0;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
     const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
