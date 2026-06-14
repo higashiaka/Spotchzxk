@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,6 +44,11 @@ public class CandleService {
     private final Map<Long, Set<String>> tradedStockIdsByMinute = new ConcurrentHashMap<>();
     private final Map<String, OhlcCandle> currentBucketCandles = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Object> stockLocks = new ConcurrentHashMap<>();
+    // Debounce candle broadcasts: during bulk trades, collapse rapid-fire updates
+    // into a single broadcast per stockId per 300 ms to prevent client freeze.
+    private final ConcurrentHashMap<String, Map<String, OhlcCandle>> pendingBroadcasts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> broadcastTimers = new ConcurrentHashMap<>();
+    private final ScheduledThreadPoolExecutor broadcastScheduler = new ScheduledThreadPoolExecutor(2);
 
     private Object lockFor(String stockId) {
         return stockLocks.computeIfAbsent(stockId, k -> new Object());
@@ -84,7 +92,21 @@ public class CandleService {
 
     public void onTrade(String stockId, BigDecimal executedPrice, long timestamp) {
         Map<String, OhlcCandle> update = recordTradeAndCompute(stockId, executedPrice, timestamp);
-        messagingTemplate.convertAndSend("/topic/candles/" + stockId, update);
+        // Merge into pending state for this stockId
+        pendingBroadcasts.merge(stockId, update, (existing, incoming) -> {
+            existing.putAll(incoming);
+            return existing;
+        });
+        // Cancel previous timer and reschedule — broadcast fires 300 ms after the last trade
+        ScheduledFuture<?> prev = broadcastTimers.put(stockId,
+                broadcastScheduler.schedule(() -> {
+                    Map<String, OhlcCandle> payload = pendingBroadcasts.remove(stockId);
+                    broadcastTimers.remove(stockId);
+                    if (payload != null) {
+                        messagingTemplate.convertAndSend("/topic/candles/" + stockId, payload);
+                    }
+                }, 300, TimeUnit.MILLISECONDS));
+        if (prev != null) prev.cancel(false);
     }
 
     private Map<String, OhlcCandle> recordTradeAndCompute(String stockId, BigDecimal executedPrice, long timestamp) {
