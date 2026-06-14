@@ -28,12 +28,26 @@ interface StockOrderHistoryItem {
 const CANDLE_PAGE_SIZE = 100;
 const KST_OFFSET_SECONDS = 9 * 3600;
 
-const toChartCandle = (c: { bucketStart: number; open: number; high: number; low: number; close: number }): Candle => ({
+// lightweight-charts uses JS Number internally; prices above ~9e15 (Number.MAX_SAFE_INTEGER)
+// cause internal overflow/NaN and freeze the browser tab. Scale down before passing to chart,
+// then reverse in the price formatter.
+const calcScaleFactor = (price: number): number => {
+  if (price <= Number.MAX_SAFE_INTEGER) return 1;
+  return Math.pow(10, Math.max(0, Math.floor(Math.log10(price)) - 8));
+};
+
+const scalePrice = (price: number, sf: number): number =>
+  sf === 1 ? price : Math.round(price / sf);
+
+const toChartCandle = (
+  c: { bucketStart: number; open: number; high: number; low: number; close: number },
+  sf: number,
+): Candle => ({
   time: (Math.floor(c.bucketStart / 1000) + KST_OFFSET_SECONDS) as UTCTimestamp,
-  open: c.open,
-  high: c.high,
-  low: c.low,
-  close: c.close,
+  open: scalePrice(c.open, sf),
+  high: scalePrice(c.high, sf),
+  low: scalePrice(c.low, sf),
+  close: scalePrice(c.close, sf),
 });
 
 const toBucketStartMs = (time: UTCTimestamp) => (Number(time) - KST_OFFSET_SECONDS) * 1000;
@@ -58,6 +72,11 @@ export const StockDetail = ({
   const [stockTradesError, setStockTradesError] = useState(false);
   const [qtyStr, setQtyStr] = useState('1');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
+  // scaleFactor fixed at mount time to avoid re-fetching candles on price change.
+  // lightweight-charts freezes with prices > Number.MAX_SAFE_INTEGER (~9e15); we scale
+  // down the OHLC values and restore in the chart formatter.
+  const [scaleFactor] = useState(() => calcScaleFactor(streamer.price));
+  const scaleFactorRef = useRef(scaleFactor);
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
   fetchParamsRef.current = { stockId: streamer.id, interval };
   const candlesRef = useRef<Candle[]>([]);
@@ -85,11 +104,12 @@ export const StockDetail = ({
     });
     if (options.before) params.set('before', String(options.before));
 
+    const sf = scaleFactorRef.current;
     return apiFetch(`/api/stocks/${stockId}/candles?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
       .then((data: { candles: { bucketStart: number; open: number; high: number; low: number; close: number }[]; splitEvents: { executedAt: number; splitRatio: number }[] } | null) => {
         if (!data) return;
-        const next = data.candles.map(toChartCandle);
+        const next = data.candles.map(c => toChartCandle(c, sf));
         setSplitEvents(data.splitEvents ?? []);
         setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
         if (options.prepend) {
@@ -166,13 +186,7 @@ export const StockDetail = ({
         const updates = JSON.parse(message.body) as Record<string, { bucketStart: number; open: number; high: number; low: number; close: number }>;
         const updated = updates[interval];
         if (!updated) return;
-        const newCandle: Candle = {
-          time: (Math.floor(updated.bucketStart / 1000) + 9 * 3600) as UTCTimestamp,
-          open: updated.open,
-          high: updated.high,
-          low: updated.low,
-          close: updated.close,
-        };
+        const newCandle: Candle = toChartCandle(updated, scaleFactorRef.current);
         setCandles(prev => {
           if (prev.length === 0) return [newCandle];
           const last = prev[prev.length - 1];
@@ -322,6 +336,7 @@ export const StockDetail = ({
           </div>
           <InteractiveChart
             candles={candles}
+            scaleFactor={scaleFactor}
             splitEvents={splitEvents}
             chartType={chartType}
             color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
