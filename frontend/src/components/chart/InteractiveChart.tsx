@@ -25,17 +25,11 @@ const chartColors = {
   },
 };
 
-const formatScaledPrice = (value: number, scaleFactor: number): string => {
-  const restored = value * scaleFactor;
-  return Number.isFinite(restored) ? fmtKorean(restored) : 'overflow';
-};
-
 /** Interactive chart component built on lightweight-charts.
  *  Supports candlestick/line toggle, shows OHLC info on crosshair move,
  *  and automatically distinguishes incremental (last-candle) vs full data updates */
 export const InteractiveChart = ({
   candles,
-  scaleFactor = 1,
   splitEvents = [],
   chartType,
   color,
@@ -46,9 +40,6 @@ export const InteractiveChart = ({
   className = '',
 }: {
   candles: Candle[];
-  /** Factor by which OHLC prices were divided before being passed to this component.
-   *  Used to restore original values in the price axis formatter and OHLC header. */
-  scaleFactor?: number;
   splitEvents?: { executedAt: number; splitRatio: number }[];
   chartType: 'candle' | 'line';
   color: string;
@@ -190,9 +181,7 @@ export const InteractiveChart = ({
     if (seriesRef.current) chart.removeSeries(seriesRef.current);
 
     const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
-    const priceFormat = scaleFactor > 1
-      ? { type: 'custom' as const, formatter: (p: number) => formatScaledPrice(p, scaleFactor) }
-      : { type: 'price' as const, precision: 0, minMove: 1 };
+    const priceFormat = { type: 'price' as const, precision: 0, minMove: 1 };
     if (chartType === 'candle') {
       seriesRef.current = chart.addCandlestickSeries({
         upColor: '#FF3B30', downColor: '#007AFF',
@@ -213,7 +202,7 @@ export const InteractiveChart = ({
       setActive(current[current.length - 1]);
     }
     prevCandlesRef.current = current;
-  }, [chartType, scaleFactor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chartType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update area series color when color prop changes
   useEffect(() => {
@@ -288,10 +277,10 @@ export const InteractiveChart = ({
               {isUp ? '▲ 양봉' : '▼ 음봉'}
             </span>
             <div className="flex gap-2.5">
-              <span>시<strong className="ml-1 text-[#FF3B30]">{formatScaledPrice(displayActive.open, scaleFactor)}</strong></span>
-              <span>고<strong className="ml-1 text-[#FF3B30]">{formatScaledPrice(displayActive.high, scaleFactor)}</strong></span>
-              <span>저<strong className="ml-1 text-[#007AFF]">{formatScaledPrice(displayActive.low, scaleFactor)}</strong></span>
-              <span>종<strong className="ml-1" style={{ color: activeColor }}>{formatScaledPrice(displayActive.close, scaleFactor)}</strong></span>
+              <span>시<strong className="ml-1 text-[#FF3B30]">{fmtKorean(displayActive.open)}</strong></span>
+              <span>고<strong className="ml-1 text-[#FF3B30]">{fmtKorean(displayActive.high)}</strong></span>
+              <span>저<strong className="ml-1 text-[#007AFF]">{fmtKorean(displayActive.low)}</strong></span>
+              <span>종<strong className="ml-1" style={{ color: activeColor }}>{fmtKorean(displayActive.close)}</strong></span>
             </div>
             {isHovering && (
               <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded"
