@@ -25,6 +25,11 @@ const chartColors = {
   },
 };
 
+const formatScaledPrice = (value: number, scaleFactor: number): string => {
+  const restored = value * scaleFactor;
+  return Number.isFinite(restored) ? fmtKorean(restored) : 'overflow';
+};
+
 /** Interactive chart component built on lightweight-charts.
  *  Supports candlestick/line toggle, shows OHLC info on crosshair move,
  *  and automatically distinguishes incremental (last-candle) vs full data updates */
@@ -73,6 +78,8 @@ export const InteractiveChart = ({
   const onLoadMoreRef = useRef(onLoadMore);
   const hasMoreRef = useRef(hasMore);
   const isLoadingMoreRef = useRef(isLoadingMore);
+  const previousVisibleFromRef = useRef<number | null>(null);
+  const lastLoadMoreAtRef = useRef(0);
   /** Ref for initial theme at chart creation */
   const themeRef = useRef(theme);
   useEffect(() => { themeRef.current = theme; }, [theme]);
@@ -155,8 +162,17 @@ export const InteractiveChart = ({
     });
 
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      const previousFrom = previousVisibleFromRef.current;
+      previousVisibleFromRef.current = range?.from ?? null;
       if (!range || !hasMoreRef.current || isLoadingMoreRef.current) return;
-      if (range.from <= 5) onLoadMoreRef.current?.();
+      if (previousFrom === null) return;
+
+      const now = Date.now();
+      const movedLeft = range.from < previousFrom;
+      if (range.from <= 5 && movedLeft && now - lastLoadMoreAtRef.current > 500) {
+        lastLoadMoreAtRef.current = now;
+        onLoadMoreRef.current?.();
+      }
     });
 
     return () => {
@@ -175,7 +191,7 @@ export const InteractiveChart = ({
 
     const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
     const priceFormat = scaleFactor > 1
-      ? { type: 'custom' as const, formatter: (p: number) => fmtKorean(p * scaleFactor) }
+      ? { type: 'custom' as const, formatter: (p: number) => formatScaledPrice(p, scaleFactor) }
       : { type: 'price' as const, precision: 0, minMove: 1 };
     if (chartType === 'candle') {
       seriesRef.current = chart.addCandlestickSeries({
@@ -272,10 +288,10 @@ export const InteractiveChart = ({
               {isUp ? '▲ 양봉' : '▼ 음봉'}
             </span>
             <div className="flex gap-2.5">
-              <span>시<strong className="ml-1 text-[#FF3B30]">{fmtKorean(displayActive.open * scaleFactor)}</strong></span>
-              <span>고<strong className="ml-1 text-[#FF3B30]">{fmtKorean(displayActive.high * scaleFactor)}</strong></span>
-              <span>저<strong className="ml-1 text-[#007AFF]">{fmtKorean(displayActive.low * scaleFactor)}</strong></span>
-              <span>종<strong className="ml-1" style={{ color: activeColor }}>{fmtKorean(displayActive.close * scaleFactor)}</strong></span>
+              <span>시<strong className="ml-1 text-[#FF3B30]">{formatScaledPrice(displayActive.open, scaleFactor)}</strong></span>
+              <span>고<strong className="ml-1 text-[#FF3B30]">{formatScaledPrice(displayActive.high, scaleFactor)}</strong></span>
+              <span>저<strong className="ml-1 text-[#007AFF]">{formatScaledPrice(displayActive.low, scaleFactor)}</strong></span>
+              <span>종<strong className="ml-1" style={{ color: activeColor }}>{formatScaledPrice(displayActive.close, scaleFactor)}</strong></span>
             </div>
             {isHovering && (
               <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded"

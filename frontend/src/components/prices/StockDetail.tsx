@@ -27,28 +27,40 @@ interface StockOrderHistoryItem {
 
 const CANDLE_PAGE_SIZE = 100;
 const KST_OFFSET_SECONDS = 9 * 3600;
+const CHART_PRICE_CAP = 1_000_000_000;
+const MAX_SCALE_FACTOR = 1e300;
 
 // lightweight-charts uses JS Number internally; prices above ~9e15 (Number.MAX_SAFE_INTEGER)
 // cause internal overflow/NaN and freeze the browser tab. Scale down before passing to chart,
 // then reverse in the price formatter.
 const calcScaleFactor = (price: number): number => {
+  if (!Number.isFinite(price) || price <= 0) return MAX_SCALE_FACTOR;
   if (price <= Number.MAX_SAFE_INTEGER) return 1;
-  return Math.pow(10, Math.max(0, Math.floor(Math.log10(price)) - 8));
+  return Math.min(MAX_SCALE_FACTOR, Math.pow(10, Math.max(0, Math.floor(Math.log10(price)) - 8)));
 };
 
-const scalePrice = (price: number, sf: number): number =>
-  sf === 1 ? price : Math.round(price / sf);
+const scalePrice = (price: number, sf: number): number => {
+  const scaled = sf === 1 ? price : price / sf;
+  if (!Number.isFinite(scaled)) return CHART_PRICE_CAP;
+  return Math.max(1, Math.min(CHART_PRICE_CAP, Math.round(scaled)));
+};
 
 const toChartCandle = (
   c: { bucketStart: number; open: number; high: number; low: number; close: number },
   sf: number,
-): Candle => ({
-  time: (Math.floor(c.bucketStart / 1000) + KST_OFFSET_SECONDS) as UTCTimestamp,
-  open: scalePrice(c.open, sf),
-  high: scalePrice(c.high, sf),
-  low: scalePrice(c.low, sf),
-  close: scalePrice(c.close, sf),
-});
+): Candle => {
+  const open = scalePrice(c.open, sf);
+  const high = scalePrice(c.high, sf);
+  const low = scalePrice(c.low, sf);
+  const close = scalePrice(c.close, sf);
+  return {
+    time: (Math.floor(c.bucketStart / 1000) + KST_OFFSET_SECONDS) as UTCTimestamp,
+    open,
+    high: Math.max(open, high, low, close),
+    low: Math.min(open, high, low, close),
+    close,
+  };
+};
 
 const toBucketStartMs = (time: UTCTimestamp) => (Number(time) - KST_OFFSET_SECONDS) * 1000;
 
