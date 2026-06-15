@@ -255,10 +255,11 @@ export const InteractiveChart = ({
     const markers = splitEvents
       .map(e => {
         const targetSec = Math.floor(e.executedAt / 1000) + 9 * 3600;
-        // Snap to the nearest candle time
-        const nearest = candleTimes.reduce((a, b) =>
-          Math.abs(b - targetSec) < Math.abs(a - targetSec) ? b : a
-        );
+        // Snap to the latest candle at or before the split time
+        const before = candleTimes.filter(t => t <= targetSec);
+        const nearest = before.length > 0
+          ? before[before.length - 1]
+          : candleTimes[0];
         return {
           time: nearest as UTCTimestamp,
           position: 'aboveBar' as const,
