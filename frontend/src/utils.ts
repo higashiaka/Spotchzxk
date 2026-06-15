@@ -59,6 +59,10 @@ export const fmtShares = (value: number): string => {
   const rounded = Math.round(value);
   const abs = Math.abs(rounded);
   const trim = (s: string) => s.replace(/\.?0+$/, '');
+  if (abs >= 1e36)              return `${trim((rounded / 1e36).toFixed(1))}간주`;
+  if (abs >= 1e32)              return `${trim((rounded / 1e32).toFixed(1))}구주`;
+  if (abs >= 1e28)              return `${trim((rounded / 1e28).toFixed(1))}양주`;
+  if (abs >= 1e24)              return `${trim((rounded / 1e24).toFixed(1))}자주`;
   if (abs >= 1e20)              return `${trim((rounded / 1e20).toFixed(1))}해주`;
   if (abs >= 1e16)              return `${trim((rounded / 1e16).toFixed(1))}경주`;
   if (abs >= 1_000_000_000_000) return `${trim((rounded / 1_000_000_000_000).toFixed(1))}조주`;

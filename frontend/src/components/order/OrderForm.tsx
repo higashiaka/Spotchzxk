@@ -5,7 +5,7 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { avatarColor, fmt, fmtBigInt, changePct, priceColorClass, tradeColorClass } from '../../utils';
+import { avatarColor, fmt, fmtBigInt, fmtShares, changePct, priceColorClass, tradeColorClass } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
@@ -91,6 +91,9 @@ const maxAffordableMarketBuyQuantity = (
   let low = 0;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
+    // Guard: float precision loss can make mid === low when both approach MAX_SAFE_INTEGER,
+    // causing cost <= balance to leave low unchanged → infinite loop.
+    if (mid <= low) break;
     const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
     if (cost <= balanceBigInt) {
       low = mid;
@@ -310,7 +313,7 @@ export const OrderForm = ({
         {orderType === 'sell' && (
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">현재 보유량</span>
-            <span className="text-xs font-mono font-bold text-white">{held}주</span>
+            <span className="text-xs font-mono font-bold text-white">{fmtShares(held)}</span>
           </div>
         )}
       </div>
