@@ -33,11 +33,6 @@ interface ApiCandle {
   close: number;
 }
 
-interface SplitMarker {
-  executedAt: number;
-  splitRatio: number;
-}
-
 const CANDLE_PAGE_SIZE = 100;
 const KST_OFFSET_SECONDS = 9 * 3600;
 // lightweight-charts uses JS Number internally; large prices cause rendering freezes.
@@ -86,7 +81,6 @@ export const StockDetail = ({
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [rawCandles, setRawCandles] = useState<ApiCandle[]>([]);
-  const [splitMarkers, setSplitMarkers] = useState<SplitMarker[]>([]);
   const [hasMoreCandles, setHasMoreCandles] = useState(true);
   const [isLoadingMoreCandles, setIsLoadingMoreCandles] = useState(false);
   const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
@@ -131,11 +125,9 @@ export const StockDetail = ({
 
     return apiFetch(`/api/stocks/${stockId}/candles?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
-      .then((data: { candles: ApiCandle[]; splitEvents?: SplitMarker[]; markers?: SplitMarker[] } | null) => {
+      .then((data: { candles: ApiCandle[] } | null) => {
         if (!data) return;
-        const markers = data.markers ?? data.splitEvents ?? [];
         const next = data.candles;
-        setSplitMarkers(markers);
         setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
         if (options.prepend) {
           setRawCandles(prev => {
@@ -361,7 +353,6 @@ export const StockDetail = ({
           <InteractiveChart
             candles={candles}
             scaleFactor={scaleFactor}
-            splitMarkers={splitMarkers}
             chartType={chartType}
             color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
             interval={interval}
