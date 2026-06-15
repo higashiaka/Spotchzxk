@@ -231,10 +231,10 @@ public class CandleService {
             filled.add(c);
         }
 
-        // Fill from the last candle up to the bucket just before the requested `before` time
+        // Trailing gap uses current price so post-split gaps reflect the split-adjusted price, not the stale pre-split last trade
         OhlcCandle last = filled.get(filled.size() - 1);
         for (long b = last.getBucketStart() + bucketMs; b <= lastAllowedBucket; b += bucketMs) {
-            filled.add(flat(b, last.getClose()));
+            filled.add(flat(b, fallback));
         }
 
         return filled;
