@@ -39,8 +39,9 @@ export const fmtKoreanBigInt = (value: bigint): string => {
   return fmtKorean(Number(value));
 };
 
-/** Abbreviates large numbers with K/M/B/T suffix (e.g. 1,200 → 1.2K) */
+/** Abbreviates large numbers with K/M/B/T/Q suffix (e.g. 1,200 → 1.2K) */
 export const fmtCompact = (n: number): string => {
+  if (n >= 1_000_000_000_000_000) return `${(n / 1_000_000_000_000_000).toFixed(1).replace(/\.0$/, '')}Q`;
   if (n >= 1_000_000_000_000) return `${(n / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
