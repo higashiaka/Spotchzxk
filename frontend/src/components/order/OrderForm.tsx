@@ -27,9 +27,14 @@ const ceilDiv = (num: bigint, den: bigint): bigint => {
   return num % den > 0n ? q + 1n : q;
 };
 
+const ceilToBigInt = (value: number): bigint => {
+  if (!Number.isFinite(value) || value <= 0) return 0n;
+  return BigInt(Math.ceil(value));
+};
+
 const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): bigint => {
   if (currentPrice <= 0 || quantity <= 0) return 0n;
-  const gross = BigInt(Math.round(currentPrice)) * BigInt(quantity);
+  const gross = ceilToBigInt(currentPrice * quantity);
   const fee = ceilDiv(gross * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
   return isBuy ? gross + fee : gross - fee;
 };
@@ -64,7 +69,7 @@ const averageAmmPrice = (
 ): number => {
   if (quantity <= 0) return 0;
   const userNetAmount = ammTradeAmount(currentPrice, coinReserve, shareReserve, isBuy, quantity);
-  return Math.max(1, Number(userNetAmount / BigInt(quantity)));
+  return Number(userNetAmount) / quantity;
 };
 
 const maxAffordableMarketBuyQuantity = (
@@ -124,7 +129,7 @@ export const OrderForm = ({
   const qty = Math.max(0, parseInt(qtyStr, 10) || 0);
   const balance: number = Number(portfolio?.balance ?? 0);
   const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
-  const limitPrice = Math.max(0, Math.floor(parseFloat(limitPriceStr) || 0));
+  const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
   const coinReserve = parseReserve(streamer.coinReserve);
   const shareReserve = parseReserve(streamer.shareReserve);
@@ -143,7 +148,7 @@ export const OrderForm = ({
     qty,
   );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
-  const limitGrossAmount = BigInt(estimatedExecutionPrice) * BigInt(qty);
+  const limitGrossAmount = ceilToBigInt(estimatedExecutionPrice * qty);
   const limitFee = ceilDiv(limitGrossAmount * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
 
   const totalCost: bigint = orderMode === 'market'
@@ -263,7 +268,8 @@ export const OrderForm = ({
             type="number"
             value={limitPriceStr}
             onChange={(e) => setLimitPriceStr(e.target.value)}
-            min="1"
+            min="0.000001"
+            step="0.000001"
             disabled={!user}
             placeholder="가격 입력"
             className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50 surface-card-secondary border-primary-token"

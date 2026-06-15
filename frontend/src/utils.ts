@@ -1,10 +1,20 @@
 /** Default base price for new stocks in KRW */
 export const BASE_PRICE = 1000;
 
+/** Coerces API/runtime numeric values into a finite number for rendering math */
+export const toFiniteNumber = (value: unknown, fallback = 0): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const trimDecimal = (value: string): string => value.replace(/\.?0+$/, '');
+
 /** Formats a number as Korean KRW string; shows 2 decimal places below 1 KRW */
-export const fmt = (value: number): string => {
-  if (value < 1) return `${value.toFixed(2)}원`;
-  return `${Math.round(value).toLocaleString('ko-KR')}원`;
+export const fmt = (value: number | string): string => {
+  const n = toFiniteNumber(value);
+  if (n === 0) return '0원';
+  if (Math.abs(n) < 1) return `${trimDecimal(n.toFixed(6))}원`;
+  return `${Math.round(n).toLocaleString('ko-KR')}원`;
 };
 
 /** Formats a bigint as Korean KRW string, safe for values above Number.MAX_SAFE_INTEGER */
@@ -40,7 +50,8 @@ export const fmtKoreanBigInt = (value: bigint): string => {
 };
 
 /** Abbreviates large numbers with K/M/B/T/Q/Qi/Sx/Sp/Oc/No suffix (e.g. 1,200 → 1.2K) */
-export const fmtCompact = (n: number): string => {
+export const fmtCompact = (value: number | string): string => {
+  const n = toFiniteNumber(value);
   if (n >= 1e30) return `${(n / 1e30).toFixed(1).replace(/\.0$/, '')}No`;
   if (n >= 1e27) return `${(n / 1e27).toFixed(1).replace(/\.0$/, '')}Oc`;
   if (n >= 1e24) return `${(n / 1e24).toFixed(1).replace(/\.0$/, '')}Sp`;
@@ -55,8 +66,8 @@ export const fmtCompact = (n: number): string => {
 };
 
 /** Formats share quantities with Korean units while keeping the 주 suffix visible */
-export const fmtShares = (value: number): string => {
-  const rounded = Math.round(value);
+export const fmtShares = (value: number | string): string => {
+  const rounded = Math.round(toFiniteNumber(value));
   const abs = Math.abs(rounded);
   const trim = (s: string) => s.replace(/\.?0+$/, '');
   if (abs >= 1e36)              return `${trim((rounded / 1e36).toFixed(1))}간주`;
@@ -72,8 +83,8 @@ export const fmtShares = (value: number): string => {
 };
 
 /** Abbreviates large KRW amounts with Korean-style short units (e.g. 140,000,000 KRW → "1.4 hundred million") */
-export const fmtCompactWon = (value: number): string => {
-  const rounded = Math.round(value);
+export const fmtCompactWon = (value: number | string): string => {
+  const rounded = Math.round(toFiniteNumber(value));
   const abs = Math.abs(rounded);
   if (abs >= 1e36) return `${(rounded / 1e36).toFixed(1).replace(/\.0$/, '')}간`;
   if (abs >= 1e32) return `${(rounded / 1e32).toFixed(1).replace(/\.0$/, '')}구`;
@@ -88,41 +99,46 @@ export const fmtCompactWon = (value: number): string => {
 };
 
 /** Formats a KRW amount with Korean units: 해 / 경 / 조 / 억 / 천만 / 만 (e.g. 123,456,789 → "1.2억원") */
-export const fmtKorean = (value: number): string => {
-  const abs = Math.abs(Math.round(value));
+export const fmtKorean = (value: number | string): string => {
+  const n = toFiniteNumber(value);
+  const abs = Math.abs(Math.round(n));
   const trim = (s: string) => s.replace(/\.?0+$/, '');
-  if (abs >= 1e36)              return `${trim((value / 1e36).toFixed(1))}간원`;
-  if (abs >= 1e32)              return `${trim((value / 1e32).toFixed(1))}구원`;
-  if (abs >= 1e28)              return `${trim((value / 1e28).toFixed(1))}양원`;
-  if (abs >= 1e24)              return `${trim((value / 1e24).toFixed(1))}자원`;
-  if (abs >= 1e20)              return `${trim((value / 1e20).toFixed(1))}해원`;
-  if (abs >= 1e16)              return `${trim((value / 1e16).toFixed(1))}경원`;
-  if (abs >= 1_000_000_000_000) return `${trim((value / 1_000_000_000_000).toFixed(1))}조원`;
-  if (abs >= 100_000_000)       return `${trim((value / 100_000_000).toFixed(1))}억원`;
-  if (abs >= 10_000_000)        return `${trim((value / 10_000_000).toFixed(2))}천만원`;
-  if (abs >= 10_000)            return `${trim((value / 10_000).toFixed(1))}만원`;
-  return fmt(value);
+  if (abs >= 1e36)              return `${trim((n / 1e36).toFixed(1))}간원`;
+  if (abs >= 1e32)              return `${trim((n / 1e32).toFixed(1))}구원`;
+  if (abs >= 1e28)              return `${trim((n / 1e28).toFixed(1))}양원`;
+  if (abs >= 1e24)              return `${trim((n / 1e24).toFixed(1))}자원`;
+  if (abs >= 1e20)              return `${trim((n / 1e20).toFixed(1))}해원`;
+  if (abs >= 1e16)              return `${trim((n / 1e16).toFixed(1))}경원`;
+  if (abs >= 1_000_000_000_000) return `${trim((n / 1_000_000_000_000).toFixed(1))}조원`;
+  if (abs >= 100_000_000)       return `${trim((n / 100_000_000).toFixed(1))}억원`;
+  if (abs >= 10_000_000)        return `${trim((n / 10_000_000).toFixed(2))}천만원`;
+  if (abs >= 10_000)            return `${trim((n / 10_000).toFixed(1))}만원`;
+  return fmt(n);
 };
 
 /** Calculates percentage return relative to the base price */
-export const changePct = (price: number, basePrice: number = BASE_PRICE) =>
-  ((price - basePrice) / basePrice) * 100;
+export const changePct = (price: number | string, basePrice: number | string = BASE_PRICE) => {
+  const safeBasePrice = toFiniteNumber(basePrice, BASE_PRICE);
+  if (safeBasePrice === 0) return 0;
+  return ((toFiniteNumber(price) - safeBasePrice) / safeBasePrice) * 100;
+};
 
 /** Formats a percentage with sign and abbreviation for large values */
-export const fmtPct = (pct: number, decimals: number = 1): string => {
-  const sign = pct >= 0 ? '+' : '';
-  const abs = Math.abs(pct);
+export const fmtPct = (pct: number | string, decimals: number = 1): string => {
+  const n = toFiniteNumber(pct);
+  const sign = n >= 0 ? '+' : '';
+  const abs = Math.abs(n);
   const trim = (s: string) => s.replace(/\.?0+$/, '');
-  if (abs >= 1e36)              return `${sign}${trim((pct / 1e36).toFixed(1))}간%`;
-  if (abs >= 1e32)              return `${sign}${trim((pct / 1e32).toFixed(1))}구%`;
-  if (abs >= 1e28)              return `${sign}${trim((pct / 1e28).toFixed(1))}양%`;
-  if (abs >= 1e24)              return `${sign}${trim((pct / 1e24).toFixed(1))}자%`;
-  if (abs >= 1e20)              return `${sign}${trim((pct / 1e20).toFixed(1))}해%`;
-  if (abs >= 1e16)              return `${sign}${trim((pct / 1e16).toFixed(1))}경%`;
-  if (abs >= 1_000_000_000_000) return `${sign}${trim((pct / 1_000_000_000_000).toFixed(1))}조%`;
-  if (abs >= 100_000_000)       return `${sign}${trim((pct / 100_000_000).toFixed(1))}억%`;
-  if (abs >= 10_000)            return `${sign}${trim((pct / 10_000).toFixed(1))}만%`;
-  return `${sign}${pct.toFixed(decimals)}%`;
+  if (abs >= 1e36)              return `${sign}${trim((n / 1e36).toFixed(1))}간%`;
+  if (abs >= 1e32)              return `${sign}${trim((n / 1e32).toFixed(1))}구%`;
+  if (abs >= 1e28)              return `${sign}${trim((n / 1e28).toFixed(1))}양%`;
+  if (abs >= 1e24)              return `${sign}${trim((n / 1e24).toFixed(1))}자%`;
+  if (abs >= 1e20)              return `${sign}${trim((n / 1e20).toFixed(1))}해%`;
+  if (abs >= 1e16)              return `${sign}${trim((n / 1e16).toFixed(1))}경%`;
+  if (abs >= 1_000_000_000_000) return `${sign}${trim((n / 1_000_000_000_000).toFixed(1))}조%`;
+  if (abs >= 100_000_000)       return `${sign}${trim((n / 100_000_000).toFixed(1))}억%`;
+  if (abs >= 10_000)            return `${sign}${trim((n / 10_000).toFixed(1))}만%`;
+  return `${sign}${n.toFixed(decimals)}%`;
 };
 
 /** Returns LoL-style tier label and color based on relative rank among all users */

@@ -12,6 +12,7 @@ public final class AmmCalculator {
 
     private static final BigInteger FEE_RATE_NUMERATOR = BigInteger.valueOf(15);
     private static final BigInteger FEE_RATE_DENOMINATOR = BigInteger.valueOf(1000);
+    private static final int PRICE_SCALE = 6;
 
     private AmmCalculator() {}
 
@@ -64,13 +65,13 @@ public final class AmmCalculator {
     /** Current AMM spot price (coinReserve / shareReserve) */
     public static BigDecimal price(BigInteger coinReserve, BigInteger shareReserve) {
         if (shareReserve.signum() <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
-        return new BigDecimal(coinReserve).divide(new BigDecimal(shareReserve), 0, RoundingMode.HALF_UP);
+        return new BigDecimal(coinReserve).divide(new BigDecimal(shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     /** ?됯퇏 泥닿껐媛 = 珥?肄붿씤 / ?섎웾 */
     public static BigDecimal avgPrice(BigInteger coinAmount, long qty) {
         return new BigDecimal(coinAmount)
-                .divide(BigDecimal.valueOf(qty), 0, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(qty), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     public record AmmResult(

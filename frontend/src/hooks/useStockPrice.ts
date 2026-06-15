@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { subscribeStomp } from '../lib/stompClient';
+import { toFiniteNumber } from '../utils';
 
 /** Real-time price state for a single stock */
 export interface StockPriceData {
@@ -15,8 +16,9 @@ export interface StockPriceData {
  *  @param channelId - Channel ID of the stock to subscribe
  *  @param fallbackPrice - Default price shown before first tick */
 export const useStockPrice = (channelId: string, fallbackPrice: number = 100): StockPriceData => {
+  const safeFallbackPrice = toFiniteNumber(fallbackPrice, 100);
   const [priceData, setPriceData] = useState<StockPriceData>({
-    currentPrice: fallbackPrice,
+    currentPrice: safeFallbackPrice,
     previousPrice: null,
     direction: 'none',
   });
@@ -24,7 +26,7 @@ export const useStockPrice = (channelId: string, fallbackPrice: number = 100): S
   useEffect(() => {
     // Reset to fallbackPrice when channelId changes
     setPriceData({
-      currentPrice: fallbackPrice,
+      currentPrice: safeFallbackPrice,
       previousPrice: null,
       direction: 'none',
     });
@@ -32,7 +34,7 @@ export const useStockPrice = (channelId: string, fallbackPrice: number = 100): S
     const subscription = subscribeStomp(`/topic/prices/${channelId}`, (message) => {
       try {
         const { price } = JSON.parse(message.body);
-        const newPrice = Number(Number(price).toFixed(2));
+        const newPrice = Number(toFiniteNumber(price).toFixed(6));
         setPriceData(prev => {
           if (prev.currentPrice === newPrice) return prev;
           return {

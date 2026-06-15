@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @DynamicUpdate
 public class Stock {
+    private static final int PRICE_SCALE = 6;
 
     @Id
     @Column(length = 50)
@@ -44,21 +45,21 @@ public class Stock {
     private BigDecimal dailyVolume = BigDecimal.ZERO;
 
     @Builder.Default
-    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    @Column(nullable = false, precision = 65, scale = 6, columnDefinition = "DECIMAL(65,6) DEFAULT 0.000000")
     private BigDecimal dailyTradingValue = BigDecimal.ZERO;
 
     @Builder.Default
     @JsonFormat(shape = JsonFormat.Shape.STRING)
-    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    @Column(nullable = false, precision = 65, scale = 6, columnDefinition = "DECIMAL(65,6) DEFAULT 0.000000")
     private BigDecimal basePrice = BigDecimal.ZERO;
 
     @Builder.Default
-    @Column(nullable = false, precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 10000.00")
+    @Column(nullable = false, precision = 65, scale = 6, columnDefinition = "DECIMAL(65,6) DEFAULT 10000.000000")
     private BigDecimal listingPrice = BigDecimal.valueOf(10_000);
 
     @Builder.Default
     @JsonFormat(shape = JsonFormat.Shape.STRING)
-    @Column(precision = 65, scale = 2, columnDefinition = "DECIMAL(65,2) DEFAULT 0.00")
+    @Column(precision = 65, scale = 6, columnDefinition = "DECIMAL(65,6) DEFAULT 0.000000")
     private BigDecimal currentPrice = BigDecimal.ZERO;
 
     @Column
@@ -177,7 +178,7 @@ public class Stock {
         this.shareReserve = shareReserve;
         this.liquidityTier = liquidityTier;
         this.currentPrice = new BigDecimal(coinReserve)
-                .divide(new BigDecimal(shareReserve), 2, RoundingMode.HALF_UP);
+                .divide(new BigDecimal(shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     public void initAmmPool(long coinReserve, long shareReserve, long liquidityTier) {
@@ -190,7 +191,7 @@ public class Stock {
 
     public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {
         this.currentPrice = new BigDecimal(newCoinReserve)
-                .divide(new BigDecimal(newShareReserve), 2, RoundingMode.HALF_UP);
+                .divide(new BigDecimal(newShareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
         this.feePool = nonNull(this.feePool).add(fee);
@@ -213,9 +214,9 @@ public class Stock {
             throw new IllegalArgumentException("Split ratio must be greater than 1.");
         }
         BigDecimal ratioDecimal = BigDecimal.valueOf(ratio);
-        this.currentPrice = this.currentPrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
-        this.basePrice = this.basePrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
-        this.listingPrice = this.listingPrice.divide(ratioDecimal, 2, RoundingMode.HALF_UP).max(BigDecimal.ONE);
+        this.currentPrice = this.currentPrice.divide(ratioDecimal, PRICE_SCALE, RoundingMode.HALF_UP);
+        this.basePrice = this.basePrice.divide(ratioDecimal, PRICE_SCALE, RoundingMode.HALF_UP);
+        this.listingPrice = this.listingPrice.divide(ratioDecimal, PRICE_SCALE, RoundingMode.HALF_UP);
         this.totalSupply = this.totalSupply.multiply(ratioDecimal);
         this.dailyVolume = this.dailyVolume.multiply(ratioDecimal);
         this.issuedShares = this.issuedShares.multiply(ratioDecimal);

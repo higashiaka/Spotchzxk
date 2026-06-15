@@ -37,6 +37,7 @@ public class TradeEngine {
 
     // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to match megaphone/stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
+    private static final int PRICE_SCALE = 6;
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -413,7 +414,7 @@ public class TradeEngine {
         BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
         BigDecimal newAvg = prevAvg.multiply(prevQty)
                 .add(cost)
-                .divide(newQty, 2, RoundingMode.HALF_UP);
+                .divide(newQty, PRICE_SCALE, RoundingMode.HALF_UP);
         share.updateOnBuy(newQty, newAvg);
         userShareRepository.save(share);
     }
@@ -431,7 +432,7 @@ public class TradeEngine {
     private BigDecimal calculateRealizedProfit(UserShare share, long qty, BigDecimal proceeds) {
         BigDecimal avgBuyPrice = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
         BigDecimal costBasis = avgBuyPrice.multiply(BigDecimal.valueOf(qty));
-        return proceeds.subtract(costBasis).setScale(2, RoundingMode.HALF_UP);
+        return proceeds.subtract(costBasis).setScale(PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     private void addToUserBalance(String userId, BigDecimal delta) {

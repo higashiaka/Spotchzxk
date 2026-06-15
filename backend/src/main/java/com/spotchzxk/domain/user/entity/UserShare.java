@@ -33,7 +33,7 @@ public class UserShare {
     @Column(precision = 65, scale = 2)
     private BigDecimal preStreamQuantity;
 
-    @Column(precision = 65, scale = 2)
+    @Column(precision = 65, scale = 6)
     private BigDecimal avgPrice;
 
     @Column
@@ -58,5 +58,4 @@ public class UserShare {
     }
 
 }
-
 

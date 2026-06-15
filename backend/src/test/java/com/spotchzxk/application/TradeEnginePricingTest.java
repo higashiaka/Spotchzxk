@@ -68,6 +68,13 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void ammSpotPrice_preservesFractionalWonBelowOneWon() {
+        BigDecimal price = AmmCalculator.price(BigInteger.ONE, BigInteger.valueOf(10_000));
+
+        assertThat(price).isEqualByComparingTo("0.000100");
+    }
+
+    @Test
     void poolDepthLimit_throwsWhenQtyExceedsShareReserve() {
         assertThatThrownBy(() -> AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, SHARE_RESERVE))
                 .isInstanceOf(IllegalStateException.class)
