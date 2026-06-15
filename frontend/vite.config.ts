@@ -9,4 +9,17 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://spotchzxk.xyz',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'https://spotchzxk.xyz',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
 })

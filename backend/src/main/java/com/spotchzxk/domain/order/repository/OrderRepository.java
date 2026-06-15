@@ -14,7 +14,7 @@ import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, String> {
-    List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<Order> findTop300ByUserIdOrderByCreatedAtDesc(String userId);
     List<Order> findTop50ByOrderByCreatedAtDesc();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

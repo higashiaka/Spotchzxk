@@ -29,7 +29,7 @@ public interface UserRepository extends JpaRepository<User, String> {
         SELECT COUNT(*) FROM (
           SELECT u.id,
             u.coin_balance + COALESCE(SUM(CASE WHEN us.quantity > 0
-              THEN CAST(us.quantity AS DECIMAL(30,0)) * CAST(COALESCE(s.current_price, 0) AS DECIMAL(30,0)) ELSE 0 END), 0) AS total_assets
+              THEN us.quantity * COALESCE(s.current_price, 0) ELSE 0 END), 0) AS total_assets
           FROM users u
           LEFT JOIN user_shares us ON us.user_id = u.id
           LEFT JOIN stocks s ON s.channel_id = us.channel_id
@@ -38,7 +38,7 @@ public interface UserRepository extends JpaRepository<User, String> {
         ) ranked
         WHERE ranked.total_assets > (
           SELECT COALESCE(u2.coin_balance, 0) + COALESCE(SUM(CASE WHEN us2.quantity > 0
-            THEN CAST(us2.quantity AS DECIMAL(30,0)) * CAST(COALESCE(s2.current_price, 0) AS DECIMAL(30,0)) ELSE 0 END), 0)
+            THEN us2.quantity * COALESCE(s2.current_price, 0) ELSE 0 END), 0)
           FROM users u2
           LEFT JOIN user_shares us2 ON us2.user_id = u2.id
           LEFT JOIN stocks s2 ON s2.channel_id = us2.channel_id

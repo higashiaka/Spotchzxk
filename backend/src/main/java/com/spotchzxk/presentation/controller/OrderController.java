@@ -23,7 +23,7 @@ public class OrderController {
         if (uid == null || uid.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        List<Order> orders = orderRepository.findByUserIdOrderByCreatedAtDesc(uid);
+        List<Order> orders = orderRepository.findTop300ByUserIdOrderByCreatedAtDesc(uid);
         return ResponseEntity.ok(orders);
     }
 
