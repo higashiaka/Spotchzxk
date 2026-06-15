@@ -3,6 +3,7 @@ package com.spotchzxk.application;
 import com.spotchzxk.presentation.dto.OhlcCandle;
 import com.spotchzxk.domain.order.entity.Order;
 import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.stock.entity.StockSplitEvent;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
@@ -13,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -66,11 +68,14 @@ public class CandleService {
                 ? orderRepository.findByStreamerIdAndTradedAtBetween(stockId, from, safeBeforeMs - 1)
                 : List.of();
         Order previousOrder = orderRepository.findTopByStreamerIdTradedBeforeWithPrice(stockId, from);
+        long splitLookupFrom = previousOrder != null ? previousOrder.tradeAt() : from;
+        List<StockSplitEvent> splitEvents = stockSplitEventRepository
+                .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, splitLookupFrom);
         long gapFallback = previousOrder != null
-                ? Math.max(1L, previousOrder.getExecutedPrice().longValue())
+                ? adjustPriceForSplitsAfter(previousOrder.getExecutedPrice(), previousOrder.tradeAt(), splitEvents)
                 : fallback;
 
-        List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs);
+        List<OhlcCandle> oneMin = buildOneMin(orders, listedAtMs, splitEvents);
         List<OhlcCandle> result = "1m".equals(interval) ? oneMin : aggregate(oneMin, bucketMs);
 
         result = fillGaps(result, bucketMs, from, safeBeforeMs, gapFallback);
@@ -154,11 +159,11 @@ public class CandleService {
     // ?? Internal utilities ???????????????????????????????????????????????????????????????
 
     /** Order list → 1-minute candle list (only candles with trades, no gap-filling) */
-    private List<OhlcCandle> buildOneMin(List<Order> orders, long listedAtMs) {
+    private List<OhlcCandle> buildOneMin(List<Order> orders, long listedAtMs, List<StockSplitEvent> splitEvents) {
         Map<Long, OhlcCandle> buckets = new LinkedHashMap<>();
         for (Order o : orders) {
             if (o.tradeAt() < listedAtMs || o.getExecutedPrice() == null) continue;
-            long price = Math.max(1L, o.getExecutedPrice().longValue());
+            long price = adjustPriceForSplitsAfter(o.getExecutedPrice(), o.tradeAt(), splitEvents);
             long bucket = (o.tradeAt() / MS_1M) * MS_1M;
             OhlcCandle c = buckets.get(bucket);
             if (c == null) {
@@ -268,7 +273,9 @@ public class CandleService {
                 String interval = entry.getKey();
                 long bucketStart = entry.getValue();
                 long bucketEnd = bucketStart + INTERVAL_MS.get(interval);
-                OhlcCandle candle = restoreCurrentBucket(orders, bucketStart, bucketEnd, price);
+                List<StockSplitEvent> splitEvents = stockSplitEventRepository
+                        .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(stockId, bucketStart);
+                OhlcCandle candle = restoreCurrentBucket(orders, bucketStart, bucketEnd, price, splitEvents);
                 currentBucketCandles.put(stockId + ":" + interval, candle);
                 result.put(interval, candle);
             }
@@ -277,7 +284,13 @@ public class CandleService {
         return result;
     }
 
-    private OhlcCandle restoreCurrentBucket(List<Order> orders, long bucketStart, long bucketEnd, long fallbackPrice) {
+    private OhlcCandle restoreCurrentBucket(
+            List<Order> orders,
+            long bucketStart,
+            long bucketEnd,
+            long fallbackPrice,
+            List<StockSplitEvent> splitEvents
+    ) {
         List<Order> inBucket = orders.stream()
                 .filter(o -> o.tradeAt() >= bucketStart
                         && o.tradeAt() < bucketEnd
@@ -289,7 +302,7 @@ public class CandleService {
         }
 
         List<Long> prices = inBucket.stream()
-                .map(o -> Math.max(1L, o.getExecutedPrice().longValue()))
+                .map(o -> adjustPriceForSplitsAfter(o.getExecutedPrice(), o.tradeAt(), splitEvents))
                 .collect(Collectors.toList());
         long open = prices.get(0);
         long close = prices.get(prices.size() - 1);
@@ -313,6 +326,16 @@ public class CandleService {
         return OhlcCandle.builder()
                 .bucketStart(bucketStart)
                 .open(price).high(price).low(price).close(price).build();
+    }
+
+    private long adjustPriceForSplitsAfter(BigDecimal price, long priceAt, List<StockSplitEvent> splitEvents) {
+        BigDecimal adjusted = price;
+        for (StockSplitEvent event : splitEvents) {
+            if (event.getExecutedAt() > priceAt) {
+                adjusted = adjusted.divide(BigDecimal.valueOf(event.getSplitRatio()), 2, RoundingMode.HALF_UP);
+            }
+        }
+        return Math.max(1L, adjusted.longValue());
     }
 }
 
