@@ -41,14 +41,26 @@ const scalePrice = (price: number, sf: number): number => {
   return Number.isFinite(scaled) && scaled >= 1 ? Math.round(scaled) : 1;
 };
 
+// Returns the product of split ratios for all splits that occurred AFTER bucketStart.
+// Dividing a pre-split price by this factor normalizes it to post-split (current) scale,
+// preventing lightweight-charts from freezing on pre-split prices > CHART_SAFE_MAX.
+const cumulativeSplitFactor = (
+  bucketStart: number,
+  splitEvents: { executedAt: number; splitRatio: number }[],
+): number => splitEvents
+  .filter(e => e.executedAt > bucketStart)
+  .reduce((acc, e) => acc * e.splitRatio, 1);
+
 const toChartCandle = (
   c: { bucketStart: number; open: number; high: number; low: number; close: number },
   sf: number,
+  splitEvents: { executedAt: number; splitRatio: number }[],
 ): Candle => {
-  const open = scalePrice(c.open, sf);
-  const high = scalePrice(c.high, sf);
-  const low = scalePrice(c.low, sf);
-  const close = scalePrice(c.close, sf);
+  const sf2 = cumulativeSplitFactor(c.bucketStart, splitEvents);
+  const open = scalePrice(c.open / sf2, sf);
+  const high = scalePrice(c.high / sf2, sf);
+  const low = scalePrice(c.low / sf2, sf);
+  const close = scalePrice(c.close / sf2, sf);
   return {
     time: (Math.floor(c.bucketStart / 1000) + KST_OFFSET_SECONDS) as UTCTimestamp,
     open,
@@ -82,6 +94,7 @@ export const StockDetail = ({
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
   const [scaleFactor] = useState(() => calcScaleFactor(streamer.price));
   const scaleFactorRef = useRef(scaleFactor);
+  const splitEventsRef = useRef<{ executedAt: number; splitRatio: number }[]>([]);
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
   fetchParamsRef.current = { stockId: streamer.id, interval };
   const candlesRef = useRef<Candle[]>([]);
@@ -89,6 +102,7 @@ export const StockDetail = ({
   const isLoadingMoreCandlesRef = useRef(false);
 
   useEffect(() => { candlesRef.current = candles; }, [candles]);
+  useEffect(() => { splitEventsRef.current = splitEvents; }, [splitEvents]);
   useEffect(() => { hasMoreCandlesRef.current = hasMoreCandles; }, [hasMoreCandles]);
   useEffect(() => { isLoadingMoreCandlesRef.current = isLoadingMoreCandles; }, [isLoadingMoreCandles]);
 
@@ -114,8 +128,9 @@ export const StockDetail = ({
       .then((data: { candles: { bucketStart: number; open: number; high: number; low: number; close: number }[]; splitEvents: { executedAt: number; splitRatio: number }[] } | null) => {
         if (!data) return;
         const sf = scaleFactorRef.current;
-        const next = data.candles.map(c => toChartCandle(c, sf));
-        setSplitEvents(data.splitEvents ?? []);
+        const events = data.splitEvents ?? [];
+        const next = data.candles.map(c => toChartCandle(c, sf, events));
+        setSplitEvents(events);
         setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
         if (options.prepend) {
           setCandles(prev => {
@@ -191,7 +206,7 @@ export const StockDetail = ({
         const updates = JSON.parse(message.body) as Record<string, { bucketStart: number; open: number; high: number; low: number; close: number }>;
         const updated = updates[interval];
         if (!updated) return;
-        const newCandle: Candle = toChartCandle(updated, scaleFactorRef.current);
+        const newCandle: Candle = toChartCandle(updated, scaleFactorRef.current, splitEventsRef.current);
         setCandles(prev => {
           if (prev.length === 0) return [newCandle];
           const last = prev[prev.length - 1];

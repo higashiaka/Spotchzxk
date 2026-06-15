@@ -55,7 +55,7 @@ public class StockService {
         return rows.stream()
                 .map(row -> new OrderBookDto.OrderBookEntry(
                         row[0] instanceof BigDecimal price ? price : new BigDecimal(String.valueOf(row[0])),
-                        ((Number) row[1]).longValue()
+                        row[1] instanceof BigDecimal qty ? qty : new BigDecimal(String.valueOf(row[1]))
                 ))
                 .collect(Collectors.toList());
     }

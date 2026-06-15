@@ -17,7 +17,7 @@ public class OrderBookDto {
     @AllArgsConstructor
     public static class OrderBookEntry {
         private BigDecimal price;
-        private long quantity;
+        private BigDecimal quantity;
     }
 }
 
