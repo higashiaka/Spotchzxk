@@ -13,6 +13,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -192,7 +193,7 @@ public class ChzzkLivePollingService {
         Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
         fresh.startLive(LocalDateTime.now());
         userShareRepository.snapshotPreStreamQuantities(fresh.getChannelId());
-        long preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
+        BigDecimal preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
         fresh.updatePreStreamFloat(preStreamFloat);
         stockRepository.save(fresh);
         log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",

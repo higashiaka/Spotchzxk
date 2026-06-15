@@ -148,8 +148,8 @@ public class Stock {
         this.dividendAccumulationCount = count;
     }
 
-    public void updatePreStreamFloat(long preStreamFloat) {
-        this.preStreamFloat = BigDecimal.valueOf(preStreamFloat);
+    public void updatePreStreamFloat(BigDecimal preStreamFloat) {
+        this.preStreamFloat = preStreamFloat;
     }
 
     public void updateStreamerName(String streamerName) {
@@ -184,8 +184,8 @@ public class Stock {
         initAmmPool(BigInteger.valueOf(coinReserve), BigInteger.valueOf(shareReserve), liquidityTier);
     }
 
-    public void syncIssuedShares(long totalHeld) {
-        this.issuedShares = BigDecimal.valueOf(Math.max(0, totalHeld));
+    public void syncIssuedShares(BigDecimal totalHeld) {
+        this.issuedShares = totalHeld.max(BigDecimal.ZERO);
     }
 
     public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {

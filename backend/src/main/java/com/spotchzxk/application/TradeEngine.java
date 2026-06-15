@@ -47,7 +47,7 @@ public class TradeEngine {
     private final CandleService candleService;
 
     private final ConcurrentHashMap<String, BigDecimal> balanceCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, Map<String, Long>> sharesCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Map<String, BigDecimal>> sharesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BigDecimal> priceCache = new ConcurrentHashMap<>();
     // {coinReserve, shareReserve}
     private final ConcurrentHashMap<String, BigInteger[]> ammPoolCache = new ConcurrentHashMap<>();
@@ -171,8 +171,8 @@ public class TradeEngine {
         long executedAt = System.currentTimeMillis();
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
-        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
-        long heldQty = shares.getOrDefault(channelId, 0L);
+        Map<String, BigDecimal> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        BigDecimal heldQty = shares.getOrDefault(channelId, BigDecimal.ZERO);
 
         validateTrade(userId, channelId, isBuy, qty, isBuy ? userNet : BigDecimal.ZERO, currentBalance, heldQty);
 
@@ -232,8 +232,8 @@ public class TradeEngine {
         long executedAt = System.currentTimeMillis();
 
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
-        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
-        long heldQty = shares.getOrDefault(channelId, 0L);
+        Map<String, BigDecimal> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        BigDecimal heldQty = shares.getOrDefault(channelId, BigDecimal.ZERO);
 
         validateTrade(userId, channelId, isBuy, qty, isBuy ? userNet : BigDecimal.ZERO, currentBalance, heldQty);
         String orderId = UUID.randomUUID().toString();
@@ -251,8 +251,8 @@ public class TradeEngine {
                                                   BigDecimal fallbackPrice, BigDecimal limitPrice) {
         BigDecimal reserveAmount = limitReservationAmount(limitPrice, qty, isBuy);
         BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
-        Map<String, Long> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
-        long heldQty = shares.getOrDefault(channelId, 0L);
+        Map<String, BigDecimal> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+        BigDecimal heldQty = shares.getOrDefault(channelId, BigDecimal.ZERO);
 
         validateLimitOrder(channelId, userId, isBuy, qty, reserveAmount, currentBalance, heldQty);
         String orderId = UUID.randomUUID().toString();
@@ -295,7 +295,7 @@ public class TradeEngine {
     }
 
     private void validateTrade(String userId, String channelId, boolean isBuy, long qty, BigDecimal cost,
-                               BigDecimal currentBalance, long heldQty) {
+                               BigDecimal currentBalance, BigDecimal heldQty) {
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         if (stock.isTradingSuspended()) {
@@ -304,7 +304,7 @@ public class TradeEngine {
 
         if (!isBuy) {
             long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
-            if (heldQty - pendingSellQty < qty) {
+            if (heldQty.subtract(BigDecimal.valueOf(pendingSellQty)).compareTo(BigDecimal.valueOf(qty)) < 0) {
                 throw new IllegalStateException("보유 수량이 부족합니다.");
             }
             return;
@@ -317,7 +317,8 @@ public class TradeEngine {
                 && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
         if (isNewListing) {
             long pendingBuyQty = orderRepository.sumPendingBuyQuantity(userId, channelId);
-            if (heldQty + pendingBuyQty + qty > AntiWhalePolicy.NEW_LISTING_CAP) {
+            if (heldQty.add(BigDecimal.valueOf(pendingBuyQty)).add(BigDecimal.valueOf(qty))
+                    .compareTo(BigDecimal.valueOf(AntiWhalePolicy.NEW_LISTING_CAP)) > 0) {
                 throw new IllegalStateException("신규 상장 초기에는 최대 200주까지 보유 가능합니다.");
             }
         }
@@ -329,7 +330,7 @@ public class TradeEngine {
     }
 
     private void validateLimitOrder(String channelId, String userId, boolean isBuy, long qty, BigDecimal reserveAmount,
-                                    BigDecimal currentBalance, long heldQty) {
+                                    BigDecimal currentBalance, BigDecimal heldQty) {
         if (isBuy) {
             validateTrade(userId, channelId, true, qty, reserveAmount, currentBalance, heldQty);
             Stock stock = stockRepository.findById(channelId)
@@ -343,7 +344,7 @@ public class TradeEngine {
         }
 
         long pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
-        if (heldQty - pendingSellQty < qty) {
+        if (heldQty.subtract(BigDecimal.valueOf(pendingSellQty)).compareTo(BigDecimal.valueOf(qty)) < 0) {
             throw new IllegalStateException("보유 수량이 부족합니다.");
         }
     }
@@ -388,7 +389,7 @@ public class TradeEngine {
                     .orElseGet(() -> UserShare.builder()
                             .user(user)
                             .stock(stock)
-                            .quantity(0L)
+                            .quantity(BigDecimal.ZERO)
                             .avgPrice(BigDecimal.ZERO)
                             .build());
             updateBoughtShare(share, qty, cost);
@@ -396,7 +397,7 @@ public class TradeEngine {
         } else {
             UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
                     .orElseThrow(() -> new IllegalStateException("보유 수량이 부족합니다."));
-            if (share.getQuantity() < qty) {
+            if (share.getQuantity().compareTo(BigDecimal.valueOf(qty)) < 0) {
                 throw new IllegalStateException("보유 수량이 부족합니다.");
             }
             BigDecimal profit = calculateRealizedProfit(share, qty, cost);
@@ -406,19 +407,19 @@ public class TradeEngine {
     }
 
     private void updateBoughtShare(UserShare share, long qty, BigDecimal cost) {
-        long prevQty = share.getQuantity();
-        long newQty = prevQty + qty;
+        BigDecimal prevQty = share.getQuantity();
+        BigDecimal newQty = prevQty.add(BigDecimal.valueOf(qty));
         BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
-        BigDecimal newAvg = prevAvg.multiply(BigDecimal.valueOf(prevQty))
+        BigDecimal newAvg = prevAvg.multiply(prevQty)
                 .add(cost)
-                .divide(BigDecimal.valueOf(newQty), 2, RoundingMode.HALF_UP);
+                .divide(newQty, 2, RoundingMode.HALF_UP);
         share.updateOnBuy(newQty, newAvg);
         userShareRepository.save(share);
     }
 
     private void updateSoldShare(UserShare share, long qty) {
-        long newQty = share.getQuantity() - qty;
-        if (newQty <= 0) {
+        BigDecimal newQty = share.getQuantity().subtract(BigDecimal.valueOf(qty));
+        if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
             userShareRepository.delete(share);
             return;
         }
@@ -620,7 +621,7 @@ public class TradeEngine {
 
     private BigDecimal updateCaches(String userId, String channelId, boolean isBuy, long qty,
                                     AmmCalculator.AmmResult amm, BigInteger[] poolForCache, BigDecimal currentBalance,
-                                    Map<String, Long> shares, long heldQty) {
+                                    Map<String, BigDecimal> shares, BigDecimal heldQty) {
         ammPoolCache.put(channelId, poolForCache);
         priceCache.put(channelId, amm.newPrice());
 
@@ -630,7 +631,7 @@ public class TradeEngine {
                 : currentBalance.add(userNet);
         balanceCache.put(userId, newBalance);
 
-        shares.put(channelId, isBuy ? heldQty + qty : heldQty - qty);
+        shares.put(channelId, isBuy ? heldQty.add(BigDecimal.valueOf(qty)) : heldQty.subtract(BigDecimal.valueOf(qty)));
         return newBalance;
     }
 
@@ -667,7 +668,7 @@ public class TradeEngine {
                 .orElse(User.builder().id(userId).coinBalance(INITIAL_BALANCE).build());
         balanceCache.put(userId, user.getCoinBalance());
 
-        Map<String, Long> shares = new ConcurrentHashMap<>();
+        Map<String, BigDecimal> shares = new ConcurrentHashMap<>();
         userShareRepository.findByUserId(userId)
                 .forEach(share -> shares.put(share.getStock().getChannelId(), share.getQuantity()));
         sharesCache.put(userId, shares);

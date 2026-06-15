@@ -44,8 +44,8 @@ public class AmmMigrationService implements ApplicationRunner {
             try {
                 if (stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0
                         && stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
-                    long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
-                    if (stock.getIssuedShares().compareTo(BigDecimal.valueOf(totalHeld)) != 0) {
+                    BigDecimal totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
+                    if (stock.getIssuedShares().compareTo(totalHeld) != 0) {
                         new TransactionTemplate(txManager).executeWithoutResult(s -> {
                             stock.syncIssuedShares(totalHeld);
                             stockRepository.save(stock);
@@ -73,11 +73,11 @@ public class AmmMigrationService implements ApplicationRunner {
         } else {
             currentPrice = stock.getListingPrice().max(BigDecimal.ONE);
         }
-        long totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
+        BigDecimal totalHeld = userShareRepository.sumQuantityByStock(stock.getChannelId());
         int tier = calcLiquidityTier(stock.getFollowerCount());
         long tierReserve = calcTierShareReserve(stock.getFollowerCount());
 
-        long shareReserve = Math.max(totalHeld * 2, tierReserve);
+        long shareReserve = Math.max(totalHeld.multiply(BigDecimal.valueOf(2)).longValue(), tierReserve);
         if (shareReserve < 100) shareReserve = 100;
         BigInteger coinReserve = currentPrice.toBigInteger().multiply(BigInteger.valueOf(shareReserve));
         stock.initAmmPool(coinReserve, BigInteger.valueOf(shareReserve), tier);

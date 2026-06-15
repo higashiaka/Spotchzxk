@@ -46,8 +46,8 @@ public class DividendService {
         Stock fresh = stockRepository.findById(stock.getChannelId())
                 .orElseThrow(() -> new IllegalStateException("종목을 찾을 수 없습니다."));
 
-        long eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
-        if (eligibleShares <= 0) return;
+        BigDecimal eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
+        if (eligibleShares.compareTo(BigDecimal.ZERO) <= 0) return;
 
         BigInteger feePool = fresh.getFeePool();
         if (feePool.signum() <= 0) return;
@@ -58,7 +58,7 @@ public class DividendService {
         if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) return;
 
         BigDecimal ratePerShare = totalPayout
-                .divide(BigDecimal.valueOf(eligibleShares), 4, RoundingMode.FLOOR);
+                .divide(eligibleShares, 4, RoundingMode.FLOOR);
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
 
@@ -70,11 +70,11 @@ public class DividendService {
 
             List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(fresh.getChannelId());
             List<UserDividendLog> logs = shares.stream()
-                    .filter(us -> us.getQuantity() > 0
+                    .filter(us -> us.getQuantity().compareTo(BigDecimal.ZERO) > 0
                             && !"__house__".equals(us.getUser().getId())
                             && !us.getUser().isBot())
                     .map(us -> {
-                        long dividendQty = us.getQuantity();
+                        BigDecimal dividendQty = us.getQuantity();
                         return UserDividendLog.builder()
                                 .userId(us.getUser().getId())
                                 .channelId(fresh.getChannelId())
@@ -82,7 +82,7 @@ public class DividendService {
                                 .profileImageUrl(fresh.getProfileImageUrl())
                                 .quantity(dividendQty)
                                 .ratePerShare(ratePerShare)
-                                .amount(ratePerShare.multiply(BigDecimal.valueOf(dividendQty))
+                                .amount(ratePerShare.multiply(dividendQty)
                                         .setScale(2, RoundingMode.HALF_UP))
                                 .build();
                     })

@@ -27,11 +27,11 @@ public class UserShare {
     @JoinColumn(name = "channel_id")
     private Stock stock;
 
-    @Column
-    private long quantity;
+    @Column(precision = 65, scale = 2)
+    private BigDecimal quantity;
 
-    @Column
-    private long preStreamQuantity;
+    @Column(precision = 65, scale = 2)
+    private BigDecimal preStreamQuantity;
 
     @Column(precision = 65, scale = 2)
     private BigDecimal avgPrice;
@@ -45,14 +45,14 @@ public class UserShare {
         updatedAt = LocalDateTime.now();
     }
 
-    public void updateOnBuy(long newQuantity, BigDecimal newAvgPrice) {
+    public void updateOnBuy(BigDecimal newQuantity, BigDecimal newAvgPrice) {
         this.quantity = newQuantity;
         this.avgPrice = newAvgPrice;
     }
 
-    public void updateOnSell(long newQuantity) {
+    public void updateOnSell(BigDecimal newQuantity) {
         this.quantity = newQuantity;
-        if (this.preStreamQuantity > newQuantity) {
+        if (this.preStreamQuantity != null && this.preStreamQuantity.compareTo(newQuantity) > 0) {
             this.preStreamQuantity = newQuantity;
         }
     }

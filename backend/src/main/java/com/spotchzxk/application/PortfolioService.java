@@ -53,7 +53,7 @@ public class PortfolioService {
     public Map<String, Object> getPortfolioResponse(String userId) {
         User p = getOrCreate(userId);
         List<UserShare> userShares = userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId);
-        Map<String, Long> shares = userShares.stream()
+        Map<String, BigDecimal> shares = userShares.stream()
                 .collect(Collectors.toMap(
                         s -> s.getStock().getChannelId(),
                         s -> s.getQuantity()
@@ -90,7 +90,7 @@ public class PortfolioService {
         User p = getOrCreate(userId);
 
         List<UserShare> shares = userShareRepository.findByUserId(userId);
-        boolean hasShares = shares.stream().anyMatch(s -> s.getQuantity() > 0);
+        boolean hasShares = shares.stream().anyMatch(s -> s.getQuantity().compareTo(BigDecimal.ZERO) > 0);
         if (hasShares) {
             throw new IllegalStateException("보유 주식이 있으면 초기화할 수 없습니다. 먼저 매도 후 시도해주세요.");
         }

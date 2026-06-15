@@ -30,8 +30,8 @@ public class UserDividendLog {
     @Column(columnDefinition = "TEXT")
     private String profileImageUrl;
 
-    @Column(nullable = false)
-    private long quantity;
+    @Column(nullable = false, precision = 65, scale = 2)
+    private BigDecimal quantity;
 
     @Column(nullable = false, precision = 65, scale = 4)
     private BigDecimal ratePerShare;
