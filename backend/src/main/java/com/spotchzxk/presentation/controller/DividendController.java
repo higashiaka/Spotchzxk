@@ -49,11 +49,11 @@ public class DividendController {
                 "channelId", log.getChannelId(),
                 "streamerName", log.getStreamerName(),
                 "profileImageUrl", log.getProfileImageUrl() != null ? log.getProfileImageUrl() : "",
-                "quantity", Math.abs(log.getQuantity()),
+                "quantity", log.getQuantity().abs(),
                 "ratePerShare", log.getRatePerShare().abs(),
                 "amount", log.getAmount().abs(),
                 "createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : FALLBACK_CREATED_AT
-        )).collect(Collectors.toList());
+        )).collect(Collectors.<Map<String, Object>>toList());
         return ResponseEntity.ok(result);
     }
 }

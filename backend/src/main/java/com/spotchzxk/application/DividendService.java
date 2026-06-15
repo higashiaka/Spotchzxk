@@ -122,12 +122,12 @@ public class DividendService {
                             "channelId", ul.getChannelId(),
                             "streamerName", ul.getStreamerName(),
                             "profileImageUrl", ul.getProfileImageUrl() != null ? ul.getProfileImageUrl() : "",
-                            "quantity", Math.abs(ul.getQuantity()),
+                            "quantity", ul.getQuantity().abs(),
                             "ratePerShare", ul.getRatePerShare().abs(),
                             "amount", ul.getAmount().abs(),
                             "createdAt", ul.getCreatedAt() != null ? ul.getCreatedAt().toString() : now
                     ))
-                    .collect(Collectors.toList());
+                    .collect(Collectors.<Map<String, Object>>toList());
             final List<String> userIds = logs.stream()
                     .map(UserDividendLog::getUserId)
                     .collect(Collectors.toList());

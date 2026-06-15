@@ -583,7 +583,7 @@ public class TradeEngine {
             } else {
                 UserShare share = userShareRepository.findByUserIdAndStockChannelId(
                         user.getId(), freshOrder.getStreamerId()).orElse(null);
-                if (share == null || share.getQuantity() < freshOrder.getQuantity()) {
+                if (share == null || share.getQuantity().compareTo(BigDecimal.valueOf(freshOrder.getQuantity())) < 0) {
                     freshOrder.cancel();
                     orderRepository.save(freshOrder);
                     return;
