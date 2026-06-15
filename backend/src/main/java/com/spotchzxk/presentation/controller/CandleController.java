@@ -38,7 +38,7 @@ public class CandleController {
         long beforeMs = before != null ? before : System.currentTimeMillis();
         List<OhlcCandle> candles = candleService.getCandles(stockId, interval, count, beforeMs, listedAtMs, fallbackPrice);
 
-        List<Map<String, Object>> splitEvents = stockSplitEventRepository
+        List<Map<String, Object>> splitMarkers = stockSplitEventRepository
                 .findByChannelIdOrderByExecutedAtDesc(stockId)
                 .stream()
                 .map(e -> Map.<String, Object>of(
@@ -46,7 +46,11 @@ public class CandleController {
                         "splitRatio", e.getSplitRatio()))
                 .toList();
 
-        return ResponseEntity.ok(Map.of("candles", candles, "splitEvents", splitEvents));
+        return ResponseEntity.ok(Map.of(
+                "candles", candles,
+                "markers", splitMarkers,
+                "splitEvents", splitMarkers,
+                "priceScale", "current"));
     }
 }
 

@@ -25,6 +25,19 @@ interface StockOrderHistoryItem {
   createdAt: number;
 }
 
+interface ApiCandle {
+  bucketStart: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface SplitMarker {
+  executedAt: number;
+  splitRatio: number;
+}
+
 const CANDLE_PAGE_SIZE = 100;
 const KST_OFFSET_SECONDS = 9 * 3600;
 // lightweight-charts uses JS Number internally; large prices cause rendering freezes.
@@ -41,10 +54,12 @@ const scalePrice = (price: number, sf: number): number => {
   return Number.isFinite(scaled) && scaled >= 1 ? Math.round(scaled) : 1;
 };
 
-const toChartCandle = (
-  c: { bucketStart: number; open: number; high: number; low: number; close: number },
-  sf: number,
-): Candle => {
+const maxChartInputPrice = (candles: ApiCandle[], currentPrice: number): number => {
+  const candleHigh = candles.reduce((max, candle) => Math.max(max, candle.high), 0);
+  return Math.max(candleHigh, currentPrice);
+};
+
+const toChartCandle = (c: ApiCandle, sf: number): Candle => {
   const open = scalePrice(c.open, sf);
   const high = scalePrice(c.high, sf);
   const low = scalePrice(c.low, sf);
@@ -58,8 +73,6 @@ const toChartCandle = (
   };
 };
 
-const toBucketStartMs = (time: UTCTimestamp) => (Number(time) - KST_OFFSET_SECONDS) * 1000;
-
 export const StockDetail = ({
   streamer, user, onOrder, liveTrades,
 }: {
@@ -72,23 +85,30 @@ export const StockDetail = ({
   const { data: portfolio } = usePortfolio(user?.uid);
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [splitEvents, setSplitEvents] = useState<{ executedAt: number; splitRatio: number }[]>([]);
+  const [rawCandles, setRawCandles] = useState<ApiCandle[]>([]);
+  const [splitMarkers, setSplitMarkers] = useState<SplitMarker[]>([]);
   const [hasMoreCandles, setHasMoreCandles] = useState(true);
   const [isLoadingMoreCandles, setIsLoadingMoreCandles] = useState(false);
   const [stockTrades, setStockTrades] = useState<LiveTrade[]>([]);
   const [stockTradesError, setStockTradesError] = useState(false);
   const [qtyStr, setQtyStr] = useState('1');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
-  const [scaleFactor] = useState(() => calcScaleFactor(streamer.price));
-  const scaleFactorRef = useRef(scaleFactor);
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
   fetchParamsRef.current = { stockId: streamer.id, interval };
-  const candlesRef = useRef<Candle[]>([]);
+  const rawCandlesRef = useRef<ApiCandle[]>([]);
   const hasMoreCandlesRef = useRef(true);
   const isLoadingMoreCandlesRef = useRef(false);
 
-  useEffect(() => { candlesRef.current = candles; }, [candles]);
+  const scaleFactor = useMemo(
+    () => calcScaleFactor(maxChartInputPrice(rawCandles, currentPrice)),
+    [rawCandles, currentPrice],
+  );
+  const candles = useMemo(
+    () => rawCandles.map(c => toChartCandle(c, scaleFactor)),
+    [rawCandles, scaleFactor],
+  );
+
+  useEffect(() => { rawCandlesRef.current = rawCandles; }, [rawCandles]);
   useEffect(() => { hasMoreCandlesRef.current = hasMoreCandles; }, [hasMoreCandles]);
   useEffect(() => { isLoadingMoreCandlesRef.current = isLoadingMoreCandles; }, [isLoadingMoreCandles]);
 
@@ -98,7 +118,7 @@ export const StockDetail = ({
     options: { before?: number; prepend?: boolean; reset?: boolean } = {},
   ) => {
     if (options.reset) {
-      setCandles([]);
+      setRawCandles([]);
       setHasMoreCandles(true);
       hasMoreCandlesRef.current = true;
     }
@@ -111,20 +131,19 @@ export const StockDetail = ({
 
     return apiFetch(`/api/stocks/${stockId}/candles?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
-      .then((data: { candles: { bucketStart: number; open: number; high: number; low: number; close: number }[]; splitEvents: { executedAt: number; splitRatio: number }[] } | null) => {
+      .then((data: { candles: ApiCandle[]; splitEvents?: SplitMarker[]; markers?: SplitMarker[] } | null) => {
         if (!data) return;
-        const sf = scaleFactorRef.current;
-        const events = data.splitEvents ?? [];
-        const next = data.candles.map(c => toChartCandle(c, sf));
-        setSplitEvents(events);
+        const markers = data.markers ?? data.splitEvents ?? [];
+        const next = data.candles;
+        setSplitMarkers(markers);
         setHasMoreCandles(next.length >= CANDLE_PAGE_SIZE);
         if (options.prepend) {
-          setCandles(prev => {
-            const existing = new Set(prev.map(c => c.time));
-            return [...next.filter(c => !existing.has(c.time)), ...prev];
+          setRawCandles(prev => {
+            const existing = new Set(prev.map(c => c.bucketStart));
+            return [...next.filter(c => !existing.has(c.bucketStart)), ...prev];
           });
         } else {
-          setCandles(next);
+          setRawCandles(next);
         }
       })
       .catch(() => {});
@@ -132,13 +151,13 @@ export const StockDetail = ({
 
   const loadMoreCandles = useCallback(() => {
     const { stockId, interval: iv } = fetchParamsRef.current;
-    const oldest = candlesRef.current[0];
+    const oldest = rawCandlesRef.current[0];
     if (!oldest || !hasMoreCandlesRef.current || isLoadingMoreCandlesRef.current) return;
 
     isLoadingMoreCandlesRef.current = true;
     setIsLoadingMoreCandles(true);
     fetchCandles(stockId, iv, {
-      before: toBucketStartMs(oldest.time),
+      before: oldest.bucketStart,
       prepend: true,
     }).finally(() => {
       isLoadingMoreCandlesRef.current = false;
@@ -189,15 +208,14 @@ export const StockDetail = ({
   useEffect(() => {
     const subscription = subscribeStomp(`/topic/candles/${streamer.id}`, (message) => {
       try {
-        const updates = JSON.parse(message.body) as Record<string, { bucketStart: number; open: number; high: number; low: number; close: number }>;
+        const updates = JSON.parse(message.body) as Record<string, ApiCandle>;
         const updated = updates[interval];
         if (!updated) return;
-        const newCandle: Candle = toChartCandle(updated, scaleFactorRef.current);
-        setCandles(prev => {
-          if (prev.length === 0) return [newCandle];
+        setRawCandles(prev => {
+          if (prev.length === 0) return [updated];
           const last = prev[prev.length - 1];
-          if (last.time === newCandle.time) return [...prev.slice(0, -1), newCandle];
-          return [...prev, newCandle];
+          if (last.bucketStart === updated.bucketStart) return [...prev.slice(0, -1), updated];
+          return [...prev, updated];
         });
       } catch (e) {
         console.error('Failed to parse candle update', e);
@@ -343,7 +361,7 @@ export const StockDetail = ({
           <InteractiveChart
             candles={candles}
             scaleFactor={scaleFactor}
-            splitEvents={splitEvents}
+            splitMarkers={splitMarkers}
             chartType={chartType}
             color={pct >= 0 ? '#FF5252' : '#3D8BFF'}
             interval={interval}

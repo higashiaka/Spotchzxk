@@ -36,7 +36,7 @@ const formatScaledPrice = (value: number, scaleFactor: number): string => {
 export const InteractiveChart = ({
   candles,
   scaleFactor = 1,
-  splitEvents = [],
+  splitMarkers = [],
   chartType,
   color,
   interval,
@@ -47,7 +47,7 @@ export const InteractiveChart = ({
 }: {
   candles: Candle[];
   scaleFactor?: number;
-  splitEvents?: { executedAt: number; splitRatio: number }[];
+  splitMarkers?: { executedAt: number; splitRatio: number }[];
   chartType: 'candle' | 'line';
   color: string;
   interval: string;
@@ -244,15 +244,15 @@ export const InteractiveChart = ({
     setActive(candles[candles.length - 1]);
   }, [candles]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Render split markers whenever candles or splitEvents change
+  // Render split markers as annotations only; candle prices are already normalized by the API.
   useEffect(() => {
     const series = seriesRef.current;
-    if (!series || candles.length === 0 || splitEvents.length === 0) {
+    if (!series || candles.length === 0 || splitMarkers.length === 0) {
       seriesRef.current?.setMarkers?.([]);
       return;
     }
     const candleTimes = candles.map(c => Number(c.time));
-    const markers = splitEvents
+    const markers = splitMarkers
       .map(e => {
         const targetSec = Math.floor(e.executedAt / 1000) + 9 * 3600;
         // Snap to the latest candle at or before the split time
@@ -271,7 +271,7 @@ export const InteractiveChart = ({
       })
       .sort((a, b) => Number(a.time) - Number(b.time));
     series.setMarkers?.(markers);
-  }, [candles, splitEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [candles, splitMarkers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const displayActive = active ?? (candles.length > 0 ? candles[candles.length - 1] : null);
   const isUp = displayActive ? displayActive.close >= displayActive.open : true;
