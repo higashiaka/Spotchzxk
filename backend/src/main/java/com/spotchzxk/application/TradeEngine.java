@@ -390,6 +390,7 @@ public class TradeEngine {
                             .user(user)
                             .stock(stock)
                             .quantity(BigDecimal.ZERO)
+                            .preStreamQuantity(BigDecimal.ZERO)
                             .avgPrice(BigDecimal.ZERO)
                             .build());
             updateBoughtShare(share, qty, cost);
