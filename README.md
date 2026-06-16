@@ -1,248 +1,442 @@
 # Spotchzxk
 
-> **Global Streamer Exchange** — 치지직(CHZZK) 스트리머를 주식처럼 매수/매도하는 실시간 모의 거래소
+**Spotchzxk**는 치지직(CHZZK) 스트리머를 종목처럼 등록하고, 사용자가 가상 원화로 매수·매도하는 실시간 모의 주식 거래소입니다.
 
-각 스트리머가 하나의 종목(주식)으로 표현되며, 실제 매매 수요/공급 볼륨에 따라 가격이 동적으로 변화하는 가상 자산 거래 게임입니다.
+스트리머 한 명이 하나의 종목이 되고, 가격은 AMM 풀 기반으로 움직입니다. 사용자는 종목 시세를 확인하고, 시장가/지정가 주문을 넣고, 라이브 중인 스트리머 종목의 배당과 랭킹, 확성기, 보유 자산을 실시간으로 확인할 수 있습니다.
+
+---
+
+## 주요 기능
+
+- 치지직 채널 기반 종목 등록 및 시세 조회
+- CPAMM(Constant Product AMM) 기반 시장가 체결
+- 시장가/지정가 주문, 미체결 주문 취소
+- Firebase Google 로그인 및 익명 게스트 로그인
+- 게스트 abuse protection을 위한 FingerprintJS + 서버 precheck
+- 포트폴리오, 평균단가, 실현손익, 배당/후원 누적 관리
+- 라이브 시작 시점 보유량 기준 1시간 단위 배당
+- 고가 종목 10:1 주식 분할
+- STOMP WebSocket 기반 실시간 가격, 체결, 배당, 확성기, 접속자 수 반영
+- React Query 기반 서버 상태 캐시와 주문 낙관적 업데이트
+- 데스크톱/모바일 반응형 UI와 모바일 탭 스와이프
+- OCI VM + Nginx + systemd + MySQL 운영 배포 문서화
+
+---
+
+## 프로젝트 구조
+
+```text
+Spotchzxk/
+├── backend/                  # Spring Boot API, 거래 엔진, DB/Flyway, WebSocket
+├── frontend/                 # React/Vite SPA
+├── documents/
+│   ├── BACKEND_OVERVIEW.md   # 백엔드 상세 구조 설명서
+│   ├── FRONTEND_OVERVIEW.md  # 프론트엔드 상세 구조 설명서
+│   ├── PROJECT_DETAILS.md    # 운영/배포/환경변수/장애 대응 세부 정보
+│   └── ...
+└── README.md
+```
+
+상세 구조는 아래 문서를 기준으로 확인하세요.
+
+| 문서 | 내용 |
+| --- | --- |
+| [BACKEND_OVERVIEW.md](documents/BACKEND_OVERVIEW.md) | 백엔드 패키지, 도메인 모델, 거래/배당/분할/API/스케줄러 |
+| [FRONTEND_OVERVIEW.md](documents/FRONTEND_OVERVIEW.md) | 프론트엔드 화면 구조, 인증, React Query, STOMP, 주문 UI |
+| [PROJECT_DETAILS.md](documents/PROJECT_DETAILS.md) | 환경변수, 로컬 실행, 배포, DB 운영, 점검, 장애 대응 |
 
 ---
 
 ## 기술 스택
 
-### 프론트엔드 (`frontend/`)
-- React 19 + TypeScript 5 + Vite 8
-- TailwindCSS 4
+### Frontend
+
+- React 19
+- TypeScript 5
+- Vite 8
+- Tailwind CSS 4
 - TanStack React Query 5
-- STOMP.js 7 + SockJS (실시간 WebSocket)
-- Firebase SDK 12
-- FingerprintJS 5 (게스트 디바이스 식별)
+- Firebase SDK
+- STOMP.js + SockJS
+- lightweight-charts
+- FingerprintJS
 
-### 백엔드 (`backend/`)
-- Java 17 + Spring Boot 3.5
-- Spring Data JPA + MySQL (Flyway 마이그레이션)
-- Spring WebSocket (STOMP 브로커)
-- Spring Security + Firebase Admin SDK 9 (토큰 인증)
-- Lombok, Gradle
+### Backend
 
-### 인프라
-- **MySQL** — 포트폴리오·주문 영속 스토리지
-- **Firebase Authentication** — Google / 익명 / 게스트 커스텀 토큰 로그인
-- **Firebase Firestore** — 스트리머 메타데이터 (관리자 패널 경유)
-- **Firebase Analytics** — 사용량 분석
+- Java 17
+- Spring Boot 3.5
+- Spring Data JPA / Hibernate
+- Spring Security
+- Spring WebSocket + STOMP
+- Firebase Admin SDK
+- MySQL
+- Redis
+- Flyway
+- Gradle
 
----
+### Infra
 
-## 아키텍처
-
-```
-[브라우저]
-    |
-    |-- STOMP /topic/prices/{id} --> [Spring WebSocket 브로커] (실시간 가격 구독)
-    |-- STOMP /topic/streamers   --> [Spring WebSocket 브로커] (종목 목록 구독)
-    |-- POST /api/trade          --> [Spring 백엔드 :8080]
-                                          |
-                                   [인메모리 주문 버퍼]
-                                   (ConcurrentHashMap + LinkedBlockingQueue)
-                                          |
-                              [3초 주기 @Scheduled flush()]
-                                          |
-                              [@Transactional MySQL 일괄 처리]
-                               - 포트폴리오 업데이트
-                               - 주문 기록 저장
-                               - 스트리머 가격 업데이트
-                                          |
-                              [STOMP 브로드캐스트] (트랜잭션 외부)
-```
-
-**핵심 설계 원칙:**
-- 거래 요청 즉시 인메모리 캐시에서 처리 → DB 쓰기 없이 즉각 응답
-- 3초마다 dirty 포트폴리오·종목을 단일 트랜잭션으로 MySQL에 플러시 → 원자성 보장
-- 플러시 성공 후 STOMP `/topic/*`으로 브로드캐스트 → 모든 클라이언트 동시 갱신
-- 프론트엔드 Optimistic UI로 즉시 반영 → 체감 응답성 향상
+- OCI VM
+- Nginx
+- systemd
+- Cloudflare
+- MySQL
+- Redis
 
 ---
 
-## 실행 방법
+## 아키텍처 개요
 
-### 사전 준비
-
-**백엔드:** Firebase 서비스 계정 키(JSON)를 발급받아 `backend/` 디렉토리에 배치하고, `.env` 파일을 생성하세요.
-
+```text
+Browser
+  -> React/Vite SPA
+  -> Firebase Auth
+  -> REST API /api/*
+  -> STOMP WebSocket /ws
+  -> Spring Boot Backend
+  -> MySQL + Flyway
+  -> Redis
+  -> Chzzk OpenAPI
 ```
+
+운영 배포에서는 Nginx가 `frontend/dist` 정적 파일을 서빙하고, `/api/*`와 `/ws`를 Spring Boot 백엔드로 프록시합니다.
+
+```text
+User
+  -> Cloudflare HTTPS
+  -> Nginx
+     -> frontend/dist
+     -> /api/* -> localhost:8080
+     -> /ws    -> localhost:8080
+  -> Spring Boot
+  -> MySQL / Redis
+```
+
+---
+
+## 핵심 도메인
+
+| 개념 | 설명 |
+| --- | --- |
+| User | Firebase UID 기반 사용자. 잔고, 닉네임, 티켓, 랭킹 누적값을 가진다. |
+| Stock | 치지직 채널 하나를 거래 가능한 종목으로 만든 데이터. |
+| Order | 시장가/지정가 매수·매도 주문 기록. |
+| UserShare | 사용자별 종목 보유량, 평균단가, 배당 기준 수량. |
+| AMM Pool | `coinReserve`와 `shareReserve`로 가격을 산출하는 유동성 풀. |
+| Dividend | 라이브 중인 종목의 방송 시작 시점 보유량 기준 배당. |
+| Stock Split | 1,000,000원 초과 고가 종목을 10:1로 나누는 가격 안정 장치. |
+
+거래 가격은 CPAMM 모델을 사용합니다.
+
+```text
+coinReserve * shareReserve = k
+currentPrice = coinReserve / shareReserve
+```
+
+매수하면 `coinReserve`가 증가하고 `shareReserve`가 감소해 가격이 오릅니다. 매도하면 반대로 가격이 내려갑니다.
+
+---
+
+## 사전 준비
+
+로컬 개발에는 다음이 필요합니다.
+
+- Java 17
+- Node.js 20 이상 권장
+- MySQL 8
+- Redis
+- Firebase project
+- Firebase service account JSON
+
+Firebase Authentication에서 Google 로그인과 Anonymous 로그인을 활성화해야 합니다.
+
+---
+
+## Backend 설정
+
+`backend/.env` 파일을 생성합니다.
+
+```dotenv
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=spotchzxk
 DB_USERNAME=root
 DB_PASSWORD=
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+PORT=8080
+CORS_ORIGIN=http://localhost:5173,http://localhost:3000
+ADMIN_API_KEY=local-admin-key
 FIREBASE_SERVICE_ACCOUNT_PATH=serviceAccountKey.json
-CORS_ORIGIN=http://localhost:5173
-ADMIN_API_KEY=
+
+GUEST_ABUSE_ENABLED=true
+GUEST_ABUSE_WINDOW_SECONDS=300
+GUEST_ABUSE_MAX_NEW_GUESTS_PER_WINDOW=3
+GUEST_ABUSE_BLOCK_SECONDS=300
 ```
 
-**프론트엔드:** `frontend/.env` 파일을 생성하고 Firebase 프로젝트 설정값을 입력하세요.
+Firebase service account 파일은 예를 들어 아래 위치에 둡니다.
 
+```text
+backend/serviceAccountKey.json
 ```
+
+MySQL database 예시:
+
+```sql
+CREATE DATABASE spotchzxk CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+애플리케이션 시작 시 Flyway가 `backend/src/main/resources/db/migration/`의 migration을 적용합니다.
+
+---
+
+## Frontend 설정
+
+`frontend/.env` 파일을 생성합니다.
+
+```dotenv
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASUREMENT_ID=
+
 VITE_API_BASE_URL=http://localhost:8080
 VITE_WS_URL=http://localhost:8080/ws
 ```
 
-### 백엔드 실행
+프론트엔드 환경변수는 빌드 타임에 반영됩니다. 값을 바꾸면 프론트엔드를 다시 빌드해야 합니다.
+
+---
+
+## Installation
+
+루트에서 각각 백엔드와 프론트엔드를 준비합니다.
+
+### Backend
+
+```bash
+cd backend
+./gradlew bootJar
+```
+
+Windows:
+
+```powershell
+cd backend
+.\gradlew.bat bootJar
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## Run Locally
+
+### 1. Backend 실행
 
 ```bash
 cd backend
 ./gradlew bootRun
 ```
 
-> Windows에서는 `gradlew.bat bootRun`
+Windows:
 
-### 프론트엔드 실행
+```powershell
+cd backend
+.\gradlew.bat bootRun
+```
+
+백엔드 기본 주소:
+
+```text
+http://localhost:8080
+```
+
+확인:
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8080/api/stocks
+```
+
+### 2. Frontend 실행
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
-> 프론트엔드는 `http://localhost:8080`으로 백엔드 REST API를 호출하고, `http://localhost:8080/ws`로 STOMP WebSocket에 연결합니다.
+프론트엔드 기본 주소:
 
----
-
-## 주요 기능
-
-### 인증
-- **Google 로그인** / **익명 게스트** 모두 지원
-- 게스트는 FingerprintJS 디바이스 ID로 세션 유지 (커스텀 Firebase 토큰 발급)
-- 비인증 상태에서도 마켓 보드 실시간 열람 가능
-- 거래 및 포트폴리오 조회는 인증 필수
-
-### 마켓 보드
-- 약 160개 치지직 스트리머 종목 카드 목록
-- 총 거래 볼륨 내림차순 정렬 (인기 종목 상위 노출)
-- 이름 기준 실시간 검색 필터
-- STOMP `/topic/streamers` 구독으로 가격 실시간 업데이트
-
-### 종목 거래 화면
-- 스파크라인 차트 (최근 20틱 SVG polyline)
-- STOMP `/topic/prices/{streamerId}` 구독으로 개별 가격 실시간 수신
-- 가격 방향 표시: 상승(▲ 초록) / 하락(▼ 빨강)
-- 수량 입력 시 예상 총 비용 자동 계산
-- 잔액/보유량 부족 시 Buy/Sell 버튼 자동 비활성화
-
-### 포트폴리오
-- 보유 현금(Treasury Cash) 및 보유 종목(Vault Assets) 표시
-- `GET /api/portfolio` REST 폴링 (React Query)
-
-### 거래 내역
-- 최근 주문 목록, 4초 자동 폴링 갱신 (`GET /api/orders`)
-- 체결 유형, 수량, 종목명, 체결가, 상태 표시
-
-### 관리자 패널
-- Google 로그인 + 관리자 권한 확인 (`GET /api/admin/me`)
-- 스트리머 종목 추가·편집·초기화 (Firestore 직접 기록)
-- 관리자 권한 부여·회수 (`/api/admin/permissions`)
-
----
-
-## 가격 결정 알고리즘
-
-```
-netDelta       = isBuy ? +qty : -qty
-multiplier     = 1 + (netDelta × 0.0005)
-executedPrice  = max(0.01, currentPrice × multiplier)
-```
-
-- 순매수 우세 → 가격 상승 / 순매도 우세 → 가격 하락
-- 가격은 거래 즉시 인메모리 캐시에 반영되고, 3초 후 MySQL에 영속화
-- 최저가 하한선: **$0.01**
-- KST 자정(00:00) 일일 거래량 자동 리셋
-
----
-
-## 사용자 초기 상태
-
-| 항목 | 초기값 |
-|------|--------|
-| 잔액 | $10,000 |
-| 보유 주식 | 없음 |
-| 종목 초기가 | $100 |
-
----
-
-## 프로젝트 구조
-
-```
-Spotchzxk/
-├── backend/                          # Java 17 + Spring Boot 3.5
-│   └── src/main/java/com/spotchzxk/
-│       ├── SpotchzxkApplication.java
-│       ├── config/
-│       │   ├── FirebaseConfig.java   # Firebase Admin SDK 초기화
-│       │   ├── SecurityConfig.java   # Spring Security 설정
-│       │   └── WebSocketConfig.java  # STOMP 브로커 설정
-│       ├── controller/
-│       │   ├── TradeController.java  # POST /api/trade
-│       │   ├── PortfolioController.java # GET /api/portfolio, /api/orders
-│       │   ├── GuestController.java  # POST /api/guest/register
-│       │   └── AdminController.java  # /api/admin/*
-│       ├── service/
-│       │   ├── TradeEngine.java      # 인메모리 캐시 + 3초 flush + STOMP 브로드캐스트
-│       │   ├── PortfolioService.java
-│       │   ├── StreamerService.java
-│       │   └── GuestService.java     # FingerprintJS 기반 커스텀 토큰 발급
-│       ├── entity/                   # JPA 엔티티 (Streamer, Portfolio, Order, ...)
-│       ├── repository/               # Spring Data JPA 리포지토리
-│       ├── dto/                      # TradeRequest/Response, GuestRegisterRequest
-│       └── security/
-│           └── FirebaseTokenFilter.java # Authorization: Bearer 검증
-├── frontend/
-│   └── src/
-│       ├── App.tsx                   # 메인 UI (마켓 보드, 거래 화면)
-│       ├── firebase.ts               # Firebase 클라이언트 초기화
-│       ├── data/
-│       │   └── streamers.ts         # 로컬 스트리머 초기 데이터
-│       ├── lib/
-│       │   ├── api.ts               # apiFetch (Firebase 토큰 헤더 주입)
-│       │   └── stompClient.ts       # STOMP 클라이언트 싱글톤
-│       ├── hooks/
-│       │   ├── useStreamers.ts      # /topic/streamers STOMP 구독
-│       │   ├── useStreamerPrice.ts  # /topic/prices/{id} STOMP 구독
-│       │   ├── useTrade.ts          # POST /api/trade (Optimistic UI)
-│       │   ├── usePortfolio.ts      # GET /api/portfolio (React Query)
-│       │   ├── useTransactionHistory.ts # GET /api/orders (4초 폴링)
-│       │   └── useIsAdmin.ts        # GET /api/admin/me
-│       └── pages/
-│           ├── AdminPage.tsx
-│           └── AdminPermissionsPage.tsx
-└── firestore.rules                   # Firestore 보안 규칙 (스트리머 메타데이터)
+```text
+http://localhost:5173
 ```
 
 ---
 
-## API 엔드포인트
+## Build
 
-| 메서드 | 경로 | 인증 | 설명 |
-|--------|------|------|------|
-| `POST` | `/api/trade` | 필수 | 매수/매도 주문 접수 |
-| `GET` | `/api/portfolio` | 필수 | 포트폴리오 조회 |
-| `GET` | `/api/orders` | 필수 | 주문 내역 조회 |
-| `POST` | `/api/guest/register` | 불필요 | 게스트 커스텀 토큰 발급 |
-| `GET` | `/api/admin/me` | 필수 | 관리자 여부 확인 |
-| `GET/POST` | `/api/admin/permissions` | 관리자 | 관리자 권한 관리 |
-| `WS` | `/ws` (SockJS) | — | STOMP WebSocket 엔드포인트 |
+### Backend
+
+```bash
+cd backend
+./gradlew bootJar
+```
+
+테스트 포함:
+
+```bash
+cd backend
+./gradlew test
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+빌드 결과:
+
+```text
+frontend/dist/
+```
+
+Preview:
+
+```bash
+cd frontend
+npm run preview
+```
+
+Lint:
+
+```bash
+cd frontend
+npm run lint
+```
 
 ---
 
-## Firestore 보안 규칙
+## 주요 API
 
-| 컬렉션 | 읽기 | 쓰기 |
-|--------|------|------|
-| `streamers/*` | 누구나 가능 | 불가 (관리자 패널 경유) |
-| `portfolios/{userId}` | 본인만 가능 | 불가 (백엔드만) |
+| Method | Path | 설명 |
+| --- | --- | --- |
+| `GET` | `/health` | 백엔드 헬스체크 |
+| `GET` | `/api/stocks` | 전체 종목 목록 |
+| `POST` | `/api/stocks` | 종목 등록 |
+| `GET` | `/api/stocks/{id}/candles` | 종목 OHLC 캔들 |
+| `GET` | `/api/stocks/{id}/order-book` | 호가창 |
+| `POST` | `/api/trade` | 주문 제출 |
+| `POST` | `/api/trade/cancel` | 미체결 주문 취소 |
+| `GET` | `/api/portfolio` | 내 포트폴리오 |
+| `GET` | `/api/orders` | 내 주문 이력 |
+| `GET` | `/api/rankings` | 랭킹 |
+| `GET` | `/api/dividends/recent` | 최근 배당 이벤트 |
+| `POST` | `/api/shop/megaphone` | 확성기 사용 |
 
-포트폴리오·주문 데이터는 MySQL에 저장됩니다. Firestore는 스트리머 메타데이터 관리에만 사용됩니다.
+자세한 API와 인증 정책은 [BACKEND_OVERVIEW.md](documents/BACKEND_OVERVIEW.md)를 참고하세요.
+
+---
+
+## WebSocket Topics
+
+SockJS endpoint:
+
+```text
+/ws
+```
+
+주요 STOMP topic:
+
+| Topic | 설명 |
+| --- | --- |
+| `/topic/streamers` | 종목 목록, 라이브 상태, 일일 리셋, 분할 갱신 |
+| `/topic/prices/{channelId}` | 종목별 가격 갱신 |
+| `/topic/trades` | 체결 이벤트 |
+| `/topic/candles/{channelId}` | 캔들 갱신 |
+| `/topic/dividends` | 전체 배당 이벤트 |
+| `/topic/user-dividends/{userId}` | 개인 배당 알림 |
+| `/topic/megaphone` | 확성기 글 |
+| `/topic/online-count` | 접속자 수 |
+| `/topic/stock-split-notices` | 주식 분할 공지 |
+
+프론트엔드는 STOMP singleton을 사용해 재연결 시 구독을 자동 복구합니다.
+
+---
+
+## Deployment
+
+운영 배포는 OCI VM 기준으로 문서화되어 있습니다.
+
+요약:
+
+```text
+1. OCI VM 준비
+2. Java, Node.js, MySQL, Redis, Nginx 설치
+3. 프로젝트 clone
+4. backend/.env와 Firebase service account 설정
+5. frontend/.env 설정
+6. frontend npm run build
+7. backend ./gradlew bootJar
+8. systemd service 등록
+9. Nginx reverse proxy 설정
+10. Cloudflare DNS/HTTPS/WebSocket 설정
+```
+
+운영 환경변수, 점검 모드, 배포 패턴, 장애 대응은 [PROJECT_DETAILS.md](documents/PROJECT_DETAILS.md)에 정리되어 있습니다.
+
+---
+
+## Maintenance Mode
+
+운영 Nginx 설정은 `maintenance.flag` 파일로 점검 모드를 켤 수 있도록 구성할 수 있습니다.
+
+점검 시작:
+
+```bash
+touch /opt/spotchzxk/maintenance.flag
+sudo systemctl reload nginx
+```
+
+점검 종료:
+
+```bash
+rm /opt/spotchzxk/maintenance.flag
+sudo systemctl reload nginx
+```
+
+점검 페이지는 [maintenance.html](documents/maintenance.html)을 사용합니다.
+
+---
+
+## 참고 문서
+
+| 문서 | 설명 |
+| --- | --- |
+| [BACKEND_OVERVIEW.md](documents/BACKEND_OVERVIEW.md) | 백엔드 전체 동작 설명 |
+| [FRONTEND_OVERVIEW.md](documents/FRONTEND_OVERVIEW.md) | 프론트엔드 전체 동작 설명 |
+| [PROJECT_DETAILS.md](documents/PROJECT_DETAILS.md) | 운영/배포/환경변수/장애 대응 |
+
+---
+
+## 주의 사항
+
+- 이미 운영 DB에 적용된 Flyway migration 파일은 수정하지 말고 새 migration을 추가하세요.
+- 핵심 API는 클라이언트가 보낸 `userId`가 아니라 Firebase 인증 principal을 기준으로 동작해야 합니다.
+- AMM reserve와 큰 금액은 정밀도 문제가 있으므로 백엔드는 `BigDecimal`/`BigInteger`, 프론트는 필요한 곳에서 `bigint`를 사용합니다.
+- 프론트엔드 환경변수는 빌드 타임에 반영됩니다.
+- WebSocket 운영 시 Nginx upgrade header와 Cloudflare WebSockets 설정을 확인하세요.
+- README는 프로젝트 진입점이고, 최신 세부 구현은 `documents/`의 상세 문서를 우선합니다.
