@@ -1,14 +1,15 @@
 package com.spotchzxk.presentation.controller;
 
-import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.application.AmmMigrationService;
 import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
+import com.spotchzxk.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigInteger;
@@ -26,10 +27,10 @@ public class AdminController {
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     @Value("${app.admin-api-key:}")
     private String adminApiKey;
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @PostMapping("/stock-split/force")
     public ResponseEntity<String> forceStockSplit(
@@ -77,6 +78,7 @@ public class AdminController {
                 stock.getStreamerName(), targetPrice, newCoinReserve, shareReserve));
     }
 
+    @Transactional
     @PostMapping("/users/{userId}/suspend")
     public ResponseEntity<?> suspendUser(
             @RequestHeader(value = "X-Admin-Key", required = false) String key,
@@ -110,6 +112,7 @@ public class AdminController {
         ));
     }
 
+    @Transactional
     @PostMapping("/users/{userId}/unsuspend")
     public ResponseEntity<?> unsuspendUser(
             @RequestHeader(value = "X-Admin-Key", required = false) String key,
@@ -134,4 +137,3 @@ public class AdminController {
         }
     }
 }
-
