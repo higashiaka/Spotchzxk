@@ -1,0 +1,5 @@
+ALTER TABLE users
+    ADD COLUMN suspended BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN suspension_reason VARCHAR(255) NULL,
+    ADD COLUMN suspended_until DATETIME NULL;
+

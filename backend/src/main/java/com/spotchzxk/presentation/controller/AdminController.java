@@ -1,5 +1,6 @@
 package com.spotchzxk.presentation.controller;
 
+import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.application.AmmMigrationService;
 import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -11,6 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -20,9 +24,12 @@ public class AdminController {
     private final AmmMigrationService ammMigrationService;
     private final StockSplitService stockSplitService;
     private final StockRepository stockRepository;
+    private final UserRepository userRepository;
 
     @Value("${app.admin-api-key:}")
     private String adminApiKey;
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @PostMapping("/stock-split/force")
     public ResponseEntity<String> forceStockSplit(
@@ -69,6 +76,62 @@ public class AdminController {
         return ResponseEntity.ok(String.format("Fixed %s: price=%d, coinReserve=%s, shareReserve=%s",
                 stock.getStreamerName(), targetPrice, newCoinReserve, shareReserve));
     }
-}
 
+    @PostMapping("/users/{userId}/suspend")
+    public ResponseEntity<?> suspendUser(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String userId,
+            @RequestBody Map<String, Object> body) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        String reason = String.valueOf(body.getOrDefault("reason", "")).trim();
+        long durationHours = parseDurationHours(body.get("durationHours"));
+        if (reason.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "reason is required"));
+        }
+        if (reason.length() > 255) {
+            return ResponseEntity.badRequest().body(Map.of("error", "reason must be 255 chars or less"));
+        }
+        if (durationHours <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("error", "durationHours must be > 0"));
+        }
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "user not found"));
+        }
+        LocalDateTime suspendedUntil = LocalDateTime.now(KST).plusHours(durationHours);
+        userRepository.suspendUser(userId, reason, suspendedUntil);
+        return ResponseEntity.ok(Map.of(
+                "userId", userId,
+                "suspended", true,
+                "reason", reason,
+                "durationHours", durationHours,
+                "suspendedUntil", suspendedUntil.toString()
+        ));
+    }
+
+    @PostMapping("/users/{userId}/unsuspend")
+    public ResponseEntity<?> unsuspendUser(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String userId) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        if (userRepository.clearSuspension(userId) != 1) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "user not found"));
+        }
+        return ResponseEntity.ok(Map.of("userId", userId, "suspended", false));
+    }
+
+    private long parseDurationHours(Object raw) {
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(raw));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+}
 

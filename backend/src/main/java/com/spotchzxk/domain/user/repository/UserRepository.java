@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -82,6 +83,14 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.donationTotal = u.donationTotal + :delta WHERE u.id = :userId")
     int addToDonationTotal(@Param("userId") String userId, @Param("delta") BigDecimal delta);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.suspended = true, u.suspensionReason = :reason, u.suspendedUntil = :until WHERE u.id = :userId")
+    int suspendUser(@Param("userId") String userId, @Param("reason") String reason, @Param("until") LocalDateTime until);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.suspended = false, u.suspensionReason = null, u.suspendedUntil = null WHERE u.id = :userId")
+    int clearSuspension(@Param("userId") String userId);
 }
 
 
