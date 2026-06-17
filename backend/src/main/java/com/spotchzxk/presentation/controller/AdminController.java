@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,6 +27,7 @@ public class AdminController {
     private final StockSplitService stockSplitService;
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -103,6 +105,8 @@ public class AdminController {
         }
         LocalDateTime suspendedUntil = LocalDateTime.now(KST).plusHours(durationHours);
         userRepository.suspendUser(userId, reason, suspendedUntil);
+        messagingTemplate.convertAndSend("/topic/user-suspension/" + userId,
+                Map.of("suspended", true, "reason", reason, "suspendedUntil", suspendedUntil.toString()));
         return ResponseEntity.ok(Map.of(
                 "userId", userId,
                 "suspended", true,

@@ -6,6 +6,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { apiFetch } from '../lib/api';
+import { subscribeStomp } from '../lib/stompClient';
 import { useQueryClient } from '@tanstack/react-query';
 
 const HAS_LINKED_ACCOUNT_KEY = 'has_linked_account';
@@ -109,6 +110,26 @@ export function useAuth() {
     const timer = window.setInterval(refreshSuspensionStatus, 60_000);
     return () => window.clearInterval(timer);
   }, [user, refreshSuspensionStatus]);
+
+  useEffect(() => {
+    if (!user) return;
+    const subscription = subscribeStomp(`/topic/user-suspension/${user.uid}`, (message) => {
+      try {
+        const body = JSON.parse(message.body);
+        if (body.suspended) {
+          setSuspensionNotice({
+            reason: String(body.reason ?? 'Policy violation'),
+            suspendedUntil: String(body.suspendedUntil ?? ''),
+          });
+        } else {
+          setSuspensionNotice(null);
+        }
+      } catch (e) {
+        console.error('Failed to parse suspension message', e);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [user]);
 
   const handleGoogleLogin = useCallback(async () => {
     try {

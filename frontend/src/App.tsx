@@ -16,6 +16,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { DesktopTabBar } from './components/layout/DesktopTabBar';
 import { MobileNavBar } from './components/layout/MobileNavBar';
 import { GuestLimitModal } from './components/common/GuestLimitModal';
+import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
 import { HomeView } from './components/home/HomeView';
 import { PricesView } from './components/prices/PricesView';
 import { ChartView } from './components/rankings/ChartView';
@@ -28,61 +29,6 @@ import { GuideView } from './components/guide/GuideView';
 import { AnnouncementArchiveView } from './components/announcements/AnnouncementArchiveView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
-type SuspensionNotice = {
-  reason: string;
-  suspendedUntil: string;
-};
-
-function SuspendedAccountModal({
-  notice,
-  onLogout,
-}: {
-  notice: SuspensionNotice;
-  onLogout: () => void;
-}) {
-  const remainingHours = notice.suspendedUntil
-    ? Math.max(0, Math.ceil((new Date(notice.suspendedUntil).getTime() - Date.now()) / 3_600_000))
-    : null;
-  const until = notice.suspendedUntil
-    ? new Date(notice.suspendedUntil).toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : 'Checking';
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 modal-backdrop">
-      <div className="w-full max-w-sm rounded-lg p-5 modal-panel shadow-2xl">
-        <div className="mb-4">
-          <p className="text-lg font-bold text-primary-token">계정 정지됨</p>
-          <p className="mt-2 text-sm text-muted-token">
-            정지 기간 동안 거래, 상점 이용, 프로필 변경 등 모든 계정 기능이 비활성화됩니다.
-          </p>
-        </div>
-        <div className="rounded-lg border border-secondary-token p-3 text-sm">
-          <p className="text-muted-token">정지 사유</p>
-          <p className="mt-1 text-secondary-token break-words">{notice.reason}</p>
-          <p className="mt-3 text-muted-token">남은 시간</p>
-          <p className="mt-1 text-secondary-token">
-            {remainingHours === null ? '확인 중' : `${remainingHours}시간`}
-          </p>
-          <p className="mt-3 text-muted-token">정지 해제 시각</p>
-          <p className="mt-1 text-secondary-token">{until}</p>
-        </div>
-        <button
-          type="button"
-          className="mt-4 h-10 w-full rounded-md bg-accent text-sm font-bold"
-          onClick={onLogout}
-        >
-          로그아웃
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
