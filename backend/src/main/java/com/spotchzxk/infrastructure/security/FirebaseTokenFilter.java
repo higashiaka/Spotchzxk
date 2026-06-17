@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,16 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                     tryUpgradeGuestToRegistered(uid);
                 }
 
+                var user = userRepository.findById(uid).orElse(null);
+                if (user != null && user.isSuspensionActive(LocalDateTime.now()) && !isAuthMeRequest(request)) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("""
+                            {"error":"ACCOUNT_SUSPENDED","message":"Account is suspended."}
+                            """);
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(uid, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(auth);
@@ -78,6 +89,10 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    private boolean isAuthMeRequest(HttpServletRequest request) {
+        return "GET".equalsIgnoreCase(request.getMethod()) && "/api/auth/me".equals(request.getRequestURI());
     }
 
     private void tryUpgradeGuestToRegistered(String uid) {

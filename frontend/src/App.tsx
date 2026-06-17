@@ -28,6 +28,62 @@ import { GuideView } from './components/guide/GuideView';
 import { AnnouncementArchiveView } from './components/announcements/AnnouncementArchiveView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
+type SuspensionNotice = {
+  reason: string;
+  suspendedUntil: string;
+};
+
+function SuspendedAccountModal({
+  notice,
+  onLogout,
+}: {
+  notice: SuspensionNotice;
+  onLogout: () => void;
+}) {
+  const remainingHours = notice.suspendedUntil
+    ? Math.max(0, Math.ceil((new Date(notice.suspendedUntil).getTime() - Date.now()) / 3_600_000))
+    : null;
+  const until = notice.suspendedUntil
+    ? new Date(notice.suspendedUntil).toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : 'Checking';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 modal-backdrop">
+      <div className="w-full max-w-sm rounded-lg p-5 modal-panel shadow-2xl">
+        <div className="mb-4">
+          <p className="text-lg font-bold text-primary-token">Account suspended</p>
+          <p className="mt-2 text-sm text-muted-token">
+            Trading, shop actions, profile changes, and all other account features are disabled during the suspension.
+          </p>
+        </div>
+        <div className="rounded-lg border border-secondary-token p-3 text-sm">
+          <p className="text-muted-token">Reason</p>
+          <p className="mt-1 text-secondary-token break-words">{notice.reason}</p>
+          <p className="mt-3 text-muted-token">Remaining time</p>
+          <p className="mt-1 text-secondary-token">
+            {remainingHours === null ? 'Checking' : `${remainingHours} hour${remainingHours === 1 ? '' : 's'}`}
+          </p>
+          <p className="mt-3 text-muted-token">Scheduled lift time</p>
+          <p className="mt-1 text-secondary-token">{until}</p>
+        </div>
+        <button
+          type="button"
+          className="mt-4 h-10 w-full rounded-md bg-accent text-sm font-bold"
+          onClick={onLogout}
+        >
+          Log out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
@@ -41,6 +97,7 @@ function App() {
   const {
     user, authChecking,
     guestLimitNotice, guestLimitNow,
+    suspensionNotice,
     handleGoogleLogin, handleGuestLogin, handleGuestLimitGoogleLogin,
     handleLogout, handleLinkGoogle,
   } = useAuth();
@@ -201,6 +258,10 @@ function App() {
           nowMs={guestLimitNow}
           onGoogleLogin={handleGuestLimitGoogleLogin}
         />
+      )}
+
+      {suspensionNotice && (
+        <SuspendedAccountModal notice={suspensionNotice} onLogout={handleLogout} />
       )}
 
       {isDesktopLayout && (

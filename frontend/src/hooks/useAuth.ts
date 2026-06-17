@@ -12,6 +12,10 @@ const HAS_LINKED_ACCOUNT_KEY = 'has_linked_account';
 const GUEST_SOFT_LOGGED_OUT_KEY = 'guest_soft_logged_out';
 
 export type GuestLimitNotice = { retryAtMs: number };
+export type SuspensionNotice = {
+  reason: string;
+  suspendedUntil: string;
+};
 
 export const guestLimitLabel = (retryAtMs: number, nowMs: number) => {
   const remainingSeconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
@@ -25,7 +29,30 @@ export function useAuth() {
   const [authChecking, setAuthChecking] = useState(true);
   const [guestLimitNotice, setGuestLimitNotice] = useState<GuestLimitNotice | null>(null);
   const [guestLimitNow, setGuestLimitNow] = useState(Date.now());
+  const [suspensionNotice, setSuspensionNotice] = useState<SuspensionNotice | null>(null);
   const queryClient = useQueryClient();
+
+  const refreshSuspensionStatus = useCallback(async () => {
+    if (!auth.currentUser || localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true') {
+      setSuspensionNotice(null);
+      return;
+    }
+    try {
+      const res = await apiFetch('/api/auth/me');
+      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      if (body.suspended) {
+        setSuspensionNotice({
+          reason: String(body.suspensionReason ?? 'Policy violation'),
+          suspendedUntil: String(body.suspendedUntil ?? ''),
+        });
+      } else {
+        setSuspensionNotice(null);
+      }
+    } catch (err) {
+      console.error('Failed to refresh suspension status', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!guestLimitNotice) return;
@@ -45,6 +72,11 @@ export function useAuth() {
       const isSoftLoggedOutGuest =
         !!u && u.isAnonymous && localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true';
       setUser(isSoftLoggedOutGuest ? null : u);
+      if (u && !isSoftLoggedOutGuest) {
+        await refreshSuspensionStatus();
+      } else {
+        setSuspensionNotice(null);
+      }
       setAuthChecking(false);
 
       const pendingGuestUid = localStorage.getItem('pendingGuestMerge');
@@ -69,7 +101,14 @@ export function useAuth() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [refreshSuspensionStatus]);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshSuspensionStatus();
+    const timer = window.setInterval(refreshSuspensionStatus, 60_000);
+    return () => window.clearInterval(timer);
+  }, [user, refreshSuspensionStatus]);
 
   const handleGoogleLogin = useCallback(async () => {
     try {
@@ -152,8 +191,9 @@ export function useAuth() {
       queryClient.removeQueries({ queryKey: ['history'] });
       return;
     }
-    localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
-    await signOut(auth);
+      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
+      setSuspensionNotice(null);
+      await signOut(auth);
   }, [queryClient]);
 
   const handleLinkGoogle = useCallback(async () => {
@@ -195,6 +235,7 @@ export function useAuth() {
     authChecking,
     guestLimitNotice,
     guestLimitNow,
+    suspensionNotice,
     handleGoogleLogin,
     handleGuestLogin,
     handleGuestLimitGoogleLogin,

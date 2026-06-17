@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -62,6 +63,16 @@ public class User {
     @Column(name = "is_guest", nullable = false)
     @Builder.Default
     private boolean isGuest = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean suspended = false;
+
+    @Column(name = "suspension_reason", length = 255)
+    private String suspensionReason;
+
+    @Column(name = "suspended_until")
+    private LocalDateTime suspendedUntil;
 
     public void updateBalance(BigDecimal newBalance) {
         this.coinBalance = newBalance;
@@ -125,6 +136,22 @@ public class User {
 
     public void markAsBot() {
         this.isBot = true;
+    }
+
+    public boolean isSuspensionActive(LocalDateTime now) {
+        return suspended && suspendedUntil != null && suspendedUntil.isAfter(now);
+    }
+
+    public void suspend(String reason, LocalDateTime until) {
+        this.suspended = true;
+        this.suspensionReason = reason;
+        this.suspendedUntil = until;
+    }
+
+    public void clearSuspension() {
+        this.suspended = false;
+        this.suspensionReason = null;
+        this.suspendedUntil = null;
     }
 
     // Issue #33: DonationController calls userRepository directly; this method is kept for tests only
