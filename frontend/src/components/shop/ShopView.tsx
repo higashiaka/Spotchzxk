@@ -98,7 +98,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="absolute inset-0 md:fixed md:inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.7)' }}
       onClick={onClose}
     >
@@ -383,7 +383,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   };
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-6 md:px-8 md:py-8 max-w-6xl mx-auto touch-pan-y">
+    <div className="relative h-full overflow-y-auto px-4 py-6 md:px-8 md:py-8 max-w-6xl mx-auto touch-pan-y">
       {showModal && (
         <MegaphoneModal
           streamers={streamers}
