@@ -16,6 +16,10 @@ export interface LiveTrade {
   price: number;
   /** Executed trading value */
   tradingValue?: number;
+  /** Server-authoritative daily cumulative trading volume after this trade */
+  dailyVolume?: number | string;
+  /** Server-authoritative daily cumulative trading value after this trade */
+  dailyTradingValue?: number | string;
   /** Updated AMM coin reserve after the trade */
   coinReserve?: string;
   /** Updated AMM share reserve after the trade */

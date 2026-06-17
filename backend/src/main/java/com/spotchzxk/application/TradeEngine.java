@@ -181,7 +181,8 @@ public class TradeEngine {
         TradePersistenceResult savedTrade = persistTrade(userId, channelId, amm, isBuy, qty, fallbackPrice, executedAt, orderId, "market", null);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
-                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1], orderId);
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -242,7 +243,8 @@ public class TradeEngine {
                 executedAt, orderId, "limit", limitPrice);
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
-                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1], orderId);
+                savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.avgPrice(), newBalance, BigDecimal.ZERO, orderId, "limit");
@@ -367,7 +369,8 @@ public class TradeEngine {
             }
             saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.avgPrice(), executedAt,
                     orderId, orderMode, limitPrice, "completed");
-            return new TradePersistenceResult(stock.getStreamerName(), poolForCache);
+            return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
+                    stock.getDailyVolume(), stock.getDailyTradingValue());
         });
     }
 
@@ -546,6 +549,8 @@ public class TradeEngine {
 
         AmmCalculator.AmmResult[] resultHolder = new AmmCalculator.AmmResult[1];
         BigInteger[][] poolHolder = new BigInteger[1][];
+        BigDecimal[] dailyVolumeHolder = new BigDecimal[1];
+        BigDecimal[] dailyTradingValueHolder = new BigDecimal[1];
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             Order freshOrder = orderRepository.findByIdForUpdate(order.getId()).orElse(null);
             if (freshOrder == null || !"pending".equals(freshOrder.getStatus())) return;
@@ -597,6 +602,8 @@ public class TradeEngine {
             }
 
             poolHolder[0] = updateStock(stock, freshIsBuy, freshOrder.getQuantity(), amm, userNet);
+            dailyVolumeHolder[0] = stock.getDailyVolume();
+            dailyTradingValueHolder[0] = stock.getDailyTradingValue();
             freshOrder.complete(amm.avgPrice(), executedAt);
             orderRepository.save(freshOrder);
             resultHolder[0] = amm;
@@ -616,7 +623,8 @@ public class TradeEngine {
                 .map(Stock::getStreamerName)
                 .orElse(order.getStreamerId());
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, order.getQuantity(), amm.newPrice(), executedAt,
-                new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1], order.getId());
+                new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1],
+                dailyVolumeHolder[0], dailyTradingValueHolder[0], order.getId());
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -637,27 +645,31 @@ public class TradeEngine {
         return newBalance;
     }
 
-    private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache) {
+    private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
+                                          BigDecimal dailyVolume, BigDecimal dailyTradingValue) {
     }
 
     // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, long qty,
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
-                                BigInteger coinReserve, BigInteger shareReserve, String orderId) {
+                                BigInteger coinReserve, BigInteger shareReserve,
+                                BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt));
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice.toPlainString()));
-        asyncBroadcast.send("/topic/trades", Map.of(
-                "id", orderId,
-                "streamerId", channelId,
-                "streamerName", streamerName != null ? streamerName : channelId,
-                "type", isBuy ? "buy" : "sell",
-                "quantity", qty,
-                "price", executedPrice.toPlainString(),
-                "tradingValue", toLongCap(cost),
-                "coinReserve", coinReserve.toString(),
-                "shareReserve", shareReserve.toString(),
-                "timestamp", executedAt
+        asyncBroadcast.send("/topic/trades", Map.ofEntries(
+                Map.entry("id", orderId),
+                Map.entry("streamerId", channelId),
+                Map.entry("streamerName", streamerName != null ? streamerName : channelId),
+                Map.entry("type", isBuy ? "buy" : "sell"),
+                Map.entry("quantity", qty),
+                Map.entry("price", executedPrice.toPlainString()),
+                Map.entry("tradingValue", toLongCap(cost)),
+                Map.entry("dailyVolume", dailyVolume != null ? dailyVolume.toPlainString() : String.valueOf(qty)),
+                Map.entry("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString()),
+                Map.entry("coinReserve", coinReserve.toString()),
+                Map.entry("shareReserve", shareReserve.toString()),
+                Map.entry("timestamp", executedAt)
         ));
     }
 
