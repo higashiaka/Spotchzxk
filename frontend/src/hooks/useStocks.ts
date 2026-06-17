@@ -89,11 +89,17 @@ export const useStocks = () => {
         const trade = JSON.parse(message.body) as LiveTrade;
         setStocks(prev => prev.map(stock => {
           if (stock.id !== trade.streamerId) return stock;
+          const dailyVolume = trade.dailyVolume !== undefined
+            ? Number(trade.dailyVolume)
+            : stock.totalVolume + Number(trade.quantity);
+          const dailyTradingValue = trade.dailyTradingValue !== undefined
+            ? Number(trade.dailyTradingValue)
+            : stock.dailyTradingValue + Number(trade.tradingValue ?? 0);
           return {
             ...stock,
             price: Number(trade.price),
-            totalVolume: stock.totalVolume + Number(trade.quantity),
-            dailyTradingValue: stock.dailyTradingValue + Number(trade.tradingValue ?? 0),
+            totalVolume: dailyVolume,
+            dailyTradingValue,
             coinReserve: trade.coinReserve ?? stock.coinReserve,
             shareReserve: trade.shareReserve ?? stock.shareReserve,
           };
