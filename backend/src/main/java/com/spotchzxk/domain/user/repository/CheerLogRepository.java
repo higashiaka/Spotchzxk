@@ -25,8 +25,10 @@ public interface CheerLogRepository extends JpaRepository<CheerLog, Long> {
                    u.ranking_nickname_public AS rankingNicknamePublic,
                    SUM(c.burned_coins) AS totalDonation
              FROM cheer_logs c
-             JOIN users u ON u.id = c.user_id
-             WHERE c.stock_id = :stockId
+              JOIN users u ON CONVERT(u.id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                         = CONVERT(c.user_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+             WHERE CONVERT(c.stock_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                 = CONVERT(:stockId USING utf8mb4) COLLATE utf8mb4_unicode_ci
                AND u.is_bot = 0
              GROUP BY c.user_id, u.display_name, u.profile_image_url, u.ranking_nickname_public
              ORDER BY totalDonation DESC

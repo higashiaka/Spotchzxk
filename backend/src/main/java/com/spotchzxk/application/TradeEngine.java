@@ -105,6 +105,16 @@ public class TradeEngine {
         }
     }
 
+    public void runWithStockLock(String channelId, Runnable task) {
+        ReentrantLock stockLock = stockLocks.computeIfAbsent(channelId, k -> new ReentrantLock());
+        stockLock.lock();
+        try {
+            task.run();
+        } finally {
+            stockLock.unlock();
+        }
+    }
+
     public void evictStockCache(String channelId) {
         priceCache.remove(channelId);
         ammPoolCache.remove(channelId);

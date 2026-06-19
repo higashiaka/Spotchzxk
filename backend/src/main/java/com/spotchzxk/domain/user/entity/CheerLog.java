@@ -3,6 +3,7 @@ package com.spotchzxk.domain.user.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -23,8 +24,8 @@ public class CheerLog {
     @Column(name = "stock_id", nullable = false, length = 50)
     private String stockId;
 
-    @Column(name = "burned_coins", nullable = false)
-    private long burnedCoins;
+    @Column(name = "burned_coins", nullable = false, precision = 65, scale = 0)
+    private BigDecimal burnedCoins;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

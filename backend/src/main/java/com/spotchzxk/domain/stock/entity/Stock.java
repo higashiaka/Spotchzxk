@@ -197,6 +197,18 @@ public class Stock {
         this.feePool = nonNull(this.feePool).add(fee);
     }
 
+    public void addBalancedLiquidity(BigInteger coinAmount, BigInteger shareAmount, BigInteger feeAmount) {
+        if (coinAmount.signum() <= 0 || shareAmount.signum() <= 0) {
+            return;
+        }
+        this.coinReserve = nonNull(this.coinReserve).add(coinAmount);
+        this.shareReserve = nonNull(this.shareReserve).add(shareAmount);
+        this.feePool = nonNull(this.feePool).add(feeAmount.max(BigInteger.ZERO));
+        this.totalSupply = nonNull(this.totalSupply).add(new BigDecimal(shareAmount));
+        this.currentPrice = new BigDecimal(this.coinReserve)
+                .divide(new BigDecimal(this.shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
+    }
+
     public void suspendTrading() {
         this.tradingSuspended = true;
     }
@@ -227,5 +239,9 @@ public class Stock {
 
     private BigInteger nonNull(BigInteger value) {
         return value != null ? value : BigInteger.ZERO;
+    }
+
+    private BigDecimal nonNull(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 }
