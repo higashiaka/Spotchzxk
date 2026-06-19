@@ -363,9 +363,15 @@ function InventoryModal({ portfolio, onClose }: { portfolio: any; onClose: () =>
   const selectedTitleId = portfolio?.selectedTitleId ? String(portfolio.selectedTitleId) : '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg max-h-[82vh] overflow-y-auto hide-scrollbar rounded-xl border"
-        style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
+    <div
+      className="absolute inset-0 md:fixed md:inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[82vh] overflow-y-auto hide-scrollbar rounded-xl border"
+        style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between gap-3 px-4 py-3"
           style={{ borderBottom: '1px solid var(--border-primary)' }}>
           <div>
