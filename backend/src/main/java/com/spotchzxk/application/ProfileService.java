@@ -47,4 +47,16 @@ public class ProfileService {
             }
         });
     }
+
+    public void updateProfileImageUrl(String uid, String profileImageUrl) {
+        String trimmed = profileImageUrl == null ? "" : profileImageUrl.trim();
+        if (trimmed.length() > 500) {
+            throw new IllegalArgumentException("프로필 이미지 URL이 너무 깁니다.");
+        }
+        transactionTemplate.executeWithoutResult(status -> {
+            if (userRepository.updateProfileImageUrl(uid, trimmed.isBlank() ? null : trimmed) != 1) {
+                throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+            }
+        });
+    }
 }

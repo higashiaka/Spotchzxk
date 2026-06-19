@@ -38,6 +38,9 @@ public class RankingController {
                             ? "Anonymous"
                             : user.getDisplayName())
                     : "Private";
+            String profileImageUrl = user.isRankingNicknamePublic() && user.getProfileImageUrl() != null
+                    ? user.getProfileImageUrl()
+                    : "";
             BigDecimal realizedProfit = user.getRealizedProfit() != null ? user.getRealizedProfit() : BigDecimal.ZERO;
             BigDecimal dividendTotal = user.getDividendTotal() != null ? user.getDividendTotal() : BigDecimal.ZERO;
             BigDecimal donationTotal = user.getDonationTotal() != null ? user.getDonationTotal() : BigDecimal.ZERO;
@@ -51,6 +54,7 @@ public class RankingController {
             rankings.add(Map.of(
                     "rank", i + 1,
                     "displayName", displayName,
+                    "profileImageUrl", profileImageUrl,
                     "value", value,
                     "realizedProfit", realizedProfit,
                     "dividendTotal", dividendTotal,

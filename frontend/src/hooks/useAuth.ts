@@ -112,6 +112,14 @@ export function useAuth() {
   }, [user, refreshSuspensionStatus]);
 
   useEffect(() => {
+    if (!user || user.isAnonymous) return;
+    apiFetch('/api/profile/profile-image', {
+      method: 'POST',
+      body: JSON.stringify({ profileImageUrl: user.photoURL ?? '' }),
+    }).catch(err => console.error('Failed to sync profile image', err));
+  }, [user?.uid, user?.photoURL, user?.isAnonymous]);
+
+  useEffect(() => {
     if (!user) return;
     const subscription = subscribeStomp(`/topic/user-suspension/${user.uid}`, (message) => {
       try {

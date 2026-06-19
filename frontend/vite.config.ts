@@ -12,13 +12,19 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://spotchzxk.xyz',
+        target: process.env.VITE_DEV_PROXY_TARGET ?? 'https://spotchzxk.xyz',
         changeOrigin: true,
+        headers: {
+          Origin: process.env.VITE_DEV_PROXY_TARGET ?? 'https://spotchzxk.xyz',
+        },
       },
       '/ws': {
-        target: 'https://spotchzxk.xyz',
+        target: process.env.VITE_DEV_PROXY_TARGET ?? 'https://spotchzxk.xyz',
         changeOrigin: true,
         ws: true,
+        headers: {
+          Origin: process.env.VITE_DEV_PROXY_TARGET ?? 'https://spotchzxk.xyz',
+        },
       },
     },
   },

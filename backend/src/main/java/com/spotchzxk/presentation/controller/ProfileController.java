@@ -42,6 +42,20 @@ public class ProfileController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    @PostMapping("/profile-image")
+    public ResponseEntity<?> updateProfileImage(
+            @AuthenticationPrincipal String uid,
+            @RequestBody Map<String, String> body
+    ) {
+        try {
+            String profileImageUrl = body.getOrDefault("profileImageUrl", "");
+            profileService.updateProfileImageUrl(uid, profileImageUrl);
+            return ResponseEntity.ok(Map.of("profileImageUrl", profileImageUrl.trim()));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }
 
 

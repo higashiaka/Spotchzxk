@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { User } from 'firebase/auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { UTCTimestamp } from 'lightweight-charts';
 import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
@@ -31,6 +32,13 @@ interface ApiCandle {
   high: number;
   low: number;
   close: number;
+}
+
+interface FanRankingEntry {
+  userId: string;
+  displayName: string;
+  profileImageUrl?: string;
+  totalDonation: string | number;
 }
 
 const CANDLE_PAGE_SIZE = 100;
@@ -76,6 +84,7 @@ export const StockDetail = ({
   onOrder: (type: 'buy' | 'sell') => void;
   liveTrades: LiveTrade[];
 }) => {
+  const queryClient = useQueryClient();
   const { currentPrice, direction } = useStockPrice(streamer.id, streamer.price);
   const { data: portfolio } = usePortfolio(user?.uid);
   const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
@@ -87,6 +96,13 @@ export const StockDetail = ({
   const [stockTradesError, setStockTradesError] = useState(false);
   const [qtyStr, setQtyStr] = useState('1');
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
+  const [donationAmount, setDonationAmount] = useState('');
+  const [donationPending, setDonationPending] = useState(false);
+  const [donationMsg, setDonationMsg] = useState('');
+  const [donationError, setDonationError] = useState('');
+  const [fanRankings, setFanRankings] = useState<FanRankingEntry[]>([]);
+  const [fanRankingsLoading, setFanRankingsLoading] = useState(false);
+  const [fanRankingsError, setFanRankingsError] = useState(false);
   const fetchParamsRef = useRef({ stockId: streamer.id, interval });
   fetchParamsRef.current = { stockId: streamer.id, interval };
   const rawCandlesRef = useRef<ApiCandle[]>([]);
@@ -161,9 +177,32 @@ export const StockDetail = ({
     fetchCandles(streamer.id, interval, { reset: true });
   }, [streamer.id, interval, fetchCandles]);
 
+  const fetchFanRankings = useCallback(() => {
+    setFanRankingsLoading(true);
+    setFanRankingsError(false);
+    return apiFetch(`/api/stocks/${encodeURIComponent(streamer.id)}/fans?limit=10`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load fan rankings');
+        return res.json();
+      })
+      .then((data: FanRankingEntry[]) => {
+        setFanRankings(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setFanRankingsError(true))
+      .finally(() => setFanRankingsLoading(false));
+  }, [streamer.id]);
+
+  useEffect(() => {
+    setFanRankings([]);
+    fetchFanRankings();
+  }, [fetchFanRankings]);
+
   useEffect(() => {
     setQtyStr('1');
     setOrderType('buy');
+    setDonationAmount('');
+    setDonationMsg('');
+    setDonationError('');
   }, [streamer.id]);
 
   useEffect(() => {
@@ -223,6 +262,53 @@ export const StockDetail = ({
   const holdingCost = heldQty * avgPrice;
   const holdingPnL = holdingValue - holdingCost;
   const holdingPnLPct = holdingCost > 0 ? (holdingPnL / holdingCost) * 100 : 0;
+  const balance = Number(portfolio?.balance ?? 0);
+  const parsedDonation = parseInt(donationAmount.replace(/,/g, '') || '0', 10);
+  const canDonate = Boolean(user) && parsedDonation >= 1_000 && parsedDonation <= balance && !donationPending;
+
+  const setDonationPercentPreset = (percent: number) => {
+    const amount = Math.floor(balance * percent);
+    setDonationAmount(amount.toLocaleString('ko-KR'));
+    setDonationMsg('');
+    setDonationError('');
+  };
+
+  const handleDonationAmountChange = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, '');
+    const num = parseInt(digits || '0', 10);
+    setDonationAmount(num > 0 ? num.toLocaleString('ko-KR') : '');
+    setDonationMsg('');
+    setDonationError('');
+  };
+
+  const handleDonate = async () => {
+    if (!canDonate || !user) return;
+    setDonationPending(true);
+    setDonationMsg('');
+    setDonationError('');
+    try {
+      const res = await apiFetch('/api/donate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: parsedDonation, streamerId: streamer.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDonationError(data.error ?? '후원에 실패했습니다.');
+        return;
+      }
+      queryClient.setQueryData(['portfolio', user.uid], (old: any) =>
+        old ? { ...old, balance: String(data.balance), donationTotal: String(data.donationTotal) } : old
+      );
+      fetchFanRankings();
+      setDonationAmount('');
+      setDonationMsg(`${streamer.name}에게 ${parsedDonation.toLocaleString('ko-KR')}원 후원 완료`);
+    } catch {
+      setDonationError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setDonationPending(false);
+    }
+  };
 
   const streamerTrades = useMemo(() => {
     const merged = new Map<string, LiveTrade>();
@@ -232,6 +318,73 @@ export const StockDetail = ({
     });
     return [...merged.values()].sort((a, b) => b.timestamp - a.timestamp);
   }, [liveTrades, stockTrades, streamer.id]);
+
+  const fanRankingPanel = (
+    <div className="rounded-xl border p-4 md:p-5" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-white text-sm md:text-base font-bold">{streamer.name} 팬 랭킹</h3>
+          <p className="text-xs mt-1 truncate" style={{ color: 'var(--text-dim)' }}>
+            이 종목에 후원한 팬 기준으로 집계됩니다.
+          </p>
+        </div>
+        <span className="text-xs font-bold px-2 py-1 rounded-full shrink-0"
+          style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+          TOP 10
+        </span>
+      </div>
+      <div className="space-y-2">
+        {fanRankingsLoading ? (
+          <div className="text-center py-5 text-xs" style={{ color: 'var(--text-dim)' }}>
+            팬 랭킹을 불러오는 중입니다.
+          </div>
+        ) : fanRankingsError ? (
+          <div className="text-center py-5 text-xs" style={{ color: '#FF6B6B' }}>
+            팬 랭킹을 불러오지 못했습니다.
+          </div>
+        ) : fanRankings.length === 0 ? (
+          <div className="text-center py-5 text-xs" style={{ color: 'var(--text-dim)' }}>
+            아직 이 종목의 후원 팬이 없습니다.
+          </div>
+        ) : (
+          fanRankings.map((fan, index) => {
+            const rank = index + 1;
+            const totalDonation = Number(fan.totalDonation ?? 0);
+            const badge = rank === 1 ? '대표 팬' : rank <= 10 ? '열성 팬' : '후원 팬';
+            return (
+              <div key={`${fan.userId}-${rank}`} className="flex items-center gap-3 rounded-lg px-3 py-2"
+                style={{ background: 'var(--bg-sidebar)' }}>
+                <span className="w-6 shrink-0 text-center text-xs font-black font-mono"
+                  style={{ color: rank === 1 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                  {rank}
+                </span>
+                <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-black shrink-0"
+                  style={{ background: fan.profileImageUrl ? 'transparent' : avatarColor(fan.displayName) }}>
+                  {fan.profileImageUrl ? (
+                    <img src={fan.profileImageUrl} alt={fan.displayName} className="w-full h-full object-cover" />
+                  ) : (
+                    fan.displayName.slice(0, 2)
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{fan.displayName}</p>
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                      style={{ background: rank === 1 ? '#FFD16622' : 'var(--bg-card)', color: rank === 1 ? '#FFD166' : 'var(--text-muted)' }}>
+                      {badge}
+                    </span>
+                  </div>
+                  <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                    {fmtKorean(totalDonation)}
+                  </p>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 
   const tradeHistoryPanel = (
     <div className="rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
@@ -392,6 +545,75 @@ export const StockDetail = ({
             </button>
           </div>
 
+          <div className="rounded-xl border p-4 md:p-5 mb-4 md:mb-5" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-white text-sm md:text-base font-bold">스트리머 후원</h3>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
+                  {streamer.name}의 팬 랭킹과 칭호 기준으로 집계될 후원입니다.
+                </p>
+              </div>
+              <span className="text-xs font-bold px-2 py-1 rounded-full shrink-0"
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                팬 칭호
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              {[0.01, 0.05, 0.1, 0.25].map(percent => {
+                const amount = Math.floor(balance * percent);
+                const disabled = !user || amount < 1_000;
+                return (
+                  <button
+                    key={percent}
+                    type="button"
+                    onClick={() => setDonationPercentPreset(percent)}
+                    disabled={disabled}
+                    className="h-11 rounded-lg text-xs font-bold border disabled:opacity-40"
+                    style={{
+                      background: parsedDonation === amount && amount >= 1_000 ? 'var(--accent)' : 'var(--bg-sidebar)',
+                      color: parsedDonation === amount && amount >= 1_000 ? 'var(--accent-foreground)' : 'var(--text-muted)',
+                      borderColor: 'var(--border-primary)',
+                    }}
+                  >
+                    <span className="block">{Math.round(percent * 100)}%</span>
+                    <span className="block text-[10px] font-mono opacity-80">{amount >= 1_000 ? fmtKorean(amount) : '1천원 미만'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2">
+              <div className="flex items-center flex-1 min-w-0 rounded-xl px-3"
+                style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)', height: 44 }}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  disabled={!user}
+                  value={donationAmount}
+                  onChange={e => handleDonationAmountChange(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleDonate(); }}
+                  placeholder={user ? '후원 금액 입력' : '로그인 필요'}
+                  className="flex-1 min-w-0 bg-transparent text-sm font-bold outline-none disabled:opacity-40"
+                  style={{ color: 'var(--text-secondary)' }}
+                />
+                <span className="text-xs ml-2 shrink-0" style={{ color: 'var(--text-dim)' }}>원</span>
+              </div>
+              <button type="button" onClick={handleDonate} disabled={!canDonate}
+                className="px-4 rounded-xl text-sm font-bold transition-opacity disabled:opacity-40"
+                style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', height: 44 }}>
+                {donationPending ? '처리 중' : '후원'}
+              </button>
+            </div>
+            {(donationMsg || donationError) && (
+              <p className="text-xs font-bold mt-2" style={{ color: donationError ? '#FF5252' : 'var(--accent)' }}>
+                {donationError || donationMsg}
+              </p>
+            )}
+          </div>
+
+          <div className="md:hidden mb-4">
+            {fanRankingPanel}
+          </div>
+
           <div className="md:hidden mb-4">
             {tradeHistoryPanel}
           </div>
@@ -459,6 +681,7 @@ export const StockDetail = ({
         <div className="hidden md:flex flex-col gap-3">
           <OrderBookPanel streamerId={streamer.id} />
           <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
+          {fanRankingPanel}
         </div>
 
       </div>

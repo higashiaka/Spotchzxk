@@ -98,18 +98,18 @@ export const announcements: AnnouncementItem[] = [
   },
   {
     id: 'notice_update_20260610',
-    title: '후원왕 랭킹 추가 및 운영 정책 변경 안내',
+    title: '팬 랭킹 추가 및 운영 정책 변경 안내',
     date: '운영 정책 업데이트',
-    summary: '후원왕 랭킹이 추가되었고, 배당 지급률·액면분할 주기·확성기 횟수 제한이 조정됩니다.',
+    summary: '종목별 팬 랭킹 구성이 추가되었고, 배당 지급률·액면분할 주기·확성기 횟수 제한이 조정됩니다.',
     sections: [
       {
-        title: '후원왕 랭킹 추가',
+        title: '종목별 팬 랭킹 추가',
         rows: [
-          { label: '기능', value: '상점 탭에서 원하는 금액을 후원할 수 있습니다', tone: 'accent' },
-          { label: '반영', value: '후원 금액은 잔고에서 차감되고 후원왕 랭킹에 누적', tone: 'accent' },
-          { label: '초기화', value: '매일 자정 랭킹 초기화', tone: 'accent' },
+          { label: '기능', value: '스트리머 종목별로 팬 후원을 집계합니다', tone: 'accent' },
+          { label: '칭호', value: '상위 후원자는 “OO 스트리머의 팬” 칭호 대상', tone: 'accent' },
+          { label: '초기화', value: '시즌 또는 운영 정책 기준으로 정산', tone: 'accent' },
         ],
-        note: '유저 랭킹 탭에서 실현손익·배당수익·후원왕 세 가지 랭킹을 확인할 수 있습니다.',
+        note: '유저 랭킹 탭에서는 실현손익·배당수익과 베타 명예관의 칭호 기준을 확인할 수 있습니다.',
       },
       {
         title: '배당 지급률 조정',

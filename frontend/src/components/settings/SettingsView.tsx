@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { apiFetch } from '../../lib/api';
+import { betaTitleToneStyle, UserTitle } from '../rewards/betaRewards';
 
 export const SettingsView = ({
   userId,
@@ -16,10 +17,21 @@ export const SettingsView = ({
   const queryClient = useQueryClient();
   const [isRankingNicknamePublic, setIsRankingNicknamePublic] = useState(false);
   const [privacySaving, setPrivacySaving] = useState(false);
+  const [selectedTitleId, setSelectedTitleId] = useState<string>('');
+  const [titleSaving, setTitleSaving] = useState(false);
+  const ownedTitles: UserTitle[] = Array.isArray(portfolio?.titles) ? portfolio.titles : [];
 
   useEffect(() => {
     setIsRankingNicknamePublic(Boolean(portfolio?.rankingNicknamePublic));
   }, [portfolio?.rankingNicknamePublic]);
+
+  useEffect(() => {
+    if (!userId) {
+      setSelectedTitleId('');
+      return;
+    }
+    setSelectedTitleId(portfolio?.selectedTitleId ? String(portfolio.selectedTitleId) : '');
+  }, [userId, portfolio?.selectedTitleId]);
 
   const toggleRankingNicknamePublic = async () => {
     if (!userId || privacySaving) return;
@@ -43,6 +55,34 @@ export const SettingsView = ({
       setIsRankingNicknamePublic(!next);
     } finally {
       setPrivacySaving(false);
+    }
+  };
+
+  const selectDisplayTitle = async (titleId: string) => {
+    if (!userId || titleSaving) return;
+    const previous = selectedTitleId;
+    setSelectedTitleId(titleId);
+    setTitleSaving(true);
+    try {
+      const res = await apiFetch('/api/inventory/selected-title', {
+        method: 'POST',
+        body: JSON.stringify({ titleId: titleId || null }),
+      });
+      if (!res.ok) {
+        throw new Error('대표 칭호 설정 실패');
+      }
+      const data = await res.json();
+      const savedTitleId = data.selectedTitleId ? String(data.selectedTitleId) : '';
+      setSelectedTitleId(savedTitleId);
+      queryClient.setQueryData(['portfolio', userId], (old: any) => (
+        old ? { ...old, selectedTitleId: savedTitleId || null } : old
+      ));
+      queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
+      queryClient.invalidateQueries({ queryKey: ['rankings'] });
+    } catch {
+      setSelectedTitleId(previous);
+    } finally {
+      setTitleSaving(false);
     }
   };
 
@@ -81,9 +121,93 @@ export const SettingsView = ({
           onToggle={toggleRankingNicknamePublic}
         />
       </div>
+
+      <div className="rounded-xl border p-4 mt-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>대표 칭호</h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+              프로필과 랭킹에 표시할 칭호를 선택합니다
+            </p>
+          </div>
+          <span className="text-xs font-bold px-2 py-1 rounded-md border shrink-0" style={betaTitleToneStyle(selectedTitleId ? 'gold' : 'gray')}>
+            {selectedTitleId ? '표시 중' : '숨김'}
+          </span>
+        </div>
+        <div className="space-y-2">
+          <TitleSelectRow
+            title={null}
+            selected={!selectedTitleId}
+            disabled={!userId || titleSaving}
+            onSelect={() => selectDisplayTitle('')}
+          />
+          {ownedTitles.length === 0 && (
+            <p className="text-xs px-1 py-2" style={{ color: 'var(--text-dim)' }}>
+              아직 보유한 칭호가 없습니다.
+            </p>
+          )}
+          {ownedTitles.map(title => (
+            <TitleSelectRow
+              key={title.id}
+              title={title}
+              selected={selectedTitleId === String(title.id)}
+              disabled={!userId || titleSaving}
+              onSelect={() => selectDisplayTitle(String(title.id))}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
+
+function TitleSelectRow({
+  title,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  title: UserTitle | null;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className="w-full rounded-lg border px-3 py-2 flex items-center justify-between gap-3 text-left disabled:opacity-50"
+      style={{
+        background: selected ? 'var(--accent-soft)' : 'var(--bg-sidebar)',
+        borderColor: selected ? 'var(--accent)' : 'var(--border-primary)',
+      }}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {title ? (
+          <span className="text-[11px] font-black px-2 py-1 rounded-md border shrink-0 max-w-[108px] text-center leading-tight"
+            style={betaTitleToneStyle(title.tone)}>
+            {title.label}
+          </span>
+        ) : (
+          <span className="text-[11px] font-black px-2 py-1 rounded-md border shrink-0"
+            style={betaTitleToneStyle('gray')}>
+            칭호 없음
+          </span>
+        )}
+        <p className="text-xs truncate" style={{ color: 'var(--text-dim)' }}>
+          {title?.description || '랭킹과 프로필에서 칭호를 숨깁니다'}
+        </p>
+      </div>
+      <span className="w-5 h-5 rounded-full border flex items-center justify-center shrink-0"
+        style={{ borderColor: selected ? 'var(--accent)' : 'var(--border-primary)', color: selected ? 'var(--accent)' : 'transparent' }}>
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
+    </button>
+  );
+}
 
 function ThemeToggleRow({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle: () => void }) {
   const isDark = theme === 'dark';

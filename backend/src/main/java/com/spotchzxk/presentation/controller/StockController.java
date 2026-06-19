@@ -1,6 +1,7 @@
 package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.user.repository.CheerLogRepository;
 import com.spotchzxk.presentation.dto.OrderBookDto;
 import com.spotchzxk.shared.exception.ChannelNotFoundException;
 import com.spotchzxk.shared.exception.InsufficientFollowerCountException;
@@ -22,6 +23,7 @@ import java.util.Optional;
 public class StockController {
 
     private final StockService stockService;
+    private final CheerLogRepository cheerLogRepository;
 
     @GetMapping
     public ResponseEntity<List<Stock>> getAllStocks() {
@@ -34,6 +36,32 @@ public class StockController {
             @RequestParam(defaultValue = "10") int depth
     ) {
         return ResponseEntity.ok(stockService.getOrderBook(channelId, depth));
+    }
+
+    @GetMapping("/{channelId}/fans")
+    public ResponseEntity<List<Map<String, Object>>> getFanRankings(
+            @PathVariable String channelId,
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        int safeLimit = Math.max(1, Math.min(limit, 50));
+        List<Map<String, Object>> rankings = cheerLogRepository.findFanRankings(channelId, safeLimit).stream()
+                .map(row -> {
+                    boolean isPublic = Boolean.TRUE.equals(row.getRankingNicknamePublic());
+                    String name = isPublic && row.getDisplayName() != null && !row.getDisplayName().isBlank()
+                            ? row.getDisplayName()
+                            : "익명 팬";
+                    String profileImageUrl = isPublic && row.getProfileImageUrl() != null
+                            ? row.getProfileImageUrl()
+                            : "";
+                    return Map.<String, Object>of(
+                            "userId", row.getUserId(),
+                            "displayName", name,
+                            "profileImageUrl", profileImageUrl,
+                            "totalDonation", row.getTotalDonation()
+                    );
+                })
+                .toList();
+        return ResponseEntity.ok(rankings);
     }
 
     @PostMapping

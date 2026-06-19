@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useHoldings } from '../../hooks/useHoldings';
 import { useDividendHistory } from '../../hooks/useDividendHistory';
 import { useNicknameEdit } from '../../hooks/useNicknameEdit';
+import { betaRewardTiers, betaTitleToneStyle, UserTitle } from '../rewards/betaRewards';
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
@@ -41,6 +42,8 @@ export const ProfileView = ({
   const nicknameChangeTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
   const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
   const baseName = portfolio?.displayName || '트레이더';
+  const ownedTitles: UserTitle[] = Array.isArray(portfolio?.titles) ? portfolio.titles : [];
+  const selectedTitleId = portfolio?.selectedTitleId ? String(portfolio.selectedTitleId) : '';
 
   const {
     resolvedName, isEditingName, nameInput, nameUpdating,
@@ -271,6 +274,50 @@ export const ProfileView = ({
         ))}
       </div>
 
+      {/* Beta reward titles */}
+      <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-secondary)' }}>베타 보상 칭호</h3>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
+              정식 전환 스냅샷 기준으로 지급됩니다.
+            </p>
+          </div>
+          <span className="text-xs font-bold px-2 py-1 rounded-md border shrink-0"
+            style={user.isAnonymous ? betaTitleToneStyle('gray') : betaTitleToneStyle('gold')}>
+            {user.isAnonymous ? '보상 제외' : '지급 예정'}
+          </span>
+        </div>
+
+        {ownedTitles.length > 0 ? (
+          <div className="space-y-2">
+            {ownedTitles.map(title => (
+              <TitleRow key={title.id} title={title} selected={selectedTitleId === String(title.id)} />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {betaRewardTiers.map(tier => (
+              <div key={tier.id} className="flex items-center gap-3 py-2"
+                style={{ borderBottom: '1px solid var(--bg-card)' }}>
+                <span className="text-[11px] font-black px-2 py-1 rounded-md border shrink-0 max-w-[96px] text-center leading-tight"
+                  style={betaTitleToneStyle(user.isAnonymous ? 'gray' : tier.tone)}>
+                  {tier.label}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{tier.description}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                    {selectedTitleId === tier.id
+                      ? '대표 칭호로 표시 중'
+                      : user.isAnonymous ? 'Google 계정 기준 보상 대상' : tier.status === 'pending' ? '스냅샷 후 자동 지급 예정' : '베타 최종 랭킹 기준 선정'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Dividend history */}
       {!user.isAnonymous && (
         <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
@@ -372,6 +419,26 @@ export const ProfileView = ({
     </div>
   );
 };
+
+function TitleRow({ title, selected }: { title: UserTitle; selected: boolean }) {
+  return (
+    <div className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid var(--bg-card)' }}>
+      <span className="text-xs font-black px-2 py-1 rounded-md border shrink-0" style={betaTitleToneStyle(title.tone)}>
+        {title.label}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-white truncate">{title.description || '획득한 칭호입니다.'}</p>
+        {selected ? (
+          <p className="text-xs mt-0.5" style={{ color: 'var(--accent)' }}>대표 칭호로 표시 중</p>
+        ) : title.awardedAt && (
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+            {new Date(title.awardedAt).toLocaleDateString('ko-KR')} 획득
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const GoogleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24">

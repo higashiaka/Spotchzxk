@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
@@ -184,139 +184,6 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
   );
 }
 
-function DonationCard({ balance, userId, isLoggedIn }: { balance: number; userId: string | undefined; isLoggedIn: boolean }) {
-  const queryClient = useQueryClient();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [amount, setAmount] = useState('');
-  const [error, setError] = useState('');
-  const [pending, setPending] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-
-  const minDonation = 1_000;
-  const parsedAmount = parseInt(amount.replace(/,/g, '') || '0', 10);
-  const isValid = parsedAmount >= minDonation && parsedAmount <= balance;
-
-  const presets = [10, 25, 50, 100];
-
-  function amountFromPercent(percent: number) {
-    return Math.floor(balance * (percent / 100));
-  }
-
-  function handleAmountChange(raw: string) {
-    const digits = raw.replace(/[^0-9]/g, '');
-    const num = parseInt(digits || '0', 10);
-    setAmount(num > 0 ? num.toLocaleString('ko-KR') : '');
-    setError('');
-    setSuccessMsg('');
-  }
-
-  async function handleDonate() {
-    if (!isValid || pending) return;
-    setPending(true);
-    setError('');
-    setSuccessMsg('');
-    try {
-      const res = await apiFetch('/api/donate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: parsedAmount }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? '후원에 실패했습니다.');
-        return;
-      }
-      queryClient.setQueryData(['portfolio', userId], (old: any) =>
-        old ? { ...old, balance: data.balance, donationTotal: data.donationTotal } : old
-      );
-      queryClient.invalidateQueries({ queryKey: ['rankings', 'donation'] });
-      setAmount('');
-      setSuccessMsg(`${parsedAmount.toLocaleString('ko-KR')}원 후원 완료!`);
-      inputRef.current?.blur();
-    } catch {
-      setError('네트워크 오류가 발생했습니다.');
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <div className="rounded-xl p-5 md:p-7 mb-8 md:mb-10" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
-      <div className="flex items-start gap-4 md:gap-6 mb-4 md:mb-6">
-        <div className="w-14 h-14 md:w-20 md:h-20 rounded-xl flex items-center justify-center text-3xl md:text-5xl shrink-0"
-          style={{ background: 'var(--bg-card)' }}>
-          🎁
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-base md:text-2xl font-bold mb-1" style={{ color: 'var(--text-secondary)' }}>후원하기</p>
-          <p className="text-xs md:text-sm" style={{ color: 'var(--text-dim)' }}>
-            잔고에서 금액을 차감해 후원왕 랭킹에 반영합니다. 매일 자정에 초기화됩니다.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        {presets.map((p) => {
-          const presetAmount = amountFromPercent(p);
-          return (
-            <button
-              key={p}
-              type="button"
-              disabled={!isLoggedIn || presetAmount < minDonation}
-              onClick={() => { setAmount(presetAmount.toLocaleString('ko-KR')); setError(''); setSuccessMsg(''); }}
-              className="h-9 rounded-lg text-xs font-bold transition-colors disabled:opacity-40"
-              style={{
-                background: parsedAmount === presetAmount ? 'var(--accent)' : 'var(--bg-card)',
-                color: parsedAmount === presetAmount ? 'var(--accent-foreground)' : 'var(--text-muted)',
-                border: '1px solid var(--border-primary)',
-              }}
-            >
-              {p}%
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex gap-2">
-        <div
-          className="flex items-center flex-1 min-w-0 rounded-xl px-4"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-primary)', height: '48px' }}
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="numeric"
-            placeholder={isLoggedIn ? '금액 입력 (최소 1,000원)' : '로그인 필요'}
-            disabled={!isLoggedIn}
-            value={amount}
-            onChange={(e) => handleAmountChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleDonate(); }}
-            className="flex-1 bg-transparent text-sm font-bold outline-none disabled:opacity-40"
-            style={{ color: 'var(--text-secondary)' }}
-          />
-          <span className="text-xs ml-2 shrink-0" style={{ color: 'var(--text-dim)' }}>원</span>
-        </div>
-        <button
-          type="button"
-          disabled={!isValid || pending}
-          onClick={handleDonate}
-          className="px-5 shrink-0 rounded-xl text-sm font-bold transition-opacity disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)', height: '48px' }}
-        >
-          {pending ? '...' : '후원'}
-        </button>
-      </div>
-
-      {error && (
-        <p className="text-xs mt-2 font-bold" style={{ color: '#FF5252' }}>{error}</p>
-      )}
-      {successMsg && (
-        <p className="text-xs mt-2 font-bold" style={{ color: 'var(--accent)' }}>{successMsg}</p>
-      )}
-    </div>
-  );
-}
-
 /** Shop screen props */
 interface Props {
   /** Full list of stocks */
@@ -338,6 +205,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
 
   /** Whether the megaphone modal is visible */
   const [showModal, setShowModal] = useState(false);
+  const [showInventory, setShowInventory] = useState(false);
   const [purchasePending, setPurchasePending] = useState<string | null>(null);
 
   /** Whether balance covers the megaphone price */
@@ -392,8 +260,18 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
           isPending={mutation.isPending}
         />
       )}
+      {showInventory && (
+        <InventoryModal portfolio={portfolio} onClose={() => setShowInventory(false)} />
+      )}
 
-      <h2 className="text-lg md:text-3xl font-black mb-6 md:mb-8" style={{ color: 'var(--text-secondary)' }}>상점</h2>
+      <div className="flex items-center justify-between gap-3 mb-6 md:mb-8">
+        <h2 className="text-lg md:text-3xl font-black" style={{ color: 'var(--text-secondary)' }}>상점</h2>
+        <button type="button" onClick={() => setShowInventory(true)}
+          className="rounded-lg border px-3 py-2 text-xs md:text-sm font-bold shrink-0"
+          style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
+          보유 아이템
+        </button>
+      </div>
 
       <div className="grid gap-3 md:gap-5 mb-4 md:mb-6 sm:grid-cols-2">
         <ShopItemCard
@@ -475,8 +353,86 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
           </span>
         </div>
       </div>
-
-      <DonationCard balance={balance} userId={user?.uid} isLoggedIn={isLoggedIn} />
     </div>
   );
 };
+
+function InventoryModal({ portfolio, onClose }: { portfolio: any; onClose: () => void }) {
+  const items = Array.isArray(portfolio?.items) ? portfolio.items : [];
+  const titles = Array.isArray(portfolio?.titles) ? portfolio.titles : [];
+  const selectedTitleId = portfolio?.selectedTitleId ? String(portfolio.selectedTitleId) : '';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg max-h-[82vh] overflow-y-auto hide-scrollbar rounded-xl border"
+        style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border-primary)' }}>
+          <div>
+            <h3 className="text-white text-base font-black">보유 아이템</h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>아이템과 획득한 칭호</p>
+          </div>
+          <button type="button" onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-sm font-bold"
+            style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}>
+            닫기
+          </button>
+        </div>
+
+        <div className="p-4">
+          <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>아이템</p>
+          {items.length === 0 ? (
+            <EmptyInventoryText text="보유한 아이템이 없습니다." />
+          ) : (
+            <div className="space-y-2">
+              {items.map((item: any) => (
+                <div key={item.type} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                  style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{item.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{item.type}</p>
+                  </div>
+                  <span className="text-sm font-black font-mono" style={{ color: 'var(--accent)' }}>
+                    {Number(item.quantity).toLocaleString('ko-KR')}개
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs font-bold mt-5 mb-2" style={{ color: 'var(--text-secondary)' }}>칭호</p>
+          {titles.length === 0 ? (
+            <EmptyInventoryText text="획득한 칭호가 없습니다." />
+          ) : (
+            <div className="space-y-2">
+              {titles.map((title: any) => (
+                <div key={title.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                  style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{title.label}</p>
+                    <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-dim)' }}>{title.description}</p>
+                  </div>
+                  {selectedTitleId === String(title.id) && (
+                    <span className="text-xs font-bold px-2 py-1 rounded-md shrink-0"
+                      style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                      표시 중
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyInventoryText({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border px-3 py-4 text-center text-xs"
+      style={{ borderColor: 'var(--border-primary)', color: 'var(--text-dim)' }}>
+      {text}
+    </div>
+  );
+}

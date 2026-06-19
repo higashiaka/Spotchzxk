@@ -81,6 +81,10 @@ public interface UserRepository extends JpaRepository<User, String> {
     int updateRankingNicknamePublic(@Param("userId") String userId, @Param("isPublic") boolean isPublic);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.profileImageUrl = :profileImageUrl WHERE u.id = :userId")
+    int updateProfileImageUrl(@Param("userId") String userId, @Param("profileImageUrl") String profileImageUrl);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.donationTotal = u.donationTotal + :delta WHERE u.id = :userId")
     int addToDonationTotal(@Param("userId") String userId, @Param("delta") BigDecimal delta);
 

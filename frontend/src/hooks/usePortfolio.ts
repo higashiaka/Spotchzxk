@@ -1,5 +1,12 @@
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
+import { UserTitle } from '../components/rewards/betaRewards';
+
+export interface InventoryItem {
+  type: string;
+  name: string;
+  quantity: number;
+}
 
 /** Portfolio data structure returned by the backend */
 export interface Portfolio {
@@ -18,6 +25,9 @@ export interface Portfolio {
   rankingNicknamePublic?: boolean;
   nicknameChangeTickets?: number;
   stockAddTickets?: number;
+  items?: InventoryItem[];
+  titles?: UserTitle[];
+  selectedTitleId?: string | number | null;
   /** Remaining portfolio reset count for today */
   remainingResets: number;
 }

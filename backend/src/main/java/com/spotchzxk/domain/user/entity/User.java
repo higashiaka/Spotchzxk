@@ -25,6 +25,9 @@ public class User {
     @Column(name = "display_name", length = 20)
     private String displayName;
 
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
+
     @Column(name = "realized_profit", nullable = false, precision = 65, scale = 6)
     @Builder.Default
     private BigDecimal realizedProfit = BigDecimal.ZERO;
@@ -74,6 +77,9 @@ public class User {
     @Column(name = "suspended_until")
     private LocalDateTime suspendedUntil;
 
+    @Column(name = "selected_title_id")
+    private Long selectedTitleId;
+
     public void updateBalance(BigDecimal newBalance) {
         this.coinBalance = newBalance;
     }
@@ -104,6 +110,10 @@ public class User {
 
     public void changeDisplayName(String name) {
         this.displayName = name;
+    }
+
+    public void updateProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 
     public void useNicknameTicket() {
@@ -152,6 +162,10 @@ public class User {
         this.suspended = false;
         this.suspensionReason = null;
         this.suspendedUntil = null;
+    }
+
+    public void selectTitle(Long titleId) {
+        this.selectedTitleId = titleId;
     }
 
     // Issue #33: DonationController calls userRepository directly; this method is kept for tests only
