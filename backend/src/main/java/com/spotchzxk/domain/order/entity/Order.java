@@ -75,6 +75,23 @@ public class Order {
         return executedAt != null ? executedAt : createdAt;
     }
 
+    /**
+     * Records a partial fill. Transitions to "completed" when all quantity is filled;
+     * otherwise remains "pending" with updated filledQuantity.
+     */
+    public void partialFill(long partialQty, BigDecimal avgPrice, long executedAt) {
+        this.filledQuantity += partialQty;
+        this.executedPrice = avgPrice;
+        if (this.filledQuantity >= this.quantity) {
+            this.status = "completed";
+            this.executedAt = executedAt;
+        }
+    }
+
+    public long remainingQuantity() {
+        return quantity - filledQuantity;
+    }
+
     public void cancel() {
         this.status = "cancelled";
     }

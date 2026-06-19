@@ -17,22 +17,30 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@RequiredArgsConstructor
 public class FirebaseTokenFilter extends OncePerRequestFilter {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
     private final AccountLinkService accountLinkService;
+    private final boolean firebaseEnabled;
+
+    public FirebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService, boolean firebaseEnabled) {
+        this.userRepository = userRepository;
+        this.accountLinkService = accountLinkService;
+        this.firebaseEnabled = firebaseEnabled;
+    }
 
     // Issue #32: ConcurrentHashMap never expires; use Caffeine with TTL to avoid unbounded JVM heap growth
     // 30-min TTL: guest accounts refresh frequently — shorter than session lifetime but sufficient to avoid hammering Firebase
@@ -44,6 +52,10 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
+        if (!firebaseEnabled) {
+            chain.doFilter(request, response);
+            return;
+        }
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
@@ -72,7 +84,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 }
 
                 var user = userRepository.findById(uid).orElse(null);
-                if (user != null && user.isSuspensionActive(LocalDateTime.now()) && !isAuthMeRequest(request)) {
+                if (user != null && user.isSuspensionActive(LocalDateTime.now(KST)) && !isAuthMeRequest(request)) {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write("""

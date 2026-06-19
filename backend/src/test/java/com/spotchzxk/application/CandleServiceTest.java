@@ -56,7 +56,7 @@ class CandleServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void onTradeIgnoresOrdersOutsideCurrentBucketWhenRestoring() {
+    void onTradeIgnoresOrdersOutsideCurrentBucketWhenRestoring() throws InterruptedException {
         String stockId = "stock-1";
         long minuteStart = 1_771_000_020_000L;
         long timestamp = minuteStart + 5_000;
@@ -67,6 +67,7 @@ class CandleServiceTest {
                 ));
 
         service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
+        Thread.sleep(500); // wait for 300ms debounced broadcast
 
         ArgumentCaptor<Map<String, OhlcCandle>> update = ArgumentCaptor.forClass(Map.class);
         verify(messagingTemplate).convertAndSend(eq("/topic/candles/" + stockId), update.capture());
@@ -80,7 +81,7 @@ class CandleServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void onTradeAdjustsRestoredBucketPricesForLaterStockSplits() {
+    void onTradeAdjustsRestoredBucketPricesForLaterStockSplits() throws InterruptedException {
         String stockId = "stock-1";
         long minuteStart = 1_771_000_020_000L;
         long timestamp = minuteStart + 5_000;
@@ -96,6 +97,7 @@ class CandleServiceTest {
                         .build()));
 
         service.onTrade(stockId, BigDecimal.valueOf(1_000), timestamp);
+        Thread.sleep(500); // wait for 300ms debounced broadcast
 
         ArgumentCaptor<Map<String, OhlcCandle>> update = ArgumentCaptor.forClass(Map.class);
         verify(messagingTemplate).convertAndSend(eq("/topic/candles/" + stockId), update.capture());

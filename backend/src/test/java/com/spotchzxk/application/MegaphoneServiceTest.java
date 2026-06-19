@@ -8,7 +8,6 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -133,21 +132,10 @@ class MegaphoneServiceTest {
     }
 
     @Test
-    void getRecentPostsReturnsOnlyPostsFromCurrentLiveSessionWithoutJoiningTables() {
+    void getRecentPostsReturnsPostsFromDbQuery() {
         LocalDateTime currentLiveStartedAt = LocalDateTime.of(2026, 6, 2, 20, 0);
-        Stock liveStock = Stock.builder()
-                .channelId("channel-1")
-                .streamerName("streamer")
-                .isLive(true)
-                .liveStartedAt(currentLiveStartedAt)
-                .build();
         MegaphonePost currentPost = post("current-post", "channel-1", currentLiveStartedAt, currentLiveStartedAt.plusMinutes(5));
-        MegaphonePost oldPost = post("old-post", "channel-1", currentLiveStartedAt.minusHours(2), currentLiveStartedAt.minusHours(1));
-        when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(liveStock));
-        when(megaphonePostRepository.findByChannelIdInOrderByCreatedAtDesc(
-                eq(List.of("channel-1")),
-                eq(PageRequest.of(0, 200))
-        )).thenReturn(List.of(currentPost, oldPost));
+        when(megaphonePostRepository.findRecentPostsForLiveStocks()).thenReturn(List.of(currentPost));
 
         List<MegaphonePost> posts = service.getRecentPosts();
 

@@ -24,8 +24,14 @@ public class GuestService {
 
     @Transactional
     public Map<String, String> registerGuest(String uid) {
-        User user = userRepository.findById(uid)
-                .orElse(User.builder().id(uid).coinBalance(INITIAL_BALANCE).build());
+        User existing = userRepository.findById(uid).orElse(null);
+        if (existing != null && !existing.isGuest()) {
+            // registered account — do not downgrade to guest
+            return Map.of("canonicalUid", uid);
+        }
+        User user = existing != null
+                ? existing
+                : User.builder().id(uid).coinBalance(INITIAL_BALANCE).build();
         user.markAsGuest();
         userRepository.save(user);
         return Map.of("canonicalUid", uid);

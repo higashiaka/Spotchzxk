@@ -4,6 +4,8 @@ import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,8 +23,8 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<?> getAuthMe() {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.ok(Map.of("authenticated", false));
         }
         String uid = String.valueOf(auth.getPrincipal());

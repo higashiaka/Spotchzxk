@@ -1,6 +1,8 @@
 package com.spotchzxk.infrastructure.config;
 
+import com.google.firebase.FirebaseApp;
 import com.spotchzxk.domain.user.repository.UserRepository;
+import com.spotchzxk.infrastructure.security.AdminKeyFilter;
 import com.spotchzxk.infrastructure.security.FirebaseTokenFilter;
 import com.spotchzxk.application.AccountLinkService;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,13 +27,22 @@ public class SecurityConfig {
     @Value("${app.cors-origin}")
     private String corsOriginRaw;
 
+    @Value("${app.admin-api-key:}")
+    private String adminApiKey;
+
     @Bean
     public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService) {
-        return new FirebaseTokenFilter(userRepository, accountLinkService);
+        boolean firebaseEnabled = !FirebaseApp.getApps().isEmpty();
+        return new FirebaseTokenFilter(userRepository, accountLinkService, firebaseEnabled);
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, FirebaseTokenFilter firebaseTokenFilter) throws Exception {
+    public AdminKeyFilter adminKeyFilter() {
+        return new AdminKeyFilter(adminApiKey);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http, FirebaseTokenFilter firebaseTokenFilter, AdminKeyFilter adminKeyFilter) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -45,6 +56,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").permitAll()
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(adminKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

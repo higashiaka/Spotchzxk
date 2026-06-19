@@ -53,18 +53,18 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Query(value = "UPDATE orders SET status = 'cancelled' WHERE user_id = :userId AND status = 'pending'", nativeQuery = true)
     int cancelPendingOrdersByUserId(@Param("userId") String userId);
 
-    // For holding limit calculation ??sums pending buy quantity per stock for a specific user
-    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
+    // Remaining quantity = quantity - filled_quantity (partial fills reduce effective pending amount)
+    @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
     long sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 
-    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'sell' AND status = 'pending'", nativeQuery = true)
+    @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'sell' AND status = 'pending'", nativeQuery = true)
     long sumPendingSellQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 
-    @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM orders WHERE streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
+    @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
     long sumPendingBuyQuantityByStreamerId(@Param("streamerId") String streamerId);
 
     @Query(value = """
-            SELECT limit_price, COALESCE(SUM(quantity), 0)
+            SELECT limit_price, COALESCE(SUM(quantity - filled_quantity), 0)
             FROM orders
             WHERE streamer_id = :streamerId
               AND type = 'sell'
@@ -78,7 +78,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Object[]> findAskLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
 
     @Query(value = """
-            SELECT limit_price, COALESCE(SUM(quantity), 0)
+            SELECT limit_price, COALESCE(SUM(quantity - filled_quantity), 0)
             FROM orders
             WHERE streamer_id = :streamerId
               AND type = 'buy'

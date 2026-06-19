@@ -22,6 +22,7 @@ public class PortfolioController {
 
     @GetMapping("/portfolio")
     public ResponseEntity<Map<String, Object>> getPortfolio(@AuthenticationPrincipal String uid) {
+        if (uid == null) return ResponseEntity.status(401).build();
         Map<String, Object> body = new HashMap<>(portfolioService.getPortfolioResponse(uid));
         body.put("remainingResets", portfolioService.getRemainingResets(uid));
         return ResponseEntity.ok(body);
@@ -29,6 +30,7 @@ public class PortfolioController {
 
     @PostMapping("/portfolio/reset")
     public ResponseEntity<Map<String, Object>> resetPortfolio(@AuthenticationPrincipal String uid) {
+        if (uid == null) return ResponseEntity.status(401).build();
         try {
             portfolioService.resetPortfolio(uid);
             tradeEngine.evictUserCache(uid);

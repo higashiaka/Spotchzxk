@@ -10,6 +10,7 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import org.junit.jupiter.api.Test;
+import com.spotchzxk.application.RankCacheService;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -92,7 +93,8 @@ class TradeEnginePricingTest {
                 orderRepository,
                 mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
-                mock(CandleService.class)
+                mock(CandleService.class),
+                mock(RankCacheService.class)
         );
         String userId = "user-1";
         String stockId = "stock-1";
@@ -100,9 +102,9 @@ class TradeEnginePricingTest {
                 .channelId(stockId)
                 .streamerName("streamer")
                 .listedAt(LocalDateTime.now().minusHours(1))
-                .totalSupply(10_000)
-                .issuedShares(0)
-                .currentPrice(1_000)
+                .totalSupply(BigDecimal.valueOf(10_000))
+                .issuedShares(BigDecimal.ZERO)
+                .currentPrice(BigDecimal.valueOf(1_000))
                 .coinReserve(BigInteger.valueOf(10_000_000L))
                 .shareReserve(BigInteger.valueOf(10_000L))
                 .build()));
@@ -134,7 +136,8 @@ class TradeEnginePricingTest {
                 orderRepository,
                 mock(AsyncBroadcastService.class),
                 txManager,
-                mock(CandleService.class)
+                mock(CandleService.class),
+                mock(RankCacheService.class)
         );
         String stockId = "stock-1";
         Order pendingOrder = Order.builder()
@@ -152,7 +155,7 @@ class TradeEnginePricingTest {
         when(stockRepository.findById(stockId)).thenReturn(Optional.of(Stock.builder()
                 .channelId(stockId)
                 .streamerName("streamer")
-                .currentPrice(10_000)
+                .currentPrice(BigDecimal.valueOf(10_000))
                 .coinReserve(COIN_RESERVE_BIG)
                 .shareReserve(SHARE_RESERVE_BIG)
                 .build()));
@@ -176,7 +179,8 @@ class TradeEnginePricingTest {
                 mock(OrderRepository.class),
                 mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
-                mock(CandleService.class)
+                mock(CandleService.class),
+                mock(RankCacheService.class)
         );
         String userId = "user-1";
         String stockId = "stock-1";
@@ -187,7 +191,7 @@ class TradeEnginePricingTest {
         Stock stock = Stock.builder()
                 .channelId(stockId)
                 .streamerName("streamer")
-                .currentPrice(10_000)
+                .currentPrice(BigDecimal.valueOf(10_000))
                 .coinReserve(COIN_RESERVE_BIG)
                 .shareReserve(SHARE_RESERVE_BIG)
                 .build();

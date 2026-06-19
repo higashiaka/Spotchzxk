@@ -7,7 +7,6 @@ import com.spotchzxk.domain.megaphone.repository.MegaphonePostRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -110,22 +107,7 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public List<MegaphonePost> getRecentPosts() {
-        List<Stock> liveStocks = stockRepository.findByIsLiveTrue();
-        if (liveStocks.isEmpty()) {
-            return List.of();
-        }
-
-        List<String> liveChannelIds = liveStocks.stream()
-                .map(Stock::getChannelId)
-                .toList();
-        List<MegaphonePost> recentPosts = megaphonePostRepository
-                .findByChannelIdInOrderByCreatedAtDesc(liveChannelIds, PageRequest.of(0, 200));
-
-        return recentPosts.stream()
-                .filter(post -> isVisibleInCurrentLiveSession(post, liveStocks))
-                .sorted(Comparator.comparing(MegaphonePost::getCreatedAt).reversed())
-                .limit(20)
-                .toList();
+        return megaphonePostRepository.findRecentPostsForLiveStocks();
     }
 
     @Transactional(readOnly = true)
@@ -149,13 +131,6 @@ public class MegaphoneService {
         return trimmed;
     }
 
-    private boolean isVisibleInCurrentLiveSession(MegaphonePost post, List<Stock> liveStocks) {
-        return liveStocks.stream()
-                .filter(stock -> stock.getChannelId().equals(post.getChannelId()))
-                .findFirst()
-                .map(stock -> Objects.equals(stock.getLiveStartedAt(), post.getLiveSessionStartedAt()))
-                .orElse(false);
-    }
 }
 
 

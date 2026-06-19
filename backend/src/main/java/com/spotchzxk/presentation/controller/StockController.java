@@ -3,6 +3,7 @@ package com.spotchzxk.presentation.controller;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.user.repository.CheerLogRepository;
 import com.spotchzxk.presentation.dto.OrderBookDto;
+import com.spotchzxk.presentation.dto.StockResponse;
 import com.spotchzxk.shared.exception.ChannelNotFoundException;
 import com.spotchzxk.shared.exception.InsufficientFollowerCountException;
 import com.spotchzxk.application.StockService;
@@ -26,7 +27,7 @@ public class StockController {
     private final CheerLogRepository cheerLogRepository;
 
     @GetMapping
-    public ResponseEntity<List<Stock>> getAllStocks() {
+    public ResponseEntity<List<StockResponse>> getAllStocks() {
         return ResponseEntity.ok(stockService.getAllStocks());
     }
 

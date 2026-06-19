@@ -25,7 +25,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,13 +35,8 @@ public class PortfolioService {
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int MAX_DAILY_RESETS = 3;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final long RANK_CACHE_TTL_MS = 3 * 60 * 1000L;
-    private static final long TOTAL_CACHE_TTL_MS = 10 * 60 * 1000L;
-
-    private final Map<String, long[]> rankCache = new ConcurrentHashMap<>();
-    private volatile long[] totalActiveCache;
-
     private final UserRepository userRepository;
+    private final RankCacheService rankCacheService;
     private final UserShareRepository userShareRepository;
     private final TitleRepository titleRepository;
     private final UserItemRepository userItemRepository;
@@ -88,8 +82,8 @@ public class PortfolioService {
                 .toList());
         response.put("selectedTitleId", p.getSelectedTitleId());
         if (!p.isGuest()) {
-            response.put("leagueRank", cachedLeagueRank(userId));
-            response.put("leagueTotal", cachedLeagueTotal());
+            response.put("leagueRank", rankCacheService.getCachedRank(userId));
+            response.put("leagueTotal", rankCacheService.getCachedTotal());
         }
         return response;
     }
@@ -198,7 +192,7 @@ public class PortfolioService {
     private void evictAfterCommit(String userId) {
         Runnable evict = () -> {
             tradeEngine.evictUserCache(userId);
-            rankCache.remove(userId);
+            rankCacheService.evict(userId);
         };
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             evict.run();
@@ -210,28 +204,6 @@ public class PortfolioService {
                 evict.run();
             }
         });
-    }
-
-    private long cachedLeagueRank(String userId) {
-        long now = System.currentTimeMillis();
-        long[] entry = rankCache.compute(userId, (key, current) -> {
-            if (current != null && now < current[1]) {
-                return current;
-            }
-            long rank = userRepository.countUsersWithHigherTotalAssets(key) + 1;
-            return new long[]{rank, now + RANK_CACHE_TTL_MS};
-        });
-        return entry[0];
-    }
-
-    private long cachedLeagueTotal() {
-        long[] entry = totalActiveCache;
-        if (entry != null && System.currentTimeMillis() < entry[1]) {
-            return entry[0];
-        }
-        long total = userRepository.countActiveUsers();
-        totalActiveCache = new long[]{total, System.currentTimeMillis() + TOTAL_CACHE_TTL_MS};
-        return total;
     }
 
     public int getRemainingResets(String userId) {

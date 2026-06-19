@@ -17,13 +17,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/topic");
-        registry.setApplicationDestinationPrefixes("/app");
+        // No @MessageMapping handlers exist — omitting /app prefix closes the client→server
+        // message path until a handler is explicitly added.
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        String[] origins = corsOriginRaw.split(",");
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOrigins(origins)
                 .withSockJS();
     }
 }

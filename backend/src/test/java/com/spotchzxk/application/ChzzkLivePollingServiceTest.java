@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +25,7 @@ class ChzzkLivePollingServiceTest {
     private final UserShareRepository userShareRepository = mock(UserShareRepository.class);
     private final ChzzkApiClient chzzkApiClient = mock(ChzzkApiClient.class);
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
+    private final StockSplitService stockSplitService = mock(StockSplitService.class);
 
     private final ChzzkLivePollingService service = new ChzzkLivePollingService(
             stockRepository,
@@ -31,7 +33,8 @@ class ChzzkLivePollingServiceTest {
             messagingTemplate,
             userShareRepository,
             chzzkApiClient,
-            transactionTemplate
+            transactionTemplate,
+            stockSplitService
     );
 
     @Test
@@ -66,11 +69,11 @@ class ChzzkLivePollingServiceTest {
         return Stock.builder()
                 .channelId(channelId)
                 .streamerName(channelId)
-                .basePrice(10_000)
-                .listingPrice(10_000)
-                .currentPrice(10_000)
-                .totalSupply(100_000)
-                .dailyVolume(0)
+                .basePrice(BigDecimal.valueOf(10_000))
+                .listingPrice(BigDecimal.valueOf(10_000))
+                .currentPrice(BigDecimal.valueOf(10_000))
+                .totalSupply(BigDecimal.valueOf(100_000))
+                .dailyVolume(BigDecimal.ZERO)
                 .isLive(isLive)
                 .liveStartedAt(liveStartedAt)
                 .build();

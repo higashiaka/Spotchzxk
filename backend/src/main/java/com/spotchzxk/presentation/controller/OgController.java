@@ -1,7 +1,7 @@
 package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.application.StockService;
-import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.presentation.dto.StockResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,27 +23,27 @@ public class OgController {
 
     @GetMapping(value = "/stocks/{id}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> stockOg(@PathVariable String id) {
-        Optional<Stock> opt = stockService.getAllStocks().stream()
-                .filter(s -> s.getChannelId().equals(id))
+        Optional<StockResponse> opt = stockService.getAllStocks().stream()
+                .filter(s -> s.channelId().equals(id))
                 .findFirst();
 
         if (opt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        Stock stock = opt.get();
-        BigDecimal price = stock.getCurrentPrice();
-        BigDecimal base = stock.getBasePrice().compareTo(BigDecimal.ZERO) > 0 ? stock.getBasePrice() : price;
+        StockResponse stock = opt.get();
+        BigDecimal price = stock.currentPrice();
+        BigDecimal base = stock.basePrice().compareTo(BigDecimal.ZERO) > 0 ? stock.basePrice() : price;
         double pct = base.compareTo(BigDecimal.ZERO) > 0
                 ? price.subtract(base).multiply(BigDecimal.valueOf(100)).divide(base, 2, java.math.RoundingMode.HALF_UP).doubleValue() : 0;
         String sign = pct >= 0 ? "+" : "";
         String formattedPrice = NumberFormat.getNumberInstance(Locale.KOREA).format(price);
-        String formattedFollowers = NumberFormat.getNumberInstance(Locale.KOREA).format(stock.getFollowerCount());
+        String formattedFollowers = NumberFormat.getNumberInstance(Locale.KOREA).format(stock.followerCount());
 
-        String title = stock.getStreamerName() + " — Spotchzxk";
+        String title = stock.streamerName() + " — Spotchzxk";
         String description = String.format("현재가 %s코인 (%s%.2f%%) · 팔로워 %s명",
                 formattedPrice, sign, pct, formattedFollowers);
-        String image = stock.getProfileImageUrl() != null ? stock.getProfileImageUrl() : "";
+        String image = stock.profileImageUrl() != null ? stock.profileImageUrl() : "";
         String url = "https://spotchzxk.xyz/stocks/" + id;
 
         String html = """
@@ -79,18 +79,18 @@ public class OgController {
 
     @GetMapping(value = "/home", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> homeOg() {
-        List<Stock> stocks = stockService.getAllStocks().stream()
-                .filter(s -> s.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0)
-                .sorted(Comparator.comparing(Stock::getDailyTradingValue).reversed())
+        List<StockResponse> stocks = stockService.getAllStocks().stream()
+                .filter(s -> s.currentPrice().compareTo(BigDecimal.ZERO) > 0)
+                .sorted(Comparator.comparing(StockResponse::dailyTradingValue).reversed())
                 .limit(20)
                 .toList();
 
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.KOREA);
 
         StringBuilder rows = new StringBuilder();
-        for (Stock s : stocks) {
-            BigDecimal price = s.getCurrentPrice();
-            BigDecimal base = s.getBasePrice().compareTo(BigDecimal.ZERO) > 0 ? s.getBasePrice() : price;
+        for (StockResponse s : stocks) {
+            BigDecimal price = s.currentPrice();
+            BigDecimal base = s.basePrice().compareTo(BigDecimal.ZERO) > 0 ? s.basePrice() : price;
             double pct = base.compareTo(BigDecimal.ZERO) > 0
                     ? price.subtract(base).multiply(BigDecimal.valueOf(100))
                             .divide(base, 2, java.math.RoundingMode.HALF_UP).doubleValue()
@@ -98,7 +98,7 @@ public class OgController {
             String sign = pct >= 0 ? "+" : "";
             rows.append(String.format(
                     "<li><a href=\"https://spotchzxk.xyz/stocks/%s\">%s</a> — %s코인 (%s%.2f%%)</li>\n",
-                    s.getChannelId(), s.getStreamerName(), nf.format(price), sign, pct));
+                    s.channelId(), s.streamerName(), nf.format(price), sign, pct));
         }
 
         String html = """

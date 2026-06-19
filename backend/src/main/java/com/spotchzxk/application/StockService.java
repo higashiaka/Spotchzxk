@@ -1,6 +1,7 @@
 package com.spotchzxk.application;
 
 import com.spotchzxk.presentation.dto.OrderBookDto;
+import com.spotchzxk.presentation.dto.StockResponse;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.shared.exception.ChannelNotFoundException;
@@ -13,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -35,8 +38,8 @@ public class StockService {
     private final TradeEngine tradeEngine;
     private final TransactionTemplate transactionTemplate;
 
-    public List<Stock> getAllStocks() {
-        return stockRepository.findAll();
+    public List<StockResponse> getAllStocks() {
+        return stockRepository.findAll().stream().map(StockResponse::from).toList();
     }
 
     public OrderBookDto getOrderBook(String channelId, int depth) {
@@ -79,13 +82,19 @@ public class StockService {
                 .listedAt(java.time.LocalDateTime.now())
                 .build();
 
-        // Issue #21: wrap addStock in a user lock to prevent TOCTOU between existsById check and insert
+        // user lock prevents TOCTOU for the same user; DataIntegrityViolationException handles
+        // the rare race where two different users register the same channelId concurrently.
         AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
-        tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
-                addStockIfNewLocked(userId, channelId, stock))));
+        try {
+            tradeEngine.runWithUserLock(userId, () -> result.set(transactionTemplate.execute(status ->
+                    addStockIfNewLocked(userId, channelId, stock))));
+        } catch (DataIntegrityViolationException e) {
+            return Optional.empty(); // already inserted by a concurrent request
+        }
 
         result.get().ifPresent(savedStock ->
-                messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll()));
+                messagingTemplate.convertAndSend("/topic/streamers",
+                        stockRepository.findAll().stream().map(StockResponse::from).toList()));
         return result.get();
     }
 

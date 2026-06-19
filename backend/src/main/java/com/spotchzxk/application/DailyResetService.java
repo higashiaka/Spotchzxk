@@ -3,6 +3,7 @@ package com.spotchzxk.application;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
+import com.spotchzxk.presentation.dto.StockResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -43,7 +44,8 @@ public class DailyResetService {
 
         String resetAt = LocalDateTime.now().toString();
         sendAfterCommit(() -> {
-            messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+            messagingTemplate.convertAndSend("/topic/streamers",
+                    stockRepository.findAll().stream().map(StockResponse::from).toList());
             messagingTemplate.convertAndSend("/topic/rankings-reset", Map.of(
                 "resetAt", resetAt,
                 "resetUsers", resetUsers

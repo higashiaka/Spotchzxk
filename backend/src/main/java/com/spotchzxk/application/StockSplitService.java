@@ -2,6 +2,7 @@ package com.spotchzxk.application;
 
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.presentation.dto.StockResponse;
 import com.spotchzxk.domain.stock.entity.StockSplitEvent;
 import com.spotchzxk.domain.stock.entity.StockSplitNotice;
 import com.spotchzxk.domain.stock.repository.StockRepository;
@@ -60,7 +61,10 @@ public class StockSplitService {
     @Scheduled(cron = "0 0 0/6 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyStockSplit() {
-        splitInProgress.set(true);
+        if (!splitInProgress.compareAndSet(false, true)) {
+            log.warn("Stock split already in progress; skipping scheduled run.");
+            return;
+        }
         try {
             doPerformSplit(false, false);
         } finally {
@@ -71,7 +75,10 @@ public class StockSplitService {
     @Scheduled(cron = "0 0 3/6 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyReverseStockSplit() {
-        splitInProgress.set(true);
+        if (!splitInProgress.compareAndSet(false, true)) {
+            log.warn("Reverse stock split already in progress; skipping scheduled run.");
+            return;
+        }
         try {
             doPerformSplit(false, true);
         } finally {
@@ -81,7 +88,9 @@ public class StockSplitService {
 
     @Transactional
     public String forcePerformSplit() {
-        splitInProgress.set(true);
+        if (!splitInProgress.compareAndSet(false, true)) {
+            return "액면분할 진행 중 — 중복 실행 차단됨";
+        }
         try {
             int count = doPerformSplit(true, false);
             return count == 0 ? "액면분할 대상 없음" : String.format("액면분할 완료: %d개 종목", count);
@@ -92,7 +101,9 @@ public class StockSplitService {
 
     @Transactional
     public String forcePerformReverseSplit() {
-        splitInProgress.set(true);
+        if (!splitInProgress.compareAndSet(false, true)) {
+            return "액면병합 진행 중 — 중복 실행 차단됨";
+        }
         try {
             int count = doPerformSplit(true, true);
             return count == 0 ? "액면병합 대상 없음" : String.format("액면병합 완료: %d개 종목", count);
@@ -155,7 +166,8 @@ public class StockSplitService {
                 ))
                 .toList();
         registerAfterCommit(() -> {
-            messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
+            messagingTemplate.convertAndSend("/topic/streamers",
+                    stockRepository.findAll().stream().map(StockResponse::from).toList());
             for (Map<String, Object> priceUpdate : priceUpdates) {
                 String channelId = (String) priceUpdate.get("channelId");
                 messagingTemplate.convertAndSend("/topic/prices/" + channelId,

@@ -16,9 +16,7 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -34,7 +32,10 @@ public class GuestAbuseProtectionService {
     private final Cache<String, LocalCounter> localCounters = Caffeine.newBuilder()
             .expireAfterAccess(1, TimeUnit.HOURS)
             .build();
-    private final Map<String, LocalPermit> localPermits = new ConcurrentHashMap<>();
+    // permit TTL matches Redis permit TTL (60 s); Caffeine prevents unbounded growth during Redis outages
+    private final Cache<String, LocalPermit> localPermits = Caffeine.newBuilder()
+            .expireAfterWrite(90, TimeUnit.SECONDS)
+            .build();
 
     public AbuseCheckResult checkAndRecord(HttpServletRequest request, String fingerprintHash) {
         if (!properties.enabled()) {
@@ -60,7 +61,7 @@ public class GuestAbuseProtectionService {
             redisTemplate.expire(key, Duration.ofSeconds(properties.windowSeconds()));
         }
 
-        if (count != null && count >= properties.maxNewGuestsPerWindow()) {
+        if (count != null && count > properties.maxNewGuestsPerWindow()) {
             Long ttl = redisTemplate.getExpire(key);
             return AbuseCheckResult.blocked(ttl != null && ttl > 0 ? ttl : properties.blockSeconds());
         }
@@ -80,6 +81,7 @@ public class GuestAbuseProtectionService {
         } catch (RedisConnectionFailureException e) {
             localPermits.put(token, new LocalPermit(abuseKey, Instant.now().getEpochSecond() + 60));
         }
+
         return token;
     }
 
@@ -100,9 +102,10 @@ public class GuestAbuseProtectionService {
             }
             return true;
         } catch (RedisConnectionFailureException e) {
-            LocalPermit permit = localPermits.remove(normalized);
-            return permit != null
-                    && expectedAbuseKey.equals(permit.abuseKey)
+            LocalPermit permit = localPermits.getIfPresent(normalized);
+            if (permit == null) return false;
+            localPermits.invalidate(normalized);
+            return expectedAbuseKey.equals(permit.abuseKey)
                     && permit.expiresAt >= Instant.now().getEpochSecond();
         }
     }
@@ -117,7 +120,7 @@ public class GuestAbuseProtectionService {
             return new LocalCounter(current.count + 1, current.expiresAt);
         });
 
-        if (counter.count >= properties.maxNewGuestsPerWindow()) {
+        if (counter.count > properties.maxNewGuestsPerWindow()) {
             return AbuseCheckResult.blocked(Math.max(1, counter.expiresAt - now));
         }
 

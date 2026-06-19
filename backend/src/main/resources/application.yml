@@ -1,52 +1,3 @@
-system-sell:
-  pressure:
-    enabled: false
-    max-orders-per-tick: 1
-    execution-chance-percent: 60
-
-    start-gain-min-percent: 200
-    start-gain-max-percent: 300
-    stop-gain-min-percent: 150
-    stop-gain-max-percent: 190
-
-    weak:
-      quantity-min: 30
-      quantity-max: 100
-      interval-min-seconds: 8
-      interval-max-seconds: 20
-
-    medium:
-      quantity-min: 60
-      quantity-max: 200
-      interval-min-seconds: 5
-      interval-max-seconds: 10
-
-    strong:
-      quantity-min: 80
-      quantity-max: 250
-      interval-min-seconds: 3
-      interval-max-seconds: 12
-
-    extreme:
-      quantity-min: 100
-      quantity-max: 300
-      interval-min-seconds: 3
-      interval-max-seconds: 18
-
-    max-quantity-per-order: 2000
-    daily-sell-limit-min: 5000
-    daily-sell-limit-max: 8000
-    max-consecutive-sell-min: 1
-    max-consecutive-sell-max: 8
-    cooldown-min-seconds: 90
-    cooldown-max-seconds: 120
-
-    state-ttl-min-hours: 1
-    state-ttl-max-hours: 3
-
-    daily-reference-ratio-min-percent: 40
-    daily-reference-ratio-max-percent: 70
-
 spring:
   application:
     name: spotchzxk
@@ -62,7 +13,7 @@ spring:
       password: disabled
 
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:spotchzxk}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:spotchzxk}?useSSL=false&characterEncoding=UTF-8&serverTimezone=Asia/Seoul
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -88,7 +39,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baseline-on-migrate: true
+    baseline-on-migrate: false
     baseline-version: 3
 
   data:
