@@ -13,7 +13,12 @@ const trimDecimal = (value: string): string => value.replace(/\.?0+$/, '');
 export const fmt = (value: number | string): string => {
   const n = toFiniteNumber(value);
   if (n === 0) return '0원';
-  if (Math.abs(n) < 1) return `${trimDecimal(n.toFixed(6))}원`;
+  if (Math.abs(n) < 1) {
+    const fixed = n.toFixed(6);
+    // If too small to represent at 6dp, show the minimum representable value
+    if (fixed === '0.000000' || fixed === '-0.000000') return n > 0 ? '<0.000001원' : '>-0.000001원';
+    return `${trimDecimal(fixed)}원`;
+  }
   return `${Math.round(n).toLocaleString('ko-KR')}원`;
 };
 
