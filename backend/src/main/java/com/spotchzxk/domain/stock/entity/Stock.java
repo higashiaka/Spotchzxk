@@ -190,8 +190,12 @@ public class Stock {
     }
 
     public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {
-        this.currentPrice = new BigDecimal(newCoinReserve)
+        BigDecimal computed = new BigDecimal(newCoinReserve)
                 .divide(new BigDecimal(newShareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
+        // Price must never round to zero while reserves are positive
+        this.currentPrice = computed.compareTo(BigDecimal.ZERO) == 0 && newCoinReserve.signum() > 0
+                ? new BigDecimal("0.000001")
+                : computed;
         this.coinReserve = newCoinReserve;
         this.shareReserve = newShareReserve;
         this.feePool = nonNull(this.feePool).add(fee);

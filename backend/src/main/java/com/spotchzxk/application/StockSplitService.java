@@ -40,7 +40,6 @@ public class StockSplitService {
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
     private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(100);
-    private static final int REVERSE_SPLIT_RATIO = 10;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
@@ -194,7 +193,7 @@ public class StockSplitService {
             return stockRepository.findByCurrentPriceLessThan(REVERSE_SPLIT_THRESHOLD_PRICE).stream()
                     .filter(stock -> stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0)
                     .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                    .map(stock -> new StockAction(stock, REVERSE_SPLIT_RATIO, true))
+                    .map(stock -> new StockAction(stock, calcReverseSplitRatio(stock.getCurrentPrice()), true))
                     .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
                     .toList();
         }
@@ -230,16 +229,34 @@ public class StockSplitService {
         String stockNames = actions.stream()
                 .map(StockAction::displayName)
                 .collect(Collectors.joining(", "));
+        int representativeRatio = reverse
+                ? -actions.stream().mapToInt(StockAction::ratio).max().orElse(10)
+                : SPLIT_RATIO;
         return StockSplitNotice.builder()
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
                 .splitHour(splitHour)
                 .thresholdPrice(reverse ? REVERSE_SPLIT_THRESHOLD_PRICE.intValue() : SPLIT_THRESHOLD_PRICE.intValue())
-                .splitRatio(reverse ? -REVERSE_SPLIT_RATIO : SPLIT_RATIO)
+                .splitRatio(representativeRatio)
                 .stockCount(actions.size())
                 .stockNames(stockNames)
                 .createdAt(LocalDateTime.now(KST))
                 .build();
+    }
+
+    /**
+     * Picks a reverse-split ratio that brings a sub-threshold price back toward 1,000 won.
+     * Ratios are capped to powers of 10 so they're easy to communicate to users.
+     */
+    private static int calcReverseSplitRatio(BigDecimal price) {
+        // target: post-split price ≥ 1,000
+        if (price.compareTo(new BigDecimal("0.001")) < 0)  return 100_000_000;
+        if (price.compareTo(new BigDecimal("0.01")) < 0)   return 10_000_000;
+        if (price.compareTo(new BigDecimal("0.1")) < 0)    return 1_000_000;
+        if (price.compareTo(BigDecimal.ONE) < 0)           return 100_000;
+        if (price.compareTo(BigDecimal.TEN) < 0)           return 10_000;
+        if (price.compareTo(BigDecimal.valueOf(100)) < 0)  return 1_000;
+        return 10;
     }
 
     private boolean isEventStock(Stock stock) {
