@@ -336,23 +336,12 @@ public class TradeEngine {
             }
         }
 
-        if (stock.getTotalSupply().compareTo(BigDecimal.ZERO) > 0
-                && stock.getIssuedShares().add(BigDecimal.valueOf(qty)).compareTo(stock.getTotalSupply()) > 0) {
-            throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
-        }
     }
 
     private void validateLimitOrder(String channelId, String userId, boolean isBuy, long qty, BigDecimal reserveAmount,
                                     BigDecimal currentBalance, BigDecimal heldQty) {
         if (isBuy) {
             validateTrade(userId, channelId, true, qty, reserveAmount, currentBalance, heldQty);
-            Stock stock = stockRepository.findById(channelId)
-                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
-            long pendingBuyQty = orderRepository.sumPendingBuyQuantityByStreamerId(channelId);
-            if (stock.getTotalSupply().compareTo(BigDecimal.ZERO) > 0
-                    && stock.getIssuedShares().add(BigDecimal.valueOf(pendingBuyQty + qty)).compareTo(stock.getTotalSupply()) > 0) {
-                throw new IllegalStateException("해당 종목의 최대 발행 한도를 초과합니다.");
-            }
             return;
         }
 
