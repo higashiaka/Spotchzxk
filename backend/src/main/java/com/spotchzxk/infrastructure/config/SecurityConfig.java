@@ -1,6 +1,5 @@
 package com.spotchzxk.infrastructure.config;
 
-import com.google.firebase.FirebaseApp;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.infrastructure.security.AdminKeyFilter;
 import com.spotchzxk.infrastructure.security.FirebaseTokenFilter;
@@ -32,8 +31,7 @@ public class SecurityConfig {
 
     @Bean
     public FirebaseTokenFilter firebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService) {
-        boolean firebaseEnabled = !FirebaseApp.getApps().isEmpty();
-        return new FirebaseTokenFilter(userRepository, accountLinkService, firebaseEnabled);
+        return new FirebaseTokenFilter(userRepository, accountLinkService);
     }
 
     @Bean

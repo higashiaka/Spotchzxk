@@ -2,6 +2,7 @@ package com.spotchzxk.infrastructure.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
@@ -34,12 +35,10 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
     private final AccountLinkService accountLinkService;
-    private final boolean firebaseEnabled;
 
-    public FirebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService, boolean firebaseEnabled) {
+    public FirebaseTokenFilter(UserRepository userRepository, AccountLinkService accountLinkService) {
         this.userRepository = userRepository;
         this.accountLinkService = accountLinkService;
-        this.firebaseEnabled = firebaseEnabled;
     }
 
     // Issue #32: ConcurrentHashMap never expires; use Caffeine with TTL to avoid unbounded JVM heap growth
@@ -52,7 +51,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        if (!firebaseEnabled) {
+        if (FirebaseApp.getApps().isEmpty()) {
             chain.doFilter(request, response);
             return;
         }
