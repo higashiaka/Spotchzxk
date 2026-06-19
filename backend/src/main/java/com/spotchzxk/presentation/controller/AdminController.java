@@ -44,6 +44,16 @@ public class AdminController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/stock-reverse-split/force")
+    public ResponseEntity<String> forceReverseStockSplit(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        String result = stockSplitService.forcePerformReverseSplit();
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping("/amm/migrate")
     public ResponseEntity<String> migrateAmm(
             @RequestHeader(value = "X-Admin-Key", required = false) String key) {

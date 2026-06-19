@@ -192,6 +192,28 @@ class CandleServiceTest {
     }
 
     @Test
+    void getCandlesAdjustsHistoricalPricesForLaterReverseStockSplits() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long splitAt = base + 120_000L;
+        long before = base + 180_000L;
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of(order(stockId, base + 60_000L, 50)));
+        when(stockSplitEventRepository.findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), anyLong()))
+                .thenReturn(List.of(StockSplitEvent.builder()
+                        .id("split-1")
+                        .channelId(stockId)
+                        .splitRatio(-10)
+                        .executedAt(splitAt)
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build()));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 500);
+
+        assertThat(candles.get(0).getClose()).isEqualTo(500);
+    }
+
+    @Test
     void getCandlesAdjustsGapFallbackUsingSplitsBetweenPreviousOrderAndWindow() {
         String stockId = "stock-1";
         long base = 1_771_000_020_000L;

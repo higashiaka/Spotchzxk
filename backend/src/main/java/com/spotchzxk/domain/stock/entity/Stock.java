@@ -237,6 +237,23 @@ public class Stock {
         this.shareReserve = nonNull(this.shareReserve).multiply(BigInteger.valueOf(ratio));
     }
 
+    public void applyReverseStockSplit(int ratio) {
+        if (ratio <= 1) {
+            throw new IllegalArgumentException("Reverse split ratio must be greater than 1.");
+        }
+        BigDecimal ratioDecimal = BigDecimal.valueOf(ratio);
+        this.currentPrice = this.currentPrice.multiply(ratioDecimal);
+        this.basePrice = this.basePrice.multiply(ratioDecimal);
+        this.listingPrice = this.listingPrice.multiply(ratioDecimal);
+        this.totalSupply = this.totalSupply.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
+        this.dailyVolume = this.dailyVolume.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
+        this.issuedShares = this.issuedShares.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
+        this.preStreamFloat = this.preStreamFloat.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
+        this.shareReserve = nonNull(this.shareReserve)
+                .divide(BigInteger.valueOf(ratio))
+                .max(BigInteger.ONE);
+    }
+
     private BigInteger nonNull(BigInteger value) {
         return value != null ? value : BigInteger.ZERO;
     }

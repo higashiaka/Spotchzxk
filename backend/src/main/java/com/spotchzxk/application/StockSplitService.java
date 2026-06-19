@@ -1,13 +1,13 @@
 package com.spotchzxk.application;
 
+import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.entity.StockSplitEvent;
 import com.spotchzxk.domain.stock.entity.StockSplitNotice;
-import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
-import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
+import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -28,6 +27,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +38,8 @@ public class StockSplitService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
+    private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(100);
+    private static final int REVERSE_SPLIT_RATIO = 10;
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
@@ -60,55 +62,74 @@ public class StockSplitService {
     public void performDailyStockSplit() {
         splitInProgress.set(true);
         try {
-            doPerformSplit();
+            doPerformSplit(false, false);
         } finally {
             splitInProgress.set(false);
         }
     }
 
-    private void doPerformSplit() {
+    @Scheduled(cron = "0 0 3/6 * * *", zone = "Asia/Seoul")
+    @Transactional
+    public void performDailyReverseStockSplit() {
+        splitInProgress.set(true);
+        try {
+            doPerformSplit(false, true);
+        } finally {
+            splitInProgress.set(false);
+        }
+    }
+
+    @Transactional
+    public String forcePerformSplit() {
+        splitInProgress.set(true);
+        try {
+            int count = doPerformSplit(true, false);
+            return count == 0 ? "액면분할 대상 없음" : String.format("액면분할 완료: %d개 종목", count);
+        } finally {
+            splitInProgress.set(false);
+        }
+    }
+
+    @Transactional
+    public String forcePerformReverseSplit() {
+        splitInProgress.set(true);
+        try {
+            int count = doPerformSplit(true, true);
+            return count == 0 ? "액면병합 대상 없음" : String.format("액면병합 완료: %d개 종목", count);
+        } finally {
+            splitInProgress.set(false);
+        }
+    }
+
+    private int doPerformSplit(boolean force, boolean reverse) {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalDate today = now.toLocalDate();
         int splitHour = now.getHour();
-        if (stockSplitNoticeRepository.existsBySplitDateAndSplitHour(today, splitHour)) {
-            log.info("Stock split already processed for {} {}:00.", today, splitHour);
-            return;
+        if (!force && stockSplitNoticeRepository.existsBySplitDateAndSplitHour(today, splitHour)) {
+            log.info("{} already processed for {} {}:00.", actionName(reverse), today, splitHour);
+            return 0;
         }
 
-        LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
-        List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
-                .filter(stock -> !isEventStock(stock))
-                .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
-                .filter(stock -> {
-                    BigDecimal postSplitPrice = stock.getCurrentPrice().divide(BigDecimal.valueOf(SPLIT_RATIO), 2, java.math.RoundingMode.HALF_UP);
-                    if (postSplitPrice.compareTo(BigDecimal.valueOf(100)) < 0) {
-                        log.warn("Skipping split for {} (channelId={}): post-split price {} is too low.",
-                                stock.getStreamerName(), stock.getChannelId(), postSplitPrice);
-                        return false;
-                    }
-                    return true;
-                })
-                .sorted(Comparator.comparing(Stock::getStreamerName))
-                .toList();
-        if (targets.isEmpty()) {
-            log.info("No stocks exceeded the split threshold of {}.", SPLIT_THRESHOLD_PRICE);
-            return;
+        List<StockAction> actions = findEligibleActions(now, reverse);
+        if (actions.isEmpty()) {
+            log.info("No stocks met {} threshold.", actionName(reverse));
+            return 0;
         }
 
-        StockSplitNotice notice = createNotice(today, splitHour, targets);
+        StockSplitNotice notice = createNotice(today, splitHour, actions);
         stockSplitNoticeRepository.saveAndFlush(notice);
 
-        List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
-        for (Stock stock : targets) {
-            stock.applyStockSplit(SPLIT_RATIO);
-            userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
-            orderRepository.deleteAllPendingOrders(stock.getChannelId());
-            orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
+        for (StockAction action : actions) {
+            applyAction(action);
+            orderRepository.deleteAllPendingOrders(action.stock().getChannelId());
         }
+
+        List<Stock> targets = actions.stream().map(StockAction::stock).toList();
         stockRepository.saveAll(targets);
-        // Evict caches after commit so other threads never read stale pre-split state
+
+        List<String> channelIds = targets.stream().map(Stock::getChannelId).toList();
         registerAfterCommit(() -> {
-            splitChannelIds.forEach(id -> {
+            channelIds.forEach(id -> {
                 tradeEngine.evictStockCache(id);
                 candleService.evictStockCache(id);
             });
@@ -116,14 +137,13 @@ public class StockSplitService {
         });
 
         long executedAt = System.currentTimeMillis();
-        LocalDateTime createdAt = now;
-        List<StockSplitEvent> events = targets.stream()
-                .map(stock -> StockSplitEvent.builder()
+        List<StockSplitEvent> events = actions.stream()
+                .map(action -> StockSplitEvent.builder()
                         .id(UUID.randomUUID().toString())
-                        .channelId(stock.getChannelId())
-                        .splitRatio(SPLIT_RATIO)
+                        .channelId(action.stock().getChannelId())
+                        .splitRatio(action.eventRatio())
                         .executedAt(executedAt)
-                        .createdAt(createdAt)
+                        .createdAt(now)
                         .build())
                 .toList();
         stockSplitEventRepository.saveAll(events);
@@ -144,85 +164,11 @@ public class StockSplitService {
             messagingTemplate.convertAndSend("/topic/stock-split-notices", notice);
         });
 
-        log.info("Applied {}:1 stock split to {} stocks: {}",
-                SPLIT_RATIO,
+        log.info("Applied {} to {} stocks: {}",
+                actionName(reverse),
                 targets.size(),
-                targets.stream().map(Stock::getStreamerName).collect(Collectors.joining(", ")));
-    }
-
-    @Transactional
-    public String forcePerformSplit() {
-        splitInProgress.set(true);
-        try {
-            LocalDateTime now = LocalDateTime.now(KST);
-            LocalDate today = now.toLocalDate();
-            int splitHour = now.getHour();
-
-            LocalDateTime splitEligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
-            List<Stock> targets = stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
-                    .filter(stock -> !isEventStock(stock))
-                    .filter(stock -> stock.getListedAt() == null || !stock.getListedAt().isAfter(splitEligibleListedAt))
-                    .filter(stock -> stock.getCurrentPrice().divide(BigDecimal.valueOf(SPLIT_RATIO), 2, java.math.RoundingMode.HALF_UP).compareTo(BigDecimal.valueOf(100)) >= 0)
-                    .sorted(Comparator.comparing(Stock::getStreamerName))
-                    .toList();
-
-            if (targets.isEmpty()) {
-                return "분할 대상 없음";
-            }
-
-            StockSplitNotice notice = createNotice(today, splitHour, targets);
-            stockSplitNoticeRepository.saveAndFlush(notice);
-
-            List<String> splitChannelIds = targets.stream().map(Stock::getChannelId).toList();
-            for (Stock stock : targets) {
-                stock.applyStockSplit(SPLIT_RATIO);
-                userShareRepository.applyStockSplit(stock.getChannelId(), SPLIT_RATIO);
-                orderRepository.deleteAllPendingOrders(stock.getChannelId());
-                orderRepository.applyPendingStockSplit(stock.getChannelId(), SPLIT_RATIO);
-            }
-            stockRepository.saveAll(targets);
-            registerAfterCommit(() -> {
-                splitChannelIds.forEach(id -> {
-                    tradeEngine.evictStockCache(id);
-                    candleService.evictStockCache(id);
-                });
-                tradeEngine.evictAllPortfolioCaches();
-            });
-
-            long executedAt = System.currentTimeMillis();
-            List<StockSplitEvent> events = targets.stream()
-                    .map(stock -> StockSplitEvent.builder()
-                            .id(UUID.randomUUID().toString())
-                            .channelId(stock.getChannelId())
-                            .splitRatio(SPLIT_RATIO)
-                            .executedAt(executedAt)
-                            .createdAt(now)
-                            .build())
-                    .toList();
-            stockSplitEventRepository.saveAll(events);
-
-            List<Map<String, Object>> priceUpdates = targets.stream()
-                    .map(stock -> Map.<String, Object>of(
-                            "channelId", stock.getChannelId(),
-                            "price", stock.getCurrentPrice()
-                    ))
-                    .toList();
-            registerAfterCommit(() -> {
-                messagingTemplate.convertAndSend("/topic/streamers", stockRepository.findAll());
-                for (Map<String, Object> priceUpdate : priceUpdates) {
-                    String channelId = (String) priceUpdate.get("channelId");
-                    messagingTemplate.convertAndSend("/topic/prices/" + channelId,
-                            Map.of("streamerId", channelId, "price", priceUpdate.get("price")));
-                }
-                messagingTemplate.convertAndSend("/topic/stock-split-notices", notice);
-            });
-
-            String names = targets.stream().map(Stock::getStreamerName).collect(Collectors.joining(", "));
-            log.info("Force split applied to {} stocks: {}", targets.size(), names);
-            return String.format("액면분할 완료: %d개 종목", targets.size());
-        } finally {
-            splitInProgress.set(false);
-        }
+                actions.stream().map(StockAction::displayName).collect(Collectors.joining(", ")));
+        return targets.size();
     }
 
     @Transactional(readOnly = true)
@@ -230,17 +176,55 @@ public class StockSplitService {
         return stockSplitNoticeRepository.findTopBySplitDateOrderByCreatedAtDesc(LocalDate.now(KST)).orElse(null);
     }
 
-    private StockSplitNotice createNotice(LocalDate today, int splitHour, List<Stock> targets) {
-        String stockNames = targets.stream()
-                .map(Stock::getStreamerName)
+    private List<StockAction> findEligibleActions(LocalDateTime now, boolean reverse) {
+        LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
+        if (reverse) {
+            return stockRepository.findByCurrentPriceLessThan(REVERSE_SPLIT_THRESHOLD_PRICE).stream()
+                    .filter(stock -> stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0)
+                    .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
+                    .map(stock -> new StockAction(stock, REVERSE_SPLIT_RATIO, true))
+                    .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
+                    .toList();
+        }
+
+        return stockRepository.findByCurrentPriceGreaterThan(SPLIT_THRESHOLD_PRICE).stream()
+                .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
+                .filter(stock -> stock.getCurrentPrice()
+                        .divide(BigDecimal.valueOf(SPLIT_RATIO), 2, RoundingMode.HALF_UP)
+                        .compareTo(REVERSE_SPLIT_THRESHOLD_PRICE) >= 0)
+                .map(stock -> new StockAction(stock, SPLIT_RATIO, false))
+                .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
+                .toList();
+    }
+
+    private boolean isEligibleForNormalization(Stock stock, LocalDateTime eligibleListedAt) {
+        return !isEventStock(stock)
+                && (stock.getListedAt() == null || !stock.getListedAt().isAfter(eligibleListedAt));
+    }
+
+    private void applyAction(StockAction action) {
+        Stock stock = action.stock();
+        if (action.reverse()) {
+            stock.applyReverseStockSplit(action.ratio());
+            userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
+            return;
+        }
+        stock.applyStockSplit(action.ratio());
+        userShareRepository.applyStockSplit(stock.getChannelId(), action.ratio());
+    }
+
+    private StockSplitNotice createNotice(LocalDate today, int splitHour, List<StockAction> actions) {
+        boolean reverse = actions.get(0).reverse();
+        String stockNames = actions.stream()
+                .map(StockAction::displayName)
                 .collect(Collectors.joining(", "));
         return StockSplitNotice.builder()
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
                 .splitHour(splitHour)
-                .thresholdPrice(SPLIT_THRESHOLD_PRICE.intValue())
-                .splitRatio(SPLIT_RATIO)
-                .stockCount(targets.size())
+                .thresholdPrice(reverse ? REVERSE_SPLIT_THRESHOLD_PRICE.intValue() : SPLIT_THRESHOLD_PRICE.intValue())
+                .splitRatio(reverse ? -REVERSE_SPLIT_RATIO : SPLIT_RATIO)
+                .stockCount(actions.size())
                 .stockNames(stockNames)
                 .createdAt(LocalDateTime.now(KST))
                 .build();
@@ -248,6 +232,10 @@ public class StockSplitService {
 
     private boolean isEventStock(Stock stock) {
         return stock.getChannelId() != null && stock.getChannelId().startsWith(EVENT_CHANNEL_PREFIX);
+    }
+
+    private String actionName(boolean reverse) {
+        return reverse ? "reverse stock split" : "stock split";
     }
 
     private void registerAfterCommit(Runnable task) {
@@ -262,6 +250,14 @@ public class StockSplitService {
             }
         });
     }
+
+    private record StockAction(Stock stock, int ratio, boolean reverse) {
+        int eventRatio() {
+            return reverse ? -ratio : ratio;
+        }
+
+        String displayName() {
+            return stock.getStreamerName() + (reverse ? " (액면병합)" : " (액면분할)");
+        }
+    }
 }
-
-

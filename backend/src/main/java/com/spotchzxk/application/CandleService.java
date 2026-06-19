@@ -332,7 +332,12 @@ public class CandleService {
         BigDecimal adjusted = price;
         for (StockSplitEvent event : splitEvents) {
             if (event.getExecutedAt() > priceAt) {
-                adjusted = adjusted.divide(BigDecimal.valueOf(event.getSplitRatio()), 2, RoundingMode.HALF_UP);
+                int ratio = event.getSplitRatio();
+                if (ratio > 0) {
+                    adjusted = adjusted.divide(BigDecimal.valueOf(ratio), 2, RoundingMode.HALF_UP);
+                } else if (ratio < 0) {
+                    adjusted = adjusted.multiply(BigDecimal.valueOf(Math.abs(ratio)));
+                }
             }
         }
         return Math.max(1L, adjusted.longValue());

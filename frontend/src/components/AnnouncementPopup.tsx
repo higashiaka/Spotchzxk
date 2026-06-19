@@ -39,6 +39,13 @@ export default function AnnouncementPopup() {
   const stockSplitAnnouncement = useMemo<AnnouncementItem | null>(() => {
     if (!stockSplitNotice) return null;
 
+    const isReverseSplit = stockSplitNotice.splitRatio < 0;
+    const isMixedSplit = stockSplitNotice.splitRatio === 0;
+    const ratioLabel = isMixedSplit ? '혼합' : `${Math.abs(stockSplitNotice.splitRatio)}:1`;
+    const actionLabel = isMixedSplit ? '가격 정규화' : isReverseSplit ? '액면병합' : '액면분할';
+    const thresholdLabel = isMixedSplit
+      ? '분할 1,000,000원 초과 / 병합 100원 미만'
+      : `${stockSplitNotice.thresholdPrice.toLocaleString()}원 ${isReverseSplit ? '미만' : '초과'}`;
     const stockNames = stockSplitNotice.stockNames
       .split(',')
       .map(name => name.trim())
@@ -46,32 +53,32 @@ export default function AnnouncementPopup() {
 
     return {
       id: `stock_split_${stockSplitNotice.id}`,
-      title: '액면분할 안내',
+      title: `${actionLabel} 안내`,
       date: stockSplitNotice.splitDate,
-      summary: `${stockSplitNotice.stockCount}개 종목이 ${stockSplitNotice.splitRatio}:1 액면분할되었습니다.`,
+      summary: `${stockSplitNotice.stockCount}개 종목이 ${actionLabel}되었습니다.`,
       sections: [
         {
-          title: '분할 기준',
+          title: `${actionLabel} 기준`,
           rows: [
             {
               label: '기준',
-              value: `${stockSplitNotice.thresholdPrice.toLocaleString()}원 초과`,
+              value: thresholdLabel,
               tone: 'accent' as const,
             },
             {
               label: '비율',
-              value: `${stockSplitNotice.splitRatio}:1`,
+              value: ratioLabel,
               tone: 'accent' as const,
             },
           ],
         },
         {
-          title: '분할 대상 종목',
+          title: `${actionLabel} 대상 종목`,
           table: {
             headers: ['종목'],
             rows: (stockNames.length > 0 ? stockNames : ['-']).map(name => [name]),
           },
-          note: '보유 수량과 미체결 지정가 주문 수량/가격이 같은 비율로 조정되었습니다.',
+          note: '보유 수량과 평균단가가 같은 비율로 조정되며, 미체결 주문은 취소됩니다.',
         },
       ],
     };

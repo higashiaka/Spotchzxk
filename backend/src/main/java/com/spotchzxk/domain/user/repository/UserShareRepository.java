@@ -58,6 +58,16 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
             WHERE channel_id = :channelId
             """, nativeQuery = true)
     int applyStockSplit(@Param("channelId") String channelId, @Param("ratio") int ratio);
+
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+            UPDATE user_shares
+            SET quantity = quantity / :ratio,
+                pre_stream_quantity = pre_stream_quantity / :ratio,
+                avg_price = CASE WHEN avg_price IS NULL THEN NULL ELSE avg_price * :ratio END
+            WHERE channel_id = :channelId
+            """, nativeQuery = true)
+    int applyReverseStockSplit(@Param("channelId") String channelId, @Param("ratio") int ratio);
 }
 
 
