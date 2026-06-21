@@ -100,6 +100,7 @@ export const StockDetail = ({
   const [donationPending, setDonationPending] = useState(false);
   const [donationMsg, setDonationMsg] = useState('');
   const [donationError, setDonationError] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
   const [fanRankings, setFanRankings] = useState<FanRankingEntry[]>([]);
   const [fanRankingsLoading, setFanRankingsLoading] = useState(false);
   const [fanRankingsError, setFanRankingsError] = useState(false);
@@ -265,6 +266,35 @@ export const StockDetail = ({
   const balance = Number(portfolio?.balance ?? 0);
   const parsedDonation = parseInt(donationAmount.replace(/,/g, '') || '0', 10);
   const canDonate = Boolean(user) && parsedDonation >= 1_000 && parsedDonation <= balance && !donationPending;
+  const shareUrl = `http://spotchzxk.xyz/stocks/${encodeURIComponent(streamer.id)}`;
+  const chzzkUrl = `https://chzzk.naver.com/${streamer.isLive ? 'live/' : ''}${streamer.id}`;
+
+  const handleShareStock = async () => {
+    setShareCopied(false);
+    const shareData = {
+      title: `${streamer.name} - Spotchzxk`,
+      text: `${streamer.name} 종목`,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareCopied(true);
+        window.setTimeout(() => setShareCopied(false), 1800);
+      } catch {
+        setShareCopied(false);
+      }
+    }
+  };
 
   const setDonationPercentPreset = (percent: number) => {
     const amount = Math.floor(balance * percent);
@@ -436,7 +466,11 @@ export const StockDetail = ({
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 pb-24 hide-scrollbar touch-pan-y">
       <div className="mb-4 md:mb-5 flex items-center gap-3 md:gap-4">
-        <div className="shrink-0"
+        <a className="shrink-0 block"
+          href={chzzkUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={streamer.isLive ? '치지직 라이브 열기' : '치지직 채널 열기'}
           style={{ padding: 3, borderRadius: '50%', background: streamer.isLive ? '#22C55E' : 'transparent' }}>
           <div className="w-14 h-14 md:w-20 md:h-20 rounded-full overflow-hidden flex items-center justify-center text-white text-lg md:text-2xl font-black"
             style={{ backgroundColor: streamer.profileImageUrl ? 'transparent' : avatarColor(streamer.name) }}>
@@ -446,8 +480,8 @@ export const StockDetail = ({
               streamer.name.slice(0, 2)
             )}
           </div>
-        </div>
-        <div className="min-w-0">
+        </a>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-white text-xl md:text-3xl font-bold truncate">{streamer.name}</h1>
             {streamer.isLive && (
@@ -470,6 +504,19 @@ export const StockDetail = ({
             )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={handleShareStock}
+          className="shrink-0 rounded-lg border px-3 py-2 text-xs md:text-sm font-bold transition-colors"
+          style={{
+            background: shareCopied ? 'var(--accent-soft)' : 'var(--bg-card-secondary)',
+            borderColor: shareCopied ? 'var(--accent)' : 'var(--border-primary)',
+            color: shareCopied ? 'var(--accent)' : 'var(--text-muted)',
+          }}
+          title={shareUrl}
+        >
+          {shareCopied ? '복사됨' : '공유'}
+        </button>
       </div>
 
       {/* PC: 2-column × 2-row flat grid — row1 height auto-matched via stretch on both sides */}
