@@ -113,11 +113,16 @@ public class ChzzkApiClient {
                 return "AUTH_FAILED";
             }
             if (httpStatus != 200) {
-                log.warn("Chzzk API returned {} for channel {}", httpStatus, channelId);
+                log.debug("Chzzk API returned {} for channel {}", httpStatus, channelId);
                 return null;
             }
 
             JsonNode content = objectMapper.readTree(response.body()).path("content");
+            if (content.isNull() || content.isMissingNode()) {
+                // content:null = channel deleted or has not streamed for a long time
+                log.debug("Chzzk API content null for channel {} - channel inactive", channelId);
+                return "INACTIVE";
+            }
             if (content.isNull() || content.isMissingNode()) {
                 // content:null = channel deleted or has not streamed for a long time
                 log.warn("Chzzk API content null for channel {} — channel inactive", channelId);
@@ -127,7 +132,7 @@ public class ChzzkApiClient {
             return status.isEmpty() ? "CLOSE" : status.toUpperCase();
         } catch (Exception e) {
             // Timeout or network error — unrelated to channel status, do not count toward suspension
-            log.warn("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
+            log.debug("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
             return "TIMEOUT";
         }
     }
@@ -136,5 +141,3 @@ public class ChzzkApiClient {
         return value == null || value.isBlank();
     }
 }
-
-
