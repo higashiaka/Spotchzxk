@@ -221,7 +221,7 @@ public class ChzzkLivePollingService {
         if (alreadyPaid > completedIntervals) {
             stock.updateDividendAccumulation(completedIntervals);
             stockRepository.save(stock);
-            log.info("Dividend interval count normalized for channel {}: intervals {} -> {}",
+            log.debug("Dividend interval count normalized for channel {}: intervals {} -> {}",
                     stock.getChannelId(), alreadyPaid, completedIntervals);
             return true;
         }
@@ -236,7 +236,7 @@ public class ChzzkLivePollingService {
         }
         stock.updateDividendAccumulation(completedIntervals);
         stockRepository.save(stock);
-        log.info("Interval dividend paid for channel {}: intervals {} -> {}",
+        log.debug("Interval dividend paid for channel {}: intervals {} -> {}",
                 stock.getChannelId(), alreadyPaid, completedIntervals);
         return true;
     }

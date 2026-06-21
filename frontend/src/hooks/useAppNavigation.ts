@@ -22,8 +22,14 @@ const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapsho
 const STACKED_TABS = new Set<AppTab>(['order', 'holdings', 'settings', 'guide', 'announcements']);
 
 function parseInitialScreen(): { tab: AppTab; stockId: string | null } {
-  const match = window.location.pathname.match(/^\/stocks\/([^/]+)/);
-  if (match) return { tab: 'prices', stockId: match[1] };
+  const match = window.location.pathname.match(/^\/stocks\/([^/]+)\/?$/);
+  if (match) {
+    try {
+      return { tab: 'prices', stockId: decodeURIComponent(match[1]) };
+    } catch {
+      return { tab: 'prices', stockId: match[1] };
+    }
+  }
   return { tab: 'home', stockId: null };
 }
 
@@ -115,7 +121,10 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
   }, [restoreScreen]);
 
   useEffect(() => {
-    window.history.replaceState(toBrowserHistoryState(currentScreenRef.current), '');
+    window.history.replaceState(toBrowserHistoryState({
+      tab: initialScreen.tab,
+      streamerId: initialScreen.stockId,
+    }), '');
 
     const handlePopState = (event: PopStateEvent) => {
       if (!isBrowserHistoryState(event.state)) return;
@@ -129,7 +138,7 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [initialScreen.stockId, initialScreen.tab]);
 
   const handleGoBack = useCallback((fallback: ScreenSnapshot) => {
     if (screenHistory.length > 0) {

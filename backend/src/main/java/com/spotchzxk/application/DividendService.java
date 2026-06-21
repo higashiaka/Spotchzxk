@@ -103,7 +103,7 @@ public class DividendService {
                     .build();
             dividendLogRepository.save(logEntry);
 
-            log.info("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
+            log.debug("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
                     fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
 
             // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
@@ -175,5 +175,4 @@ public class DividendService {
         });
     }
 }
-
 

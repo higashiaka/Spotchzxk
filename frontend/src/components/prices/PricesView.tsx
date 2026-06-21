@@ -26,6 +26,12 @@ export const PricesView = ({
 }) => {
   /** Search input state */
   const [search, setSearch] = useState('');
+  const currentSelectedStreamer = useMemo(
+    () => selectedStreamer
+      ? streamers.find(s => s.id === selectedStreamer.id) ?? selectedStreamer
+      : null,
+    [selectedStreamer, streamers],
+  );
 
   /** Stocks filtered by search term and sorted in Korean alphabetical order */
   const filtered = useMemo(() => {
@@ -35,7 +41,7 @@ export const PricesView = ({
   }, [streamers, search]);
 
   // Switch to detail view when a stock is selected
-  if (selectedStreamer) {
+  if (currentSelectedStreamer) {
     return (
       <div className="h-full flex flex-col overflow-hidden">
         {/* Back button to return to the stock list */}
@@ -52,7 +58,7 @@ export const PricesView = ({
         </button>
         <div className="flex-1 overflow-hidden">
           <StockDetail
-            streamer={selectedStreamer}
+            streamer={currentSelectedStreamer}
             user={user}
             onOrder={onOrder}
             liveTrades={liveTrades}
