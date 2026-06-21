@@ -50,7 +50,7 @@ public class ChzzkLivePollingService {
     @PostConstruct
     public void initLiveStockCache() {
         stockRepository.findByIsLiveTrue().forEach(s -> liveStockCache.put(s.getChannelId(), s));
-        log.info("Live stock cache initialized: {} stocks", liveStockCache.size());
+        log.debug("Live stock cache initialized: {} stocks", liveStockCache.size());
         // Restore failure counters for already-suspended channels so they stay suspended across restarts
         stockRepository.findAll().stream()
                 .filter(s -> s.isTradingSuspended() && !isEventStock(s))
@@ -196,7 +196,7 @@ public class ChzzkLivePollingService {
         BigDecimal preStreamFloat = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
         fresh.updatePreStreamFloat(preStreamFloat);
         stockRepository.save(fresh);
-        log.info("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
+        log.debug("Stream started: channel={}, pre-stream snapshot taken, preStreamFloat={}",
                 fresh.getChannelId(), preStreamFloat);
     }
 
@@ -207,7 +207,7 @@ public class ChzzkLivePollingService {
         Stock fresh = stockRepository.findById(stock.getChannelId()).orElseThrow();
         fresh.endLive();
         stockRepository.save(fresh);
-        log.info("Stream ended ({}): channel={}", status, fresh.getChannelId());
+        log.debug("Stream ended ({}): channel={}", status, fresh.getChannelId());
     }
 
     private boolean payIntervalIfDue(Stock stock) {
@@ -277,7 +277,7 @@ public class ChzzkLivePollingService {
                             s.resumeTrading();
                             stockRepository.save(s);
                             messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
-                            log.info("Trading resumed for channel {} (API recovered).", channelId);
+                            log.debug("Trading resumed for channel {} (API recovered).", channelId);
                         }
                     }));
         }
