@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { AppTab } from '../types';
-import { Stock } from './useStocks';
+import { mapRawToStock, type Stock } from './useStocks';
+import { apiFetch } from '../lib/api';
 
 const APP_HISTORY_KEY = 'spotchzxk-screen';
 
@@ -60,6 +61,24 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
     const found = streamers.find(s => s.id === initialScreen.stockId);
     if (found) setSelectedStreamer(found);
   }, [streamers, initialScreen.stockId]);
+
+  useEffect(() => {
+    if (!initialScreen.stockId) return;
+    if (streamers.some(s => s.id === initialScreen.stockId)) return;
+
+    let active = true;
+    apiFetch(`/api/stocks/${encodeURIComponent(initialScreen.stockId)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(rawStock => {
+        if (!active || !rawStock) return;
+        setSelectedStreamer(mapRawToStock(rawStock));
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [initialScreen.stockId, streamers]);
 
   useEffect(() => {
     if (!selectedStreamer) return;

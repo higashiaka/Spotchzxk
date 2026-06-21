@@ -8,7 +8,7 @@ export type { Stock } from '../data/stocks';
 export { DEFAULT_STOCKS };
 
 /** Maps a raw backend response object to the client-side Stock model */
-function mapRawToStock(r: any): Stock {
+export function mapRawToStock(r: any): Stock {
   return {
     id: r.channelId || r.id,
     name: r.streamerName || r.name,

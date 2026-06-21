@@ -31,6 +31,15 @@ public class StockController {
         return ResponseEntity.ok(stockService.getAllStocks());
     }
 
+    @GetMapping("/{channelId}")
+    public ResponseEntity<StockResponse> getStock(@PathVariable String channelId) {
+        return stockService.getAllStocks().stream()
+                .filter(stock -> stock.channelId().equals(channelId))
+                .findFirst()
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/{channelId}/order-book")
     public ResponseEntity<OrderBookDto> getOrderBook(
             @PathVariable String channelId,
