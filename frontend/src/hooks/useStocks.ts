@@ -38,18 +38,24 @@ function mapRawToStock(r: any): Stock {
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
 
-  // Fetch stocks on initial connect and every reconnect to pick up daily resets
+  // Fetch stocks immediately via REST, then again on STOMP reconnect to pick up daily resets.
   useEffect(() => {
+    let active = true;
     const fetchStocks = () => {
       apiFetch('/api/stocks')
         .then(res => res.ok ? res.json() : null)
         .then((rawStocks: any[] | null) => {
-          if (!rawStocks || rawStocks.length === 0) return;
+          if (!active || !rawStocks || rawStocks.length === 0) return;
           setStocks(rawStocks.map(mapRawToStock));
         })
         .catch(() => {});
     };
-    return registerOnConnect(fetchStocks);
+    fetchStocks();
+    const unregister = registerOnConnect(fetchStocks);
+    return () => {
+      active = false;
+      unregister();
+    };
   }, []);
 
   // Real-time update: subscribe to STOMP /topic/streamers

@@ -92,3 +92,10 @@ bot:
     high-holding-quantity: ${BOT_ACTIVITY_HIGH_HOLDING_QUANTITY:30}
     high-holding-buy-chance-percent: ${BOT_ACTIVITY_HIGH_HOLDING_BUY_CHANCE_PERCENT:20}
     asset-reset-threshold-percent: ${BOT_ACTIVITY_ASSET_RESET_THRESHOLD_PERCENT:15}
+
+logging:
+  level:
+    org.springframework.web.servlet.DispatcherServlet: WARN
+    org.springframework.web.socket.config.WebSocketMessageBrokerStats: WARN
+    org.springframework.web.socket.messaging.SubProtocolWebSocketHandler: WARN
+    org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver: ERROR
