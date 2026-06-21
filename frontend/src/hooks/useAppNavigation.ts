@@ -21,6 +21,19 @@ const isBrowserHistoryState = (state: unknown): state is { screen: ScreenSnapsho
 
 const STACKED_TABS = new Set<AppTab>(['order', 'holdings', 'settings', 'guide', 'announcements']);
 
+const pendingStock = (stockId: string): Stock => ({
+  id: stockId,
+  name: '종목 로딩 중',
+  price: 0,
+  totalVolume: 0,
+  dailyTradingValue: 0,
+  basePrice: 0,
+  isLive: false,
+  totalSupply: 0,
+  coinReserve: '0',
+  shareReserve: '0',
+});
+
 function parseInitialScreen(): { tab: AppTab; stockId: string | null } {
   const match = window.location.pathname.match(/^\/stocks\/([^/]+)\/?$/);
   if (match) {
@@ -37,14 +50,16 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
   const initialScreen = useMemo(parseInitialScreen, []);
   const [activeTab, setActiveTab] = useState<AppTab>(initialScreen.tab);
   const [screenHistory, setScreenHistory] = useState<ScreenSnapshot[]>([]);
-  const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(null);
+  const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(() =>
+    initialScreen.stockId ? pendingStock(initialScreen.stockId) : null
+  );
 
   // URL로 직접 접근한 경우 streamers 로드 후 해당 종목 선택
   useEffect(() => {
-    if (!initialScreen.stockId || selectedStreamer || streamers.length === 0) return;
+    if (!initialScreen.stockId || streamers.length === 0) return;
     const found = streamers.find(s => s.id === initialScreen.stockId);
     if (found) setSelectedStreamer(found);
-  }, [streamers, initialScreen.stockId, selectedStreamer]);
+  }, [streamers, initialScreen.stockId]);
 
   useEffect(() => {
     if (!selectedStreamer) return;
