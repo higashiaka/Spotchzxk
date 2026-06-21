@@ -271,15 +271,10 @@ export const StockDetail = ({
 
   const handleShareStock = async () => {
     setShareCopied(false);
-    const shareData = {
-      title: `${streamer.name} - Spotchzxk`,
-      text: `${streamer.name} 종목`,
-      url: shareUrl,
-    };
 
     try {
       if (navigator.share) {
-        await navigator.share(shareData);
+        await navigator.share({ url: shareUrl });
         return;
       }
       await navigator.clipboard.writeText(shareUrl);
