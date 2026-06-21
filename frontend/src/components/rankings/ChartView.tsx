@@ -8,6 +8,9 @@ type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
 const PAGE_SIZE = 30;
 const DIVIDEND_INTERVAL_MS = 60 * 60 * 1000;
 
+const compareStockName = (a: Stock, b: Stock): number =>
+  a.name.localeCompare(b.name, 'ko-KR') || a.id.localeCompare(b.id);
+
 const dividendRemainingMsFor = (s: Stock): number => {
   if (!s.isLive || !s.liveStartedAt) return Number.NaN;
   const startMs = new Date(s.liveStartedAt).getTime();
@@ -103,20 +106,20 @@ export const ChartView = ({
     switch (category) {
       case 'volume':
         return volumeAsc
-          ? s.sort((a, b) => a.totalVolume - b.totalVolume)
-          : s.sort((a, b) => b.totalVolume - a.totalVolume);
+          ? s.sort((a, b) => (a.totalVolume - b.totalVolume) || compareStockName(a, b))
+          : s.sort((a, b) => (b.totalVolume - a.totalVolume) || compareStockName(a, b));
       case 'value':
         return valueAsc
-          ? s.sort((a, b) => a.dailyTradingValue - b.dailyTradingValue)
-          : s.sort((a, b) => b.dailyTradingValue - a.dailyTradingValue);
+          ? s.sort((a, b) => (a.dailyTradingValue - b.dailyTradingValue) || compareStockName(a, b))
+          : s.sort((a, b) => (b.dailyTradingValue - a.dailyTradingValue) || compareStockName(a, b));
       case 'surge':
         return s
           .filter(st => changePct(st.price, st.basePrice) > 0)
-          .sort((a, b) => changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice));
+          .sort((a, b) => (changePct(b.price, b.basePrice) - changePct(a.price, a.basePrice)) || compareStockName(a, b));
       case 'drop':
         return s
           .filter(st => changePct(st.price, st.basePrice) < 0)
-          .sort((a, b) => changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice));
+          .sort((a, b) => (changePct(a.price, a.basePrice) - changePct(b.price, b.basePrice)) || compareStockName(a, b));
       case 'new': {
         // Filter only stocks listed today
         const today = new Date();
@@ -130,11 +133,11 @@ export const ChartView = ({
       }
       case 'dividend':
         // Show live stocks sorted by remaining time until next dividend ascending
-        return s.filter(st => st.isLive).sort((a, b) => remainingMs(a) - remainingMs(b));
+        return s.filter(st => st.isLive).sort((a, b) => (remainingMs(a) - remainingMs(b)) || compareStockName(a, b));
       default:
         return s;
     }
-  }, [streamers, category, volumeAsc, valueAsc, tick]);
+  }, [streamers, category, volumeAsc, valueAsc, surgeAsc, tick]);
 
   const list = useMemo(() => rankedList.slice(0, visibleCount), [rankedList, visibleCount]);
   const hasMore = visibleCount < rankedList.length;

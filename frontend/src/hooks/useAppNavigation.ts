@@ -39,6 +39,14 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
     const found = streamers.find(s => s.id === initialScreen.stockId);
     if (found) setSelectedStreamer(found);
   }, [streamers, initialScreen.stockId, selectedStreamer]);
+
+  useEffect(() => {
+    if (!selectedStreamer) return;
+    const fresh = streamers.find(s => s.id === selectedStreamer.id);
+    if (fresh && fresh !== selectedStreamer) {
+      setSelectedStreamer(fresh);
+    }
+  }, [streamers, selectedStreamer]);
   const [initialOrderType, setInitialOrderType] = useState<'buy' | 'sell'>('buy');
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>([]);
   const [mobileRouteMotion, setMobileRouteMotion] = useState<'from-left' | 'from-right' | null>(null);
