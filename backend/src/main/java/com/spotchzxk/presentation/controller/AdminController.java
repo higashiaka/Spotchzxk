@@ -1,6 +1,7 @@
 package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.application.AmmMigrationService;
+import com.spotchzxk.application.DailyResetService;
 import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AmmMigrationService ammMigrationService;
+    private final DailyResetService dailyResetService;
     private final StockSplitService stockSplitService;
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
@@ -62,6 +64,16 @@ public class AdminController {
         }
         ammMigrationService.migrateAll();
         return ResponseEntity.ok("AMM migration complete.");
+    }
+
+    @PostMapping("/daily-reset/force")
+    public ResponseEntity<?> forceDailyReset(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        int resetStocks = dailyResetService.forceDailyReset();
+        return ResponseEntity.ok(Map.of("resetStocks", resetStocks));
     }
 
     @PostMapping("/stocks/{channelId}/fix-amm")

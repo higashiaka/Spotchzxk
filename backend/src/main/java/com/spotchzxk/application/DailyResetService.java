@@ -1,6 +1,5 @@
 package com.spotchzxk.application;
 
-import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.presentation.dto.StockResponse;
@@ -68,14 +67,23 @@ public class DailyResetService {
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
     public void performDailyReset() {
+        performDailyReset(false);
+    }
+
+    @Transactional
+    public int forceDailyReset() {
+        return performDailyReset(true);
+    }
+
+    private int performDailyReset(boolean force) {
         LocalDate today = LocalDate.now(KST);
         Optional<LocalDate> lastResetDate = findLastResetDateForUpdate();
-        if (lastResetDate.isPresent() && !lastResetDate.get().isBefore(today)) {
+        if (!force && lastResetDate.isPresent() && !lastResetDate.get().isBefore(today)) {
             log.info("Daily reset already completed for {}. Skipping.", today);
-            return;
+            return 0;
         }
 
-        log.info("Starting daily reset for {}...", today);
+        log.info("Starting daily reset for {}. force={}...", today, force);
         int resetStocks = stockRepository.resetDailyMarketStats();
 
         int resetUsers = userRepository.resetAllRankingStats();
@@ -92,6 +100,7 @@ public class DailyResetService {
         });
         log.info("Daily reset completed successfully. Updated {} stocks and reset {} users ranking stats.",
                 resetStocks, resetUsers);
+        return resetStocks;
     }
 
     private Optional<LocalDate> findLastResetDate() {
