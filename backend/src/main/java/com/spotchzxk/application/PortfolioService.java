@@ -55,15 +55,15 @@ public class PortfolioService {
     public Map<String, Object> getPortfolioResponse(String userId) {
         User p = getOrCreate(userId);
         List<UserShare> userShares = userShareRepository.findByUserIdWithPositiveQuantityAndStock(userId);
-        Map<String, BigDecimal> shares = userShares.stream()
+        Map<String, String> shares = userShares.stream()
                 .collect(Collectors.toMap(
                         s -> s.getStock().getChannelId(),
-                        s -> s.getQuantity()
+                        s -> s.getQuantity().toPlainString()
                 ));
-        Map<String, BigDecimal> avgPrices = userShares.stream()
+        Map<String, String> avgPrices = userShares.stream()
                 .collect(Collectors.toMap(
                         s -> s.getStock().getChannelId(),
-                        s -> s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO
+                        s -> (s.getAvgPrice() != null ? s.getAvgPrice() : BigDecimal.ZERO).toPlainString()
                 ));
         Map<String, Object> response = new HashMap<>();
         response.put("balance", p.getCoinBalance().toPlainString());

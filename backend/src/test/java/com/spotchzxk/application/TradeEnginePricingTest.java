@@ -7,6 +7,7 @@ import com.spotchzxk.domain.order.entity.Order;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
+import com.spotchzxk.domain.trading.repository.TradeFailureLogRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import org.junit.jupiter.api.Test;
@@ -94,6 +95,7 @@ class TradeEnginePricingTest {
                 mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
                 mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
                 mock(RankCacheService.class)
         );
         String userId = "user-1";
@@ -137,6 +139,7 @@ class TradeEnginePricingTest {
                 mock(AsyncBroadcastService.class),
                 txManager,
                 mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
                 mock(RankCacheService.class)
         );
         String stockId = "stock-1";
@@ -180,6 +183,7 @@ class TradeEnginePricingTest {
                 mock(AsyncBroadcastService.class),
                 mock(PlatformTransactionManager.class),
                 mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
                 mock(RankCacheService.class)
         );
         String userId = "user-1";

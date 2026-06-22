@@ -306,10 +306,11 @@ export const OrderForm = ({
       <div className="mb-3">
         <p className="text-[10px] font-bold mb-1 text-[var(--text-muted)]">주문 수량 (주)</p>
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={qtyStr}
           onChange={(e) => setQtyStr(e.target.value)}
-          min="1"
           disabled={!user}
           placeholder={!user ? '로그인 필요' : '수량 입력'}
           className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50 surface-card-secondary border-primary-token"
