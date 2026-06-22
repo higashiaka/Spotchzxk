@@ -16,62 +16,67 @@ public final class AmmCalculator {
 
     private AmmCalculator() {}
 
-    /**
-     * qty二?留ㅼ닔 ??AMM ??먯꽌 鍮좎졇?섍???肄붿씤 (?섏닔猷??쒖쇅).
-     * cost = coinReserve * qty / (shareReserve - qty)
-     */
     public static BigInteger buyCost(BigInteger coinReserve, BigInteger shareReserve, long qty) {
-        if (coinReserve.signum() <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
-        if (qty <= 0) throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
-        BigInteger qtyValue = BigInteger.valueOf(qty);
-        if (qtyValue.compareTo(shareReserve) >= 0) throw new IllegalStateException("주문 수량이 AMM 풀 유동성을 초과합니다. 수량을 줄여주세요.");
-        BigInteger num = coinReserve.multiply(qtyValue);
-        BigInteger den = shareReserve.subtract(qtyValue);
-        // Ceiling division: round up so the pool never loses value on a buy
+        return buyCost(coinReserve, shareReserve, BigInteger.valueOf(qty));
+    }
+
+    public static BigInteger buyCost(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
+        validatePoolAndQty(coinReserve, qty);
+        if (qty.compareTo(shareReserve) >= 0) {
+            throw new IllegalStateException("주문 수량이 AMM 유동성을 초과합니다. 수량을 줄여주세요.");
+        }
+        BigInteger num = coinReserve.multiply(qty);
+        BigInteger den = shareReserve.subtract(qty);
         BigInteger[] qr = num.divideAndRemainder(den);
         return qr[1].signum() > 0 ? qr[0].add(BigInteger.ONE) : qr[0];
     }
 
-    /**
-     * qty二?留ㅻ룄 ??AMM ??먯꽌 ?좎??먭쾶 ?섍???肄붿씤 (?섏닔猷??쒖쇅).
-     * revenue = coinReserve * qty / (shareReserve + qty)
-     */
     public static BigInteger sellRevenue(BigInteger coinReserve, BigInteger shareReserve, long qty) {
-        if (coinReserve.signum() <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
-        if (qty <= 0) throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
-        BigInteger num = coinReserve.multiply(BigInteger.valueOf(qty));
-        BigInteger den = shareReserve.add(BigInteger.valueOf(qty));
+        return sellRevenue(coinReserve, shareReserve, BigInteger.valueOf(qty));
+    }
+
+    public static BigInteger sellRevenue(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
+        validatePoolAndQty(coinReserve, qty);
+        BigInteger num = coinReserve.multiply(qty);
+        BigInteger den = shareReserve.add(qty);
         return num.divide(den);
     }
 
-    /** ?섏닔猷?怨꾩궛: {feePoolAmount, burnAmount} */
     public static BigInteger[] fee(BigInteger ammAmount) {
         BigInteger total = ceilDiv(ammAmount.multiply(FEE_RATE_NUMERATOR), FEE_RATE_DENOMINATOR);
-        // Integer arithmetic for 2/3 split; remainder goes to burn
         BigInteger poolShare = total.multiply(BigInteger.TWO).divide(BigInteger.valueOf(3));
         return new BigInteger[]{poolShare, total.subtract(poolShare)};
     }
 
-    /** 留ㅼ닔 ????? ?곹깭 */
     public static BigInteger[] newPoolAfterBuy(BigInteger coinReserve, BigInteger shareReserve, long qty, BigInteger ammCost) {
-        return new BigInteger[]{coinReserve.add(ammCost), shareReserve.subtract(BigInteger.valueOf(qty))};
+        return newPoolAfterBuy(coinReserve, shareReserve, BigInteger.valueOf(qty), ammCost);
     }
 
-    /** 留ㅻ룄 ????? ?곹깭 */
+    public static BigInteger[] newPoolAfterBuy(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty, BigInteger ammCost) {
+        return new BigInteger[]{coinReserve.add(ammCost), shareReserve.subtract(qty)};
+    }
+
     public static BigInteger[] newPoolAfterSell(BigInteger coinReserve, BigInteger shareReserve, long qty, BigInteger ammRevenue) {
-        return new BigInteger[]{coinReserve.subtract(ammRevenue), shareReserve.add(BigInteger.valueOf(qty))};
+        return newPoolAfterSell(coinReserve, shareReserve, BigInteger.valueOf(qty), ammRevenue);
     }
 
-    /** Current AMM spot price (coinReserve / shareReserve) */
+    public static BigInteger[] newPoolAfterSell(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty, BigInteger ammRevenue) {
+        return new BigInteger[]{coinReserve.subtract(ammRevenue), shareReserve.add(qty)};
+    }
+
     public static BigDecimal price(BigInteger coinReserve, BigInteger shareReserve) {
-        if (shareReserve.signum() <= 0) throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
+        if (shareReserve.signum() <= 0) {
+            throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
+        }
         return new BigDecimal(coinReserve).divide(new BigDecimal(shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
-    /** ?됯퇏 泥닿껐媛 = 珥?肄붿씤 / ?섎웾 */
     public static BigDecimal avgPrice(BigInteger coinAmount, long qty) {
-        return new BigDecimal(coinAmount)
-                .divide(BigDecimal.valueOf(qty), PRICE_SCALE, RoundingMode.HALF_UP);
+        return avgPrice(coinAmount, BigInteger.valueOf(qty));
+    }
+
+    public static BigDecimal avgPrice(BigInteger coinAmount, BigInteger qty) {
+        return new BigDecimal(coinAmount).divide(new BigDecimal(qty), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     public record AmmResult(
@@ -85,6 +90,10 @@ public final class AmmCalculator {
     ) {}
 
     public static AmmResult calcBuy(BigInteger coinReserve, BigInteger shareReserve, long qty) {
+        return calcBuy(coinReserve, shareReserve, BigInteger.valueOf(qty));
+    }
+
+    public static AmmResult calcBuy(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
         BigInteger ammCost = buyCost(coinReserve, shareReserve, qty);
         BigInteger[] fee = fee(ammCost);
         BigInteger userPays = ammCost.add(fee[0]).add(fee[1]);
@@ -92,13 +101,16 @@ public final class AmmCalculator {
         return new AmmResult(
             ammCost, fee[0], fee[1], userPays,
             newPool,
-        // Issue #9: avgPrice is computed from userPays (not ammCost) because the 1.5% fee is included in what the user actually pays
             avgPrice(userPays, qty),
             price(newPool[0], newPool[1])
         );
     }
 
     public static AmmResult calcSell(BigInteger coinReserve, BigInteger shareReserve, long qty) {
+        return calcSell(coinReserve, shareReserve, BigInteger.valueOf(qty));
+    }
+
+    public static AmmResult calcSell(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
         BigInteger ammRevenue = sellRevenue(coinReserve, shareReserve, qty);
         BigInteger[] fee = fee(ammRevenue);
         BigInteger userReceives = ammRevenue.subtract(fee[0]).subtract(fee[1]);
@@ -111,10 +123,17 @@ public final class AmmCalculator {
         );
     }
 
+    private static void validatePoolAndQty(BigInteger coinReserve, BigInteger qty) {
+        if (coinReserve.signum() <= 0) {
+            throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
+        }
+        if (qty == null || qty.signum() <= 0) {
+            throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
+        }
+    }
+
     private static BigInteger ceilDiv(BigInteger numerator, BigInteger denominator) {
         BigInteger[] qr = numerator.divideAndRemainder(denominator);
         return qr[1].signum() > 0 ? qr[0].add(BigInteger.ONE) : qr[0];
     }
 }
-
-

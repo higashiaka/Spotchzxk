@@ -83,16 +83,16 @@ function App() {
 
   const totalAssets = useMemo(() => {
     if (!portfolio) return 0;
-    const held = Object.entries(portfolio.shares as Record<string, number>).reduce((sum, [id, qty]) => {
+    const held = Object.entries(portfolio.shares as Record<string, string>).reduce((sum, [id, qty]) => {
       const s = streamers.find(st => st.id === id);
-      return sum + (s?.price ?? 0) * qty;
+      return sum + (s?.price ?? 0) * Number(qty);
     }, 0);
     return Number(portfolio.balance) + held;
   }, [portfolio, streamers]);
 
   const handleReset = () => {
-    const shares = portfolio?.shares as Record<string, number> | undefined;
-    if (Object.values(shares ?? {}).some(qty => qty > 0)) {
+    const shares = portfolio?.shares as Record<string, string> | undefined;
+    if (Object.values(shares ?? {}).some(qty => Number(qty) > 0)) {
       alert('보유 종목을 모두 매도한 후 투자 자금을 초기화할 수 있습니다.');
       return;
     }

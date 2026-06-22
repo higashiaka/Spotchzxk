@@ -1,0 +1,3 @@
+ALTER TABLE orders
+    MODIFY quantity DECIMAL(65,0) NOT NULL,
+    MODIFY filled_quantity DECIMAL(65,0) NOT NULL DEFAULT 0;

@@ -345,7 +345,7 @@ export const ProfileView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(d.quantity)} · {dateStr}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(Number(d.quantity))} · {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: 'var(--accent)' }}>
                       +{fmtKorean(Math.abs(Number(d.amount)))}

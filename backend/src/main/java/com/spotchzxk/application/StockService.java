@@ -48,7 +48,7 @@ public class StockService {
         int safeDepth = Math.max(1, Math.min(depth, 20));
         return new OrderBookDto(
                 channelId,
-                stock.getCurrentPrice(),
+                stock.getCurrentPrice().toPlainString(),
                 toOrderBookEntries(orderRepository.findAskLevels(channelId, safeDepth)),
                 toOrderBookEntries(orderRepository.findBidLevels(channelId, safeDepth))
         );
@@ -57,8 +57,8 @@ public class StockService {
     private List<OrderBookDto.OrderBookEntry> toOrderBookEntries(List<Object[]> rows) {
         return rows.stream()
                 .map(row -> new OrderBookDto.OrderBookEntry(
-                        row[0] instanceof BigDecimal price ? price : new BigDecimal(String.valueOf(row[0])),
-                        row[1] instanceof BigDecimal qty ? qty : new BigDecimal(String.valueOf(row[1]))
+                        (row[0] instanceof BigDecimal price ? price : new BigDecimal(String.valueOf(row[0]))).toPlainString(),
+                        (row[1] instanceof BigDecimal qty ? qty : new BigDecimal(String.valueOf(row[1]))).toPlainString()
                 ))
                 .collect(Collectors.toList());
     }

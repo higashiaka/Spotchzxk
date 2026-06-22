@@ -13,9 +13,9 @@ export interface Portfolio {
   /** Cash balance as string to preserve precision beyond Number.MAX_SAFE_INTEGER */
   balance: string;
   /** Shares held per stock (channelId → quantity) */
-  shares: Record<string, number>;
+  shares: Record<string, string>;
   /** Average purchase price per stock */
-  avgPrices: Record<string, number>;
+  avgPrices: Record<string, string>;
   /** Total dividends received to date */
   dividendTotal: string;
   /** Total amount donated (for 후원왕 ranking) */

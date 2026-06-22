@@ -117,13 +117,18 @@ public class Stock {
     }
 
     public void applyTrade(BigDecimal executedPrice, boolean isBuy, long qty, BigDecimal tradingValue) {
+        applyTrade(executedPrice, isBuy, BigInteger.valueOf(qty), tradingValue);
+    }
+
+    public void applyTrade(BigDecimal executedPrice, boolean isBuy, BigInteger qty, BigDecimal tradingValue) {
+        BigDecimal qtyDecimal = new BigDecimal(qty);
         this.currentPrice = executedPrice;
-        this.dailyVolume = this.dailyVolume.add(BigDecimal.valueOf(qty));
+        this.dailyVolume = this.dailyVolume.add(qtyDecimal);
         this.dailyTradingValue = this.dailyTradingValue.add(tradingValue.abs());
         if (isBuy) {
-            this.issuedShares = this.issuedShares.add(BigDecimal.valueOf(qty));
+            this.issuedShares = this.issuedShares.add(qtyDecimal);
         } else {
-            this.issuedShares = this.issuedShares.subtract(BigDecimal.valueOf(qty)).max(BigDecimal.ZERO);
+            this.issuedShares = this.issuedShares.subtract(qtyDecimal).max(BigDecimal.ZERO);
         }
     }
 

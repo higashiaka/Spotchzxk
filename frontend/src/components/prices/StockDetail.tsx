@@ -19,9 +19,9 @@ interface StockOrderHistoryItem {
   id: string;
   streamerId: string;
   type: 'buy' | 'sell';
-  quantity: number;
-  executedPrice?: number;
-  estimatedPrice: number;
+  quantity: string;
+  executedPrice?: string;
+  estimatedPrice: string;
   status: string;
   createdAt: number;
 }
@@ -445,9 +445,9 @@ export const StockDetail = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="font-mono text-white">{fmtShares(trade.quantity)}</span>
+                  <span className="font-mono text-white">{fmtShares(Number(trade.quantity))}</span>
                   <span className="font-mono font-bold text-right w-20" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                    {fmtKorean(trade.price)}
+                    {fmtKorean(Number(trade.price))}
                   </span>
                 </div>
               </div>

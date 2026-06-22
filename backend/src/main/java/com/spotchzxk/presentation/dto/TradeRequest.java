@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 @Getter @Setter
 public class TradeRequest {
@@ -21,8 +22,9 @@ public class TradeRequest {
     @Pattern(regexp = "buy|sell")
     private String type;
 
-    @Min(1)
-    private long quantity;
+    @NotNull
+    @Positive
+    private BigInteger quantity;
 
     @NotNull
     private BigDecimal estimatedPrice;

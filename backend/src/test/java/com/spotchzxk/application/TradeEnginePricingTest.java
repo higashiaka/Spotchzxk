@@ -108,7 +108,7 @@ class TradeEnginePricingTest {
                 .coinReserve(BigInteger.valueOf(10_000_000L))
                 .shareReserve(BigInteger.valueOf(10_000L))
                 .build()));
-        when(orderRepository.sumPendingBuyQuantity(userId, stockId)).thenReturn(80L);
+        when(orderRepository.sumPendingBuyQuantity(userId, stockId)).thenReturn(java.math.BigDecimal.valueOf(80));
 
         // heldQty(100) + pendingBuyQty(80) + qty(21) = 201 > 200 ???덉쇅
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
@@ -145,7 +145,7 @@ class TradeEnginePricingTest {
                 .userId("user-1")
                 .streamerId(stockId)
                 .type("buy")
-                .quantity(1)
+                .quantity(java.math.BigDecimal.ONE)
                 .orderMode("limit")
                 .limitPrice(BigDecimal.valueOf(10_000))
                 .status("pending")
@@ -206,7 +206,7 @@ class TradeEnginePricingTest {
                 stock,
                 stockId,
                 false,
-                1L,
+                java.math.BigInteger.ONE,
                 BigDecimal.valueOf(10_000)
         ))
                 .isInstanceOf(IllegalStateException.class)

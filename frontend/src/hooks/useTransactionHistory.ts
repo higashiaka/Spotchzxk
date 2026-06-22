@@ -10,13 +10,13 @@ export interface OrderHistory {
   /** Order direction (buy or sell) */
   type: 'buy' | 'sell';
   /** Ordered quantity */
-  quantity: number;
+  quantity: string;
   /** Actual execution price, present only if executed */
-  executedPrice?: number;
+  executedPrice?: string;
   /** Estimated price at the time of order */
-  estimatedPrice: number;
+  estimatedPrice: string;
   /** Limit price for limit orders */
-  limitPrice?: number;
+  limitPrice?: string;
   /** Order mode (market or limit) */
   orderMode?: 'market' | 'limit';
   /** Order creation timestamp in Unix ms */

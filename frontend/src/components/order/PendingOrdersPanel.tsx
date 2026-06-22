@@ -45,7 +45,7 @@ export const PendingOrdersPanel = ({
                 </div>
                 <div className="text-right">
                   <span className="text-[var(--text-muted)]">수량</span>
-                  <p className="font-mono font-bold text-white">{fmtShares(order.quantity)}</p>
+                  <p className="font-mono font-bold text-white">{fmtShares(Number(order.quantity))}</p>
                 </div>
               </div>
             </div>

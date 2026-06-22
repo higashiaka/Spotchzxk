@@ -265,9 +265,9 @@ export const HomeView = ({
                       </span>
                     </div>
                     <div className="flex items-center justify-end gap-2 shrink-0 min-w-0 max-w-[55%]">
-                      <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>{fmtShares(trade.quantity)}</span>
+                      <span className="font-mono truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>{fmtShares(Number(trade.quantity))}</span>
                       <span className="font-mono font-bold w-16 max-w-16 text-right shrink-0 truncate" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                        {fmtKorean(trade.price)}
+                        {fmtKorean(Number(trade.price))}
                       </span>
                     </div>
                   </div>
@@ -370,9 +370,9 @@ export const HomeView = ({
                       <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono font-bold text-sm text-white">{fmtShares(trade.quantity)}</p>
+                      <p className="font-mono font-bold text-sm text-white">{fmtShares(Number(trade.quantity))}</p>
                       <p className="text-xs font-mono mt-0.5" style={{ color: isBuy ? '#FF5252' : '#3D8BFF' }}>
-                        {fmtKorean(trade.price)}
+                        {fmtKorean(Number(trade.price))}
                       </p>
                     </div>
                   </div>
@@ -403,7 +403,7 @@ export const HomeView = ({
             ) : (
               history.map((item: any) => {
                 const s = streamers.find(st => st.id === item.streamerId);
-                const price = item.executedPrice ?? item.estimatedPrice;
+                const price = Number(item.executedPrice ?? item.estimatedPrice);
                 const timeStr = formatFeedTime(item.createdAt);
                 return (
                   <div key={item.id} className="flex items-center px-4 py-3.5"
@@ -423,7 +423,7 @@ export const HomeView = ({
                       <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{timeStr} · {item.status}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono font-bold text-sm text-white">{fmtShares(item.quantity)}</p>
+                      <p className="font-mono font-bold text-sm text-white">{fmtShares(Number(item.quantity))}</p>
                       <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>{fmtKorean(price)}</p>
                     </div>
                   </div>

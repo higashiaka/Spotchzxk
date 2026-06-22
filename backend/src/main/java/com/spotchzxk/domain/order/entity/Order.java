@@ -25,8 +25,8 @@ public class Order {
     @Column(nullable = false, length = 10)
     private String type; // "buy" or "sell"
 
-    @Column(nullable = false)
-    private long quantity;
+    @Column(nullable = false, precision = 65, scale = 0)
+    private BigDecimal quantity;
 
     @Column(name = "estimated_price", nullable = false, precision = 65, scale = 6)
     private BigDecimal estimatedPrice;
@@ -54,8 +54,8 @@ public class Order {
 
     // Issue #6: added in V49 migration to track partial fills; default 0 until any quantity is executed
     @Builder.Default
-    @Column(name = "filled_quantity", nullable = false)
-    private long filledQuantity = 0L;
+    @Column(name = "filled_quantity", nullable = false, precision = 65, scale = 0)
+    private BigDecimal filledQuantity = BigDecimal.ZERO;
 
     @Builder.Default
     @Column(name = "allow_partial", nullable = false)
@@ -79,17 +79,17 @@ public class Order {
      * Records a partial fill. Transitions to "completed" when all quantity is filled;
      * otherwise remains "pending" with updated filledQuantity.
      */
-    public void partialFill(long partialQty, BigDecimal avgPrice, long executedAt) {
-        this.filledQuantity += partialQty;
+    public void partialFill(BigDecimal partialQty, BigDecimal avgPrice, long executedAt) {
+        this.filledQuantity = this.filledQuantity.add(partialQty);
         this.executedPrice = avgPrice;
-        if (this.filledQuantity >= this.quantity) {
+        if (this.filledQuantity.compareTo(this.quantity) >= 0) {
             this.status = "completed";
             this.executedAt = executedAt;
         }
     }
 
-    public long remainingQuantity() {
-        return quantity - filledQuantity;
+    public BigDecimal remainingQuantity() {
+        return quantity.subtract(filledQuantity);
     }
 
     public void cancel() {

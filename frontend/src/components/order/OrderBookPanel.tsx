@@ -7,13 +7,13 @@ export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
   const asks = data?.asks ?? [];
   const bids = data?.bids ?? [];
   const maxQty = useMemo(
-    () => Math.max(1, ...asks.map(level => level.quantity), ...bids.map(level => level.quantity)),
+    () => Math.max(1, ...asks.map(level => Number(level.quantity)), ...bids.map(level => Number(level.quantity))),
     [asks, bids],
   );
 
   const rows = [
     ...asks.slice().reverse().map(level => ({ ...level, type: 'ask' as const })),
-    { price: data?.currentPrice ?? 0, quantity: 0, type: 'current' as const },
+    { price: data?.currentPrice ?? '0', quantity: '0', type: 'current' as const },
     ...bids.map(level => ({ ...level, type: 'bid' as const })),
   ];
 
@@ -36,13 +36,14 @@ export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
           if (row.type === 'current') {
             return (
               <div key="current" className="py-1.5 my-1 border-y border-primary-token text-center">
-                <span className="font-mono text-sm font-black text-white">{fmtKorean(row.price)}</span>
+                <span className="font-mono text-sm font-black text-white">{fmtKorean(Number(row.price))}</span>
               </div>
             );
           }
 
           const isAsk = row.type === 'ask';
-          const pct = Math.max(6, Math.min(100, (row.quantity / maxQty) * 100));
+          const rowQty = Number(row.quantity);
+          const pct = Math.max(6, Math.min(100, (rowQty / maxQty) * 100));
           return (
             <div key={`${row.type}-${row.price}-${index}`} className="relative grid grid-cols-[1fr_1fr] items-center overflow-hidden rounded px-2 py-1.5 text-xs">
               <div
@@ -53,10 +54,10 @@ export const OrderBookPanel = ({ streamerId }: { streamerId: string }) => {
                 }}
               />
               <span className="relative font-mono font-bold" style={{ color: isAsk ? '#3D8BFF' : '#FF5252' }}>
-                {fmtKorean(row.price)}
+                {fmtKorean(Number(row.price))}
               </span>
               <span className="relative text-right font-mono text-white">
-                {fmtShares(row.quantity)}
+                {fmtShares(rowQty)}
               </span>
             </div>
           );

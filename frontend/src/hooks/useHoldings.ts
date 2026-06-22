@@ -36,13 +36,14 @@ export const useHoldings = (
     const source = includeDefaults ? [...streamers, ...DEFAULT_STOCKS] : streamers;
     const byId = new Map(source.map(stock => [stock.id, stock]));
 
-    const items = Object.entries(portfolio.shares as Record<string, number>)
+    const items = Object.entries(portfolio.shares as Record<string, string>)
+      .map(([id, rawQty]) => [id, Number(rawQty)] as const)
       .filter(([, qty]) => qty > 0)
       .map(([id, qty]) => {
         const streamer = byId.get(id);
         if (!streamer) return null;
 
-        const avgPrice = portfolio.avgPrices?.[id] ?? 0;
+        const avgPrice = Number(portfolio.avgPrices?.[id] ?? 0);
         const pct = avgPrice > 0 ? ((streamer.price - avgPrice) / avgPrice) * 100 : 0;
         return { streamer, qty, value: streamer.price * qty, pct, avgPrice };
       })
@@ -54,7 +55,7 @@ export const useHoldings = (
 
   /** Total count of stocks held with quantity > 0 */
   const holdingCount = useMemo(
-    () => Object.values(portfolio?.shares as Record<string, number> ?? {}).filter(q => q > 0).length,
+    () => Object.values(portfolio?.shares as Record<string, string> ?? {}).filter(q => Number(q) > 0).length,
     [portfolio],
   );
 

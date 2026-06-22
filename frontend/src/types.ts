@@ -11,9 +11,9 @@ export interface LiveTrade {
   /** Buy or sell direction */
   type: 'buy' | 'sell';
   /** Executed quantity */
-  quantity: number;
+  quantity: number | string;
   /** Executed price */
-  price: number;
+  price: number | string;
   /** Executed trading value */
   tradingValue?: number;
   /** Server-authoritative daily cumulative trading volume after this trade */

@@ -2,13 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 
 export interface OrderBookLevel {
-  price: number;
-  quantity: number;
+  price: string;
+  quantity: string;
 }
 
 export interface OrderBook {
   streamerId: string;
-  currentPrice: number;
+  currentPrice: string;
   asks: OrderBookLevel[];
   bids: OrderBookLevel[];
 }
@@ -18,7 +18,7 @@ export const useOrderBook = (streamerId: string | undefined) => {
     queryKey: ['order-book', streamerId],
     queryFn: async () => {
       if (!streamerId) {
-        return { streamerId: '', currentPrice: 0, asks: [], bids: [] };
+        return { streamerId: '', currentPrice: '0', asks: [], bids: [] };
       }
       const res = await apiFetch(`/api/stocks/${encodeURIComponent(streamerId)}/order-book?depth=10`);
       if (!res.ok) throw new Error('Failed to load order book');

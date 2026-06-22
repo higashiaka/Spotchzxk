@@ -9,7 +9,7 @@ export interface TradeDetails {
   /** Order direction (buy or sell) */
   type: 'buy' | 'sell';
   /** Order quantity */
-  quantity: number;
+  quantity: number | string;
   /** Estimated execution price at the time of order */
   estimatedPrice: number;
   estimatedExecutionPrice?: number;
@@ -50,7 +50,7 @@ export const useTrade = (userId: string) => {
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
         const estimatedAmount = newTrade.estimatedTotalAmount
-          ?? (newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * newTrade.quantity;
+          ?? (newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * Number(newTrade.quantity);
         const state = old || { balance: '10000000', shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
         let newBalanceNum = Number(state.balance ?? '10000000');
@@ -58,12 +58,12 @@ export const useTrade = (userId: string) => {
         if (newTrade.type === 'buy') {
           newBalanceNum -= estimatedAmount;
           if (newTrade.orderMode !== 'limit') {
-            newShares[newTrade.streamerId] = (newShares[newTrade.streamerId] || 0) + newTrade.quantity;
+            newShares[newTrade.streamerId] = (newShares[newTrade.streamerId] || 0) + Number(newTrade.quantity);
           }
         } else {
           if (newTrade.orderMode !== 'limit') {
             newBalanceNum += estimatedAmount;
-            newShares[newTrade.streamerId] = Math.max(0, (newShares[newTrade.streamerId] || 0) - newTrade.quantity);
+            newShares[newTrade.streamerId] = Math.max(0, (newShares[newTrade.streamerId] || 0) - Number(newTrade.quantity));
           }
         }
 

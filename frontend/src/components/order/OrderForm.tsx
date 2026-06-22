@@ -32,9 +32,18 @@ const ceilToBigInt = (value: number): bigint => {
   return BigInt(Math.ceil(value));
 };
 
-const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: number): bigint => {
-  if (currentPrice <= 0 || quantity <= 0) return 0n;
-  const gross = ceilToBigInt(currentPrice * quantity);
+const parseQuantity = (value: string): bigint => {
+  const digits = value.replace(/[^\d]/g, '');
+  return digits ? BigInt(digits) : 0n;
+};
+
+const bigintToSafeNumber = (value: bigint): number => {
+  return value > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(value);
+};
+
+const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: bigint): bigint => {
+  if (currentPrice <= 0 || quantity <= 0n) return 0n;
+  const gross = ceilToBigInt(currentPrice * bigintToSafeNumber(quantity));
   const fee = ceilDiv(gross * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
   return isBuy ? gross + fee : gross - fee;
 };
@@ -44,13 +53,13 @@ const ammTradeAmount = (
   coinReserve: bigint | undefined,
   shareReserve: bigint | undefined,
   isBuy: boolean,
-  quantity: number,
+  quantity: bigint,
 ): bigint => {
-  if (quantity <= 0) return 0n;
+  if (quantity <= 0n) return 0n;
   if (!coinReserve || !shareReserve) {
     return fallbackTradeAmount(currentPrice, isBuy, quantity);
   }
-  const qty = BigInt(quantity);
+  const qty = quantity;
   if (isBuy && qty >= shareReserve) return BigInt(Number.MAX_SAFE_INTEGER) * 1000n;
 
   const ammAmount = isBuy
@@ -65,11 +74,11 @@ const averageAmmPrice = (
   coinReserve: bigint | undefined,
   shareReserve: bigint | undefined,
   isBuy: boolean,
-  quantity: number,
+  quantity: bigint,
 ): number => {
-  if (quantity <= 0) return 0;
+  if (quantity <= 0n) return 0;
   const userNetAmount = ammTradeAmount(currentPrice, coinReserve, shareReserve, isBuy, quantity);
-  return Number(userNetAmount) / quantity;
+  return Number(userNetAmount) / bigintToSafeNumber(quantity);
 };
 
 const maxAffordableMarketBuyQuantity = (
@@ -99,7 +108,7 @@ const maxAffordableMarketBuyQuantity = (
     // Guard: float precision loss can make mid === low when both approach MAX_SAFE_INTEGER,
     // causing cost <= balance to leave low unchanged → infinite loop.
     if (mid <= low) break;
-    const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
+    const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, BigInt(mid));
     if (cost <= balanceBigInt) {
       low = mid;
     } else {
@@ -126,9 +135,11 @@ export const OrderForm = ({
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
   const [limitPriceStr, setLimitPriceStr] = useState('');
 
-  const qty = Math.max(0, parseInt(qtyStr, 10) || 0);
+  const qtyBig = parseQuantity(qtyStr);
+  const qty = bigintToSafeNumber(qtyBig);
   const balance: number = Number(portfolio?.balance ?? 0);
-  const held: number = Number(portfolio?.shares?.[streamer.id] ?? 0);
+  const heldBig = parseQuantity(String(portfolio?.shares?.[streamer.id] ?? 0).replace(/\..*$/, ''));
+  const held: number = bigintToSafeNumber(heldBig);
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
   const coinReserve = parseReserve(streamer.coinReserve);
@@ -138,14 +149,14 @@ export const OrderForm = ({
     coinReserve,
     shareReserve,
     orderType === 'buy',
-    qty,
+    qtyBig,
   );
   const marketExecutionAmount = ammTradeAmount(
     currentPrice,
     coinReserve,
     shareReserve,
     orderType === 'buy',
-    qty,
+    qtyBig,
   );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
   const limitGrossAmount = ceilToBigInt(estimatedExecutionPrice * qty);
@@ -161,16 +172,21 @@ export const OrderForm = ({
   const maxBuy = orderMode === 'market'
     ? maxAffordableMarketBuyQuantity(balance, currentPrice, coinReserve, shareReserve)
     : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
-  const maxSell = held;
+  const maxSell = heldBig;
 
   const setQuick = (ratio: number) => {
     const max = orderType === 'buy' ? maxBuy : maxSell;
+    if (typeof max === 'bigint') {
+      const scaled = (max * BigInt(Math.round(ratio * 100))) / 100n;
+      setQtyStr((scaled > 0n ? scaled : 1n).toString());
+      return;
+    }
     setQtyStr(String(Math.max(1, Math.floor(max * ratio))));
   };
 
   const isSuspended = streamer.tradingSuspended ?? false;
-  const canBuy = !!user && qty > 0 && balanceBigInt >= totalCost && !isSuspended;
-  const canSell = !!user && qty > 0 && held >= qty && !isSuspended;
+  const canBuy = !!user && qtyBig > 0n && balanceBigInt >= totalCost && !isSuspended;
+  const canSell = !!user && qtyBig > 0n && heldBig >= qtyBig && !isSuspended;
   const hasValidLimit = orderMode === 'market' || limitPrice > 0;
   const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
 
@@ -187,7 +203,7 @@ export const OrderForm = ({
     tradeMutation.mutate({
       streamerId: streamer.id,
       type: orderType,
-      quantity: qty,
+      quantity: qtyBig.toString(),
       estimatedPrice: currentPrice,
       estimatedExecutionPrice,
       estimatedTotalAmount: Number(totalCost),

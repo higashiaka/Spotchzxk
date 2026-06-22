@@ -2,18 +2,16 @@ package com.spotchzxk.presentation.dto;
 
 import com.spotchzxk.domain.order.entity.Order;
 
-import java.math.BigDecimal;
-
 public record PublicOrderResponse(
         String id,
         String streamerId,
         String type,
-        long quantity,
-        BigDecimal estimatedPrice,
-        BigDecimal executedPrice,
+        String quantity,
+        String estimatedPrice,
+        String executedPrice,
         String status,
         String orderMode,
-        BigDecimal limitPrice,
+        String limitPrice,
         long createdAt,
         Long executedAt
 ) {
@@ -22,12 +20,12 @@ public record PublicOrderResponse(
                 order.getId(),
                 order.getStreamerId(),
                 order.getType(),
-                order.getQuantity(),
-                order.getEstimatedPrice(),
-                order.getExecutedPrice(),
+                order.getQuantity().toPlainString(),
+                order.getEstimatedPrice().toPlainString(),
+                order.getExecutedPrice() != null ? order.getExecutedPrice().toPlainString() : null,
                 order.getStatus(),
                 order.getOrderMode(),
-                order.getLimitPrice(),
+                order.getLimitPrice() != null ? order.getLimitPrice().toPlainString() : null,
                 order.getCreatedAt(),
                 order.getExecutedAt()
         );

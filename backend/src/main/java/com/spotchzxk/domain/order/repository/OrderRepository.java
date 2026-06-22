@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, String> {
@@ -55,13 +56,13 @@ public interface OrderRepository extends JpaRepository<Order, String> {
 
     // Remaining quantity = quantity - filled_quantity (partial fills reduce effective pending amount)
     @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
-    long sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
+    BigDecimal sumPendingBuyQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 
     @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE user_id = :userId AND streamer_id = :streamerId AND type = 'sell' AND status = 'pending'", nativeQuery = true)
-    long sumPendingSellQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
+    BigDecimal sumPendingSellQuantity(@Param("userId") String userId, @Param("streamerId") String streamerId);
 
     @Query(value = "SELECT COALESCE(SUM(quantity - filled_quantity), 0) FROM orders WHERE streamer_id = :streamerId AND type = 'buy' AND status = 'pending'", nativeQuery = true)
-    long sumPendingBuyQuantityByStreamerId(@Param("streamerId") String streamerId);
+    BigDecimal sumPendingBuyQuantityByStreamerId(@Param("streamerId") String streamerId);
 
     @Query(value = """
             SELECT limit_price, COALESCE(SUM(quantity - filled_quantity), 0)

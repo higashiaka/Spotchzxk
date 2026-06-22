@@ -255,7 +255,7 @@ class CandleServiceTest {
                 .userId("user-1")
                 .streamerId(stockId)
                 .type("buy")
-                .quantity(1)
+                .quantity(java.math.BigDecimal.ONE)
                 .estimatedPrice(BigDecimal.valueOf(executedPrice))
                 .executedPrice(BigDecimal.valueOf(executedPrice))
                 .status("completed")
@@ -263,6 +263,5 @@ class CandleServiceTest {
                 .build();
     }
 }
-
 
 
