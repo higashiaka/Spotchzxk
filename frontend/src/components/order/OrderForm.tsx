@@ -148,7 +148,7 @@ export const OrderForm = ({
   const qtyBig = parseQuantity(qtyStr);
   const qty = bigintToSafeNumber(qtyBig);
   const balance: number = Number(portfolio?.balance ?? 0);
-  const balanceBigInt = decimalToScaledBigInt(portfolio?.balance ?? '0', 100n);
+  const balanceBigInt = decimalToScaledBigInt(portfolio?.balance ?? '0', 1n);
   const heldBig = parseQuantity(String(portfolio?.shares?.[streamer.id] ?? 0).replace(/\..*$/, ''));
   const held: number = bigintToSafeNumber(heldBig);
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
@@ -216,7 +216,7 @@ export const OrderForm = ({
       quantity: qtyBig.toString(),
       estimatedPrice: currentPrice,
       estimatedExecutionPrice,
-      estimatedTotalAmount: Number(totalCost),
+      estimatedTotalAmount: totalCost.toString(),
       orderMode,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
     });

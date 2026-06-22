@@ -2,6 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Portfolio } from './usePortfolio';
 import { apiFetch } from '../lib/api';
 
+const parseIntegerAmount = (value: number | string | undefined): bigint => {
+  if (value === undefined) return 0n;
+  const raw = String(value);
+  const normalized = raw.includes('e') || raw.includes('E') ? Number(value).toFixed(0) : raw;
+  const integerPart = normalized.replace(/[^\d.]/g, '').split('.')[0];
+  return integerPart ? BigInt(integerPart) : 0n;
+};
+
 /** Parameters required to submit a trade order */
 export interface TradeDetails {
   /** Target streamer channel ID */
@@ -14,7 +22,7 @@ export interface TradeDetails {
   estimatedPrice: number;
   estimatedExecutionPrice?: number;
   /** Estimated total amount including AMM slippage and fees */
-  estimatedTotalAmount?: number;
+  estimatedTotalAmount?: number | string;
   orderMode?: 'market' | 'limit';
   limitPrice?: number;
   maxCoinIn?: number;
@@ -49,25 +57,26 @@ export const useTrade = (userId: string) => {
       const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
-        const estimatedAmount = newTrade.estimatedTotalAmount
-          ?? (newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * Number(newTrade.quantity);
         const state = old || { balance: '10000000', shares: {} };
         const newShares: Record<string, number> = { ...state.shares };
-        let newBalanceNum = Number(state.balance ?? '10000000');
+        const estimatedAmount = newTrade.estimatedTotalAmount !== undefined
+          ? parseIntegerAmount(newTrade.estimatedTotalAmount)
+          : parseIntegerAmount((newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * Number(newTrade.quantity));
+        let newBalance = parseIntegerAmount(state.balance ?? '10000000');
 
         if (newTrade.type === 'buy') {
-          newBalanceNum -= estimatedAmount;
+          newBalance -= estimatedAmount;
           if (newTrade.orderMode !== 'limit') {
             newShares[newTrade.streamerId] = (newShares[newTrade.streamerId] || 0) + Number(newTrade.quantity);
           }
         } else {
           if (newTrade.orderMode !== 'limit') {
-            newBalanceNum += estimatedAmount;
+            newBalance += estimatedAmount;
             newShares[newTrade.streamerId] = Math.max(0, (newShares[newTrade.streamerId] || 0) - Number(newTrade.quantity));
           }
         }
 
-        return { ...state, balance: String(Math.round(newBalanceNum)), shares: newShares };
+        return { ...state, balance: newBalance.toString(), shares: newShares };
       });
 
       return { previousPortfolio };
