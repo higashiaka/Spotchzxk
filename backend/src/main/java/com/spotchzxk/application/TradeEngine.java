@@ -10,7 +10,9 @@ import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
+import com.spotchzxk.domain.trading.entity.TradeFailureLog;
 import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
+import com.spotchzxk.domain.trading.repository.TradeFailureLogRepository;
 import com.spotchzxk.domain.trading.service.AmmCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,7 @@ public class TradeEngine {
     private final AsyncBroadcastService asyncBroadcast;
     private final PlatformTransactionManager txManager;
     private final CandleService candleService;
+    private final TradeFailureLogRepository tradeFailureLogRepository;
 
     private final ConcurrentHashMap<String, BigDecimal> balanceCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<String, BigDecimal>> sharesCache = new ConcurrentHashMap<>();
@@ -86,6 +89,7 @@ public class TradeEngine {
                 } catch (RuntimeException e) {
                     evictUserCache(userId);
                     evictStockCache(channelId);
+                    recordTradeFailure(req, e.getMessage());
                     throw e;
                 }
             } finally {
@@ -767,6 +771,28 @@ public class TradeEngine {
     }
 
     // Issue #17: ?κ린 ?댁쁺 ??userLocks/stockLocks 留?臾댄븳 利앷? 諛⑹? ??誘몄궗?????뺢린 ?쒓굅
+    private void recordTradeFailure(TradeRequest req, String reason) {
+        try {
+            log.warn("[TRADE_FAILURE] userId={} streamerId={} type={} qty={} price={} orderMode={} reason={}",
+                    req.getUserId(), req.getStreamerId(), req.getType(),
+                    req.getQuantity(), req.getEstimatedPrice(), req.getOrderMode(), reason);
+            new TransactionTemplate(txManager).executeWithoutResult(status ->
+                    tradeFailureLogRepository.save(TradeFailureLog.builder()
+                            .userId(req.getUserId())
+                            .streamerId(req.getStreamerId())
+                            .type(req.getType())
+                            .quantity(req.getQuantity() != null ? new BigDecimal(req.getQuantity()) : null)
+                            .price(req.getEstimatedPrice())
+                            .orderMode(req.getOrderMode())
+                            .reason(reason != null ? reason : "unknown")
+                            .failedAt(System.currentTimeMillis())
+                            .build())
+            );
+        } catch (Exception ex) {
+            log.error("[TRADE_FAILURE] Failed to persist trade failure log: {}", ex.getMessage());
+        }
+    }
+
     @Scheduled(fixedDelay = 300_000)
     public void cleanupIdleLocks() {
         userLocks.entrySet().removeIf(e -> !e.getValue().isLocked() && e.getValue().getQueueLength() == 0);
