@@ -11,6 +11,7 @@ import { PendingOrdersPanel } from './PendingOrdersPanel';
 
 const FEE_RATE_NUMERATOR = 15n;
 const FEE_RATE_DENOMINATOR = 1000n;
+const PRICE_SCALE = 1000000n;
 
 const parseReserve = (value?: string): bigint | undefined => {
   if (!value) return undefined;
@@ -27,9 +28,13 @@ const ceilDiv = (num: bigint, den: bigint): bigint => {
   return num % den > 0n ? q + 1n : q;
 };
 
-const ceilToBigInt = (value: number): bigint => {
-  if (!Number.isFinite(value) || value <= 0) return 0n;
-  return BigInt(Math.ceil(value));
+const decimalToScaledBigInt = (value: number | string, scale: bigint = PRICE_SCALE): bigint => {
+  const raw = String(value);
+  const normalized = raw.includes('e') || raw.includes('E') ? Number(value).toFixed(6) : raw;
+  const [integerPart, fractionPart = ''] = normalized.replace(/[^\d.]/g, '').split('.');
+  const scaleDigits = scale.toString().length - 1;
+  const fraction = (fractionPart + '0'.repeat(scaleDigits)).slice(0, scaleDigits);
+  return BigInt(integerPart || '0') * scale + BigInt(fraction || '0');
 };
 
 const parseQuantity = (value: string): bigint => {
@@ -43,7 +48,7 @@ const bigintToSafeNumber = (value: bigint): number => {
 
 const fallbackTradeAmount = (currentPrice: number, isBuy: boolean, quantity: bigint): bigint => {
   if (currentPrice <= 0 || quantity <= 0n) return 0n;
-  const gross = ceilToBigInt(currentPrice * bigintToSafeNumber(quantity));
+  const gross = ceilDiv(decimalToScaledBigInt(currentPrice) * quantity, PRICE_SCALE);
   const fee = ceilDiv(gross * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
   return isBuy ? gross + fee : gross - fee;
 };
@@ -82,37 +87,42 @@ const averageAmmPrice = (
 };
 
 const maxAffordableMarketBuyQuantity = (
-  balance: number,
+  balance: bigint,
   currentPrice: number,
   coinReserve?: bigint,
   shareReserve?: bigint,
-): number => {
-  if (balance <= 0 || currentPrice <= 0) return 0;
-  // Cap high at Number.MAX_SAFE_INTEGER to prevent infinite loop from IEEE 754 precision loss
-  // (mid - 1 === mid when mid > MAX_SAFE_INTEGER, causing binary search to never converge)
-  let high = Math.min(
-    Number.MAX_SAFE_INTEGER,
-    Math.max(0, Math.floor(balance / currentPrice)),
-  );
-  if (shareReserve && shareReserve > 0n) {
-    const poolMax = shareReserve - 1n;
-    const poolMaxSafe = poolMax > BigInt(Number.MAX_SAFE_INTEGER)
-      ? Number.MAX_SAFE_INTEGER
-      : Number(poolMax);
-    if (poolMaxSafe < high) high = poolMaxSafe;
+): bigint => {
+  if (balance <= 0n || currentPrice <= 0) return 0n;
+  if (coinReserve && shareReserve && shareReserve > 1n) {
+    let low = 0n;
+    let high = shareReserve - 1n;
+    while (low < high) {
+      const mid = (low + high + 1n) / 2n;
+      const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, mid);
+      if (cost <= balance) {
+        low = mid;
+      } else {
+        high = mid - 1n;
+      }
+    }
+    return low;
   }
-  const balanceBigInt = BigInt(Math.floor(balance));
-  let low = 0;
+
+  let low = 0n;
+  let high = 1n;
+  while (fallbackTradeAmount(currentPrice, true, high) <= balance) {
+    low = high;
+    high *= 2n;
+  }
   while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
+    const mid = (low + high + 1n) / 2n;
     // Guard: float precision loss can make mid === low when both approach MAX_SAFE_INTEGER,
     // causing cost <= balance to leave low unchanged → infinite loop.
-    if (mid <= low) break;
-    const cost = ammTradeAmount(currentPrice, coinReserve, shareReserve, true, BigInt(mid));
-    if (cost <= balanceBigInt) {
+    const cost = fallbackTradeAmount(currentPrice, true, mid);
+    if (cost <= balance) {
       low = mid;
     } else {
-      high = mid - 1;
+      high = mid - 1n;
     }
   }
   return low;
@@ -138,6 +148,7 @@ export const OrderForm = ({
   const qtyBig = parseQuantity(qtyStr);
   const qty = bigintToSafeNumber(qtyBig);
   const balance: number = Number(portfolio?.balance ?? 0);
+  const balanceBigInt = decimalToScaledBigInt(portfolio?.balance ?? '0', 100n);
   const heldBig = parseQuantity(String(portfolio?.shares?.[streamer.id] ?? 0).replace(/\..*$/, ''));
   const held: number = bigintToSafeNumber(heldBig);
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
@@ -159,19 +170,18 @@ export const OrderForm = ({
     qtyBig,
   );
   const estimatedExecutionPrice = orderMode === 'market' ? marketExecutionPrice : orderPrice;
-  const limitGrossAmount = ceilToBigInt(estimatedExecutionPrice * qty);
+  const limitGrossAmount = ceilDiv(decimalToScaledBigInt(estimatedExecutionPrice) * qtyBig, PRICE_SCALE);
   const limitFee = ceilDiv(limitGrossAmount * FEE_RATE_NUMERATOR, FEE_RATE_DENOMINATOR);
 
   const totalCost: bigint = orderMode === 'market'
     ? marketExecutionAmount
     : orderType === 'buy' ? limitGrossAmount + limitFee : limitGrossAmount > limitFee ? limitGrossAmount - limitFee : 0n;
-  const balanceBigInt = BigInt(Math.floor(balance));
   const postBalance: bigint = orderType === 'buy' ? balanceBigInt - totalCost : balanceBigInt + totalCost;
   const pct = changePct(currentPrice, streamer.basePrice);
 
   const maxBuy = orderMode === 'market'
-    ? maxAffordableMarketBuyQuantity(balance, currentPrice, coinReserve, shareReserve)
-    : orderPrice > 0 ? Math.floor(balance / orderPrice) : 0;
+    ? maxAffordableMarketBuyQuantity(balanceBigInt, currentPrice, coinReserve, shareReserve)
+    : orderPrice > 0 ? balanceBigInt / (ceilDiv(decimalToScaledBigInt(orderPrice) * (FEE_RATE_DENOMINATOR + FEE_RATE_NUMERATOR), PRICE_SCALE * FEE_RATE_DENOMINATOR) || 1n) : 0n;
   const maxSell = heldBig;
 
   const setQuick = (ratio: number) => {
@@ -353,7 +363,7 @@ export const OrderForm = ({
           ? '주문 처리 중...'
           : isSuspended
           ? '거래 정지'
-          : orderType === 'buy' && !!user && qty > 0 && balance < totalCost
+          : orderType === 'buy' && !!user && qty > 0 && balanceBigInt < totalCost
           ? '잔고 부족'
           : `${orderType === 'buy' ? '매수' : '매도'} 주문하기`}
       </button>
