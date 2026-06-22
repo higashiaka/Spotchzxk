@@ -346,7 +346,7 @@ export const OrderForm = ({
         {orderType === 'sell' && (
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">현재 보유량</span>
-            <span className="text-xs font-mono font-bold text-white">{fmtShares(held)}</span>
+            <span className="text-xs font-mono font-bold text-white">{fmtShares(heldBig)}</span>
           </div>
         )}
       </div>

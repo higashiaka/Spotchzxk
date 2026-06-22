@@ -71,10 +71,31 @@ export const fmtCompact = (value: number | string): string => {
 };
 
 /** Formats share quantities with Korean units while keeping the 주 suffix visible */
-export const fmtShares = (value: number | string): string => {
+export const fmtShares = (value: number | string | bigint): string => {
+  const trim = (s: string) => s.replace(/\.?0+$/, '');
+
+  if (typeof value === 'bigint') {
+    const abs = value < 0n ? -value : value;
+    const fmt1 = (divisor: bigint, unit: string): string => {
+      const q = abs * 10n / divisor;
+      const int = q / 10n;
+      const frac = q % 10n;
+      return trim(frac === 0n ? `${int}` : `${int}.${frac}`) + unit;
+    };
+    if (abs >= 1_000_000_000_000_000_000_000_000_000_000_000_000n) return fmt1(1_000_000_000_000_000_000_000_000_000_000_000_000n, '간주');
+    if (abs >= 100_000_000_000_000_000_000_000_000_000_000n)       return fmt1(100_000_000_000_000_000_000_000_000_000_000n, '구주');
+    if (abs >= 10_000_000_000_000_000_000_000_000_000n)            return fmt1(10_000_000_000_000_000_000_000_000_000n, '양주');
+    if (abs >= 1_000_000_000_000_000_000_000_000n)                 return fmt1(1_000_000_000_000_000_000_000_000n, '자주');
+    if (abs >= 100_000_000_000_000_000_000n)                       return fmt1(100_000_000_000_000_000_000n, '해주');
+    if (abs >= 10_000_000_000_000_000n)                            return fmt1(10_000_000_000_000_000n, '경주');
+    if (abs >= 1_000_000_000_000n)                                 return fmt1(1_000_000_000_000n, '조주');
+    if (abs >= 100_000_000n)                                       return fmt1(100_000_000n, '억주');
+    if (abs >= 10_000n)                                            return fmt1(10_000n, '만주');
+    return `${value.toLocaleString()}주`;
+  }
+
   const rounded = Math.round(toFiniteNumber(value));
   const abs = Math.abs(rounded);
-  const trim = (s: string) => s.replace(/\.?0+$/, '');
   if (abs >= 1e36)              return `${trim((rounded / 1e36).toFixed(1))}간주`;
   if (abs >= 1e32)              return `${trim((rounded / 1e32).toFixed(1))}구주`;
   if (abs >= 1e28)              return `${trim((rounded / 1e28).toFixed(1))}양주`;

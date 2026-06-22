@@ -67,7 +67,7 @@ export const useTrade = (userId: string) => {
         if (newTrade.type === 'buy') {
           newBalance -= estimatedAmount;
           if (newTrade.orderMode !== 'limit') {
-            newShares[newTrade.streamerId] = (newShares[newTrade.streamerId] || 0) + Number(newTrade.quantity);
+            newShares[newTrade.streamerId] = Number(newShares[newTrade.streamerId] || 0) + Number(newTrade.quantity);
           }
         } else {
           if (newTrade.orderMode !== 'limit') {
