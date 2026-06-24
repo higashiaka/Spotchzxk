@@ -218,6 +218,7 @@ public class StockSplitService {
         if (action.reverse()) {
             stock.applyReverseStockSplit(action.ratio());
             userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
+            stock.syncIssuedShares(userShareRepository.sumQuantityByStock(stock.getChannelId()));
             return;
         }
         stock.applyStockSplit(action.ratio());

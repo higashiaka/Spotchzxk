@@ -70,6 +70,11 @@ public class TradeEngine {
         String channelId = req.getStreamerId();
         boolean isBuy = "buy".equals(req.getType());
         BigInteger qty = req.getQuantity();
+        boolean sellAll = req.isSellAll();
+
+        if (sellAll && (isBuy || "limit".equals(req.getOrderMode()))) {
+            throw new IllegalStateException("100% 매도는 시장가 매도에서만 사용할 수 있습니다.");
+        }
 
         ReentrantLock userLock = userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
         ReentrantLock stockLock = stockLocks.computeIfAbsent(channelId, k -> new ReentrantLock());
@@ -82,6 +87,9 @@ public class TradeEngine {
                 try {
                     if ("limit".equals(req.getOrderMode())) {
                         return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice(), req.isAllowPartial());
+                    }
+                    if (sellAll) {
+                        return executeSellAllMarketOrder(userId, channelId, req.getEstimatedPrice());
                     }
         // Issue #5: pass slippage parameters directly to executeMarketOrder
                     return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
@@ -98,6 +106,113 @@ public class TradeEngine {
         } finally {
             userLock.unlock();
         }
+    }
+
+    private TradeResponse executeSellAllMarketOrder(String userId, String channelId, BigDecimal fallbackPrice) {
+        BigDecimal heldQty = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                .map(UserShare::getQuantity)
+                .orElse(BigDecimal.ZERO);
+        if (heldQty.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("보유 수량이 부족합니다.");
+        }
+
+        BigInteger wholeQty = heldQty.setScale(0, RoundingMode.FLOOR).toBigIntegerExact();
+        BigDecimal fractionalQty = heldQty.subtract(new BigDecimal(wholeQty));
+        if (wholeQty.signum() == 0) {
+            return settleFractionalOnlySell(userId, channelId, heldQty, fallbackPrice);
+        }
+
+        AmmCalculator.AmmResult amm = calculateAmmTrade(channelId, false, wholeQty);
+        long executedAt = System.currentTimeMillis();
+        String orderId = UUID.randomUUID().toString();
+        BigDecimal currentBalance = balanceCache.getOrDefault(userId, INITIAL_BALANCE);
+        Map<String, BigDecimal> shares = sharesCache.computeIfAbsent(userId, k -> new ConcurrentHashMap<>());
+
+        TradePersistenceResult savedTrade = persistSellAllTrade(
+                userId, channelId, amm, wholeQty, fractionalQty, fallbackPrice, executedAt, orderId);
+        BigDecimal totalProceeds = new BigDecimal(amm.userNetAmount()).add(savedTrade.fractionalProceeds());
+        BigDecimal newBalance = currentBalance.add(totalProceeds);
+        balanceCache.put(userId, newBalance);
+        shares.remove(channelId);
+        priceCache.put(channelId, amm.newPrice());
+        ammPoolCache.put(channelId, savedTrade.poolForCache());
+
+        broadcastTrade(channelId, savedTrade.streamerName(), false, wholeQty, amm.newPrice(), executedAt,
+                new BigDecimal(amm.userNetAmount()), savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
+        processPendingLimitOrders(channelId);
+        return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(),
+                "0", orderId, "market");
+    }
+
+    private TradePersistenceResult persistSellAllTrade(
+            String userId, String channelId, AmmCalculator.AmmResult amm, BigInteger wholeQty,
+            BigDecimal fractionalQty, BigDecimal fallbackPrice, long executedAt, String orderId) {
+        return new TransactionTemplate(txManager).execute(status -> {
+            Stock stock = stockRepository.findByIdForUpdate(channelId)
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
+            User user = getOrCreateUser(userId);
+            UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                    .orElseThrow(() -> new IllegalStateException("보유 수량이 부족합니다."));
+            BigDecimal expectedQty = new BigDecimal(wholeQty).add(fractionalQty);
+            if (share.getQuantity().compareTo(expectedQty) != 0) {
+                throw new IllegalStateException("보유 수량이 변경되었습니다. 다시 시도해주세요.");
+            }
+
+            BigInteger[] poolForCache = updateStock(stock, false, wholeQty, amm, new BigDecimal(amm.userNetAmount()));
+            BigDecimal fractionalProceeds = fractionalSellProceeds(fractionalQty, amm.newPrice());
+            BigDecimal realizedProfit = new BigDecimal(amm.userNetAmount()).add(fractionalProceeds)
+                    .subtract((share.getAvgPrice() == null ? BigDecimal.ZERO : share.getAvgPrice()).multiply(expectedQty))
+                    .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
+            stock.removeFractionalIssuedShares(fractionalQty);
+            stockRepository.save(stock);
+            userShareRepository.delete(share);
+            addToUserBalance(userId, new BigDecimal(amm.userNetAmount()).add(fractionalProceeds));
+            addToUserRealizedProfit(userId, realizedProfit);
+            saveOrder(userId, channelId, false, wholeQty, fallbackPrice, amm.avgPrice(), executedAt,
+                    orderId, "market", null, "completed");
+            return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
+                    stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds);
+        });
+    }
+
+    private TradeResponse settleFractionalOnlySell(
+            String userId, String channelId, BigDecimal heldQty, BigDecimal fallbackPrice) {
+        String orderId = UUID.randomUUID().toString();
+        BigDecimal[] result = new BigDecimal[2];
+        new TransactionTemplate(txManager).executeWithoutResult(status -> {
+            Stock stock = stockRepository.findByIdForUpdate(channelId)
+                    .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
+            UserShare share = userShareRepository.findByUserIdAndStockChannelId(userId, channelId)
+                    .orElseThrow(() -> new IllegalStateException("보유 수량이 부족합니다."));
+            if (share.getQuantity().compareTo(heldQty) != 0) {
+                throw new IllegalStateException("보유 수량이 변경되었습니다. 다시 시도해주세요.");
+            }
+            BigDecimal proceeds = fractionalSellProceeds(heldQty, stock.getCurrentPrice());
+            BigDecimal costBasis = (share.getAvgPrice() == null ? BigDecimal.ZERO : share.getAvgPrice()).multiply(heldQty);
+            addToUserBalance(userId, proceeds);
+            addToUserRealizedProfit(userId, proceeds.subtract(costBasis).setScale(PRICE_SCALE, RoundingMode.HALF_UP));
+            stock.removeFractionalIssuedShares(heldQty);
+            stockRepository.save(stock);
+            userShareRepository.delete(share);
+            orderRepository.save(Order.builder()
+                    .id(orderId).userId(userId).streamerId(channelId).type("sell")
+                    .quantity(heldQty).estimatedPrice(fallbackPrice).executedPrice(stock.getCurrentPrice())
+                    .orderMode("market").status("completed").createdAt(System.currentTimeMillis())
+                    .executedAt(System.currentTimeMillis()).build());
+            result[0] = userRepository.findById(userId).orElseThrow().getCoinBalance();
+            result[1] = stock.getCurrentPrice();
+        });
+        evictUserCache(userId);
+        return new TradeResponse("executed", result[1].toPlainString(), result[0].toPlainString(),
+                "0", orderId, "market");
+    }
+
+    private BigDecimal fractionalSellProceeds(BigDecimal fractionalQty, BigDecimal price) {
+        if (fractionalQty.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;
+        BigInteger gross = fractionalQty.multiply(price).setScale(0, RoundingMode.FLOOR).toBigInteger();
+        BigInteger[] fee = AmmCalculator.fee(gross);
+        return new BigDecimal(gross.subtract(fee[0]).subtract(fee[1]).max(BigInteger.ZERO));
     }
 
     public void evictUserCache(String userId) {
@@ -728,7 +843,12 @@ public class TradeEngine {
     }
 
     private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
-                                          BigDecimal dailyVolume, BigDecimal dailyTradingValue) {
+                                          BigDecimal dailyVolume, BigDecimal dailyTradingValue,
+                                          BigDecimal fractionalProceeds) {
+        private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
+                                       BigDecimal dailyVolume, BigDecimal dailyTradingValue) {
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO);
+        }
     }
 
     // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅

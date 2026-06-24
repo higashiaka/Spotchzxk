@@ -194,6 +194,10 @@ public class Stock {
         this.issuedShares = totalHeld.max(BigDecimal.ZERO);
     }
 
+    public void removeFractionalIssuedShares(BigDecimal quantity) {
+        this.issuedShares = nonNull(this.issuedShares).subtract(quantity).max(BigDecimal.ZERO);
+    }
+
     public void applyAmmTrade(BigInteger newCoinReserve, BigInteger newShareReserve, BigInteger fee) {
         BigDecimal computed = new BigDecimal(newCoinReserve)
                 .divide(new BigDecimal(newShareReserve), PRICE_SCALE, RoundingMode.HALF_UP);

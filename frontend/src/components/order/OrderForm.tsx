@@ -146,6 +146,7 @@ export const OrderForm = ({
   const { holdings } = useHoldings(portfolio, [streamer], { includeDefaults: true });
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
   const [limitPriceStr, setLimitPriceStr] = useState('');
+  const [sellAll, setSellAll] = useState(false);
 
   const qtyBig = parseQuantity(qtyStr);
   const qty = bigintToSafeNumber(qtyBig);
@@ -187,6 +188,7 @@ export const OrderForm = ({
   const maxSell = heldBig;
 
   const setQuick = (ratio: number) => {
+    setSellAll(orderType === 'sell' && orderMode === 'market' && ratio === 1);
     const max = orderType === 'buy' ? maxBuy : maxSell;
     if (typeof max === 'bigint') {
       const scaled = (max * BigInt(Math.round(ratio * 100))) / 100n;
@@ -198,7 +200,9 @@ export const OrderForm = ({
 
   const isSuspended = streamer.tradingSuspended ?? false;
   const canBuy = !!user && qtyBig > 0n && balanceBigInt >= totalCost && !isSuspended;
-  const canSell = !!user && qtyBig > 0n && heldBig >= qtyBig && !isSuspended;
+  const canSell = !!user
+    && (sellAll ? held > 0 && orderMode === 'market' : qtyBig > 0n && heldBig >= qtyBig)
+    && !isSuspended;
   const hasValidLimit = orderMode === 'market' || limitPrice > 0;
   const canSubmit = hasValidLimit && (orderType === 'buy' ? canBuy : canSell);
 
@@ -220,6 +224,7 @@ export const OrderForm = ({
       estimatedExecutionPrice,
       estimatedTotalAmount: totalCost.toString(),
       orderMode,
+      sellAll: orderType === 'sell' && orderMode === 'market' && sellAll,
       limitPrice: orderMode === 'limit' ? limitPrice : undefined,
     });
   };
@@ -312,7 +317,10 @@ export const OrderForm = ({
           inputMode="numeric"
           pattern="[0-9]*"
           value={qtyStr}
-          onChange={(e) => setQtyStr(e.target.value)}
+          onChange={(e) => {
+            setSellAll(false);
+            setQtyStr(e.target.value);
+          }}
           disabled={!user}
           placeholder={!user ? '로그인 필요' : '수량 입력'}
           className="w-full rounded-xl border py-2.5 px-3 text-white font-mono text-base focus:outline-none disabled:opacity-50 surface-card-secondary border-primary-token"

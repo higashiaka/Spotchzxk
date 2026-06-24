@@ -45,6 +45,9 @@ public class TradeRequest {
 
     /** Allow partial fill (limit orders only) */
     private boolean allowPartial = false;
+
+    /** Sell the entire DB holding, including a legacy fractional remainder (market sell only). */
+    private boolean sellAll = false;
 }
 
 

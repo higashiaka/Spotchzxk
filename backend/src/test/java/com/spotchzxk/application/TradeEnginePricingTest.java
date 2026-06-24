@@ -216,6 +216,32 @@ class TradeEnginePricingTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("보유 수량이 부족합니다.");
     }
+    @Test
+    void fractionalSellProceedsFloorsGrossAndAppliesNormalFee() {
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                mock(StockRepository.class),
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+
+        BigDecimal proceeds = ReflectionTestUtils.invokeMethod(
+                engine,
+                "fractionalSellProceeds",
+                new BigDecimal("0.75"),
+                new BigDecimal("1000")
+        );
+
+        BigInteger[] fee = AmmCalculator.fee(BigInteger.valueOf(750));
+        assertThat(proceeds).isEqualByComparingTo(
+                new BigDecimal(BigInteger.valueOf(750).subtract(fee[0]).subtract(fee[1]))
+        );
+    }
 }
 
 

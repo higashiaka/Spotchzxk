@@ -30,6 +30,7 @@ export interface TradeDetails {
   limitPrice?: number;
   maxCoinIn?: number;
   minCoinOut?: number;
+  sellAll?: boolean;
 }
 
 /** Trade mutation hook with optimistic update.
@@ -77,7 +78,9 @@ export const useTrade = (userId: string) => {
         } else {
           if (newTrade.orderMode !== 'limit') {
             newBalance += estimatedAmount;
-            newShares[newTrade.streamerId] = subtractFloorZero(currentShares, tradeQuantity).toString();
+            newShares[newTrade.streamerId] = newTrade.sellAll
+              ? '0'
+              : subtractFloorZero(currentShares, tradeQuantity).toString();
           }
         }
 

@@ -62,8 +62,8 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Modifying(clearAutomatically = true)
     @Query(value = """
             UPDATE user_shares
-            SET quantity = quantity / :ratio,
-                pre_stream_quantity = pre_stream_quantity / :ratio,
+            SET quantity = FLOOR(quantity / :ratio),
+                pre_stream_quantity = FLOOR(pre_stream_quantity / :ratio),
                 avg_price = CASE WHEN avg_price IS NULL THEN NULL ELSE avg_price * :ratio END
             WHERE channel_id = :channelId
             """, nativeQuery = true)
