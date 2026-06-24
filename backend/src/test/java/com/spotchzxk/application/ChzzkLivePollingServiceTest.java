@@ -51,7 +51,7 @@ class ChzzkLivePollingServiceTest {
     }
 
     @Test
-    void payDueIntervalDividendsSkipsEventStocks() {
+    void payDueIntervalDividendsDoesNotReverifyLiveStatus() {
         LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(61);
         when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(
                 stock("event-live-stock", true, liveStartedAt),
@@ -62,7 +62,7 @@ class ChzzkLivePollingServiceTest {
         service.payDueIntervalDividends();
 
         verify(chzzkApiClient, never()).fetchChannelStatus("event-live-stock");
-        verify(chzzkApiClient).fetchChannelStatus("real-live-channel");
+        verify(chzzkApiClient, never()).fetchChannelStatus("real-live-channel");
     }
 
     private Stock stock(String channelId, boolean isLive, LocalDateTime liveStartedAt) {
@@ -79,6 +79,4 @@ class ChzzkLivePollingServiceTest {
                 .build();
     }
 }
-
-
 
