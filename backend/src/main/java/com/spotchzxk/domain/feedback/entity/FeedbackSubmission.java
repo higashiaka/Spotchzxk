@@ -42,9 +42,29 @@ public class FeedbackSubmission {
     @Column(name = "page_url", length = 500)
     private String pageUrl;
 
+    @Column(name = "discord_message_id", length = 32, unique = true)
+    private String discordMessageId;
+
     @Column(nullable = false, length = 20)
     private String status;
 
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String answer;
+
+    @Column(name = "answered_at")
+    private LocalDateTime answeredAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    public void answer(String answer) {
+        this.answer = answer;
+        this.answeredAt = LocalDateTime.now();
+        this.status = "ANSWERED";
+    }
+
+    public void attachDiscordMessage(String messageId) {
+        this.discordMessageId = messageId;
+    }
 }

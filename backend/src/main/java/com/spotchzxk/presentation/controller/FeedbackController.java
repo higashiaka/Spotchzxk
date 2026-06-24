@@ -18,6 +18,11 @@ public class FeedbackController {
 
     private final FeedbackService feedbackService;
 
+    @GetMapping
+    public ResponseEntity<?> mine(@AuthenticationPrincipal String uid) {
+        return ResponseEntity.ok(feedbackService.findMine(uid));
+    }
+
     @PostMapping
     public ResponseEntity<?> submit(
             @AuthenticationPrincipal String uid,
