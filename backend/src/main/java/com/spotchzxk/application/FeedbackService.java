@@ -3,6 +3,8 @@ package com.spotchzxk.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotchzxk.domain.feedback.entity.FeedbackSubmission;
 import com.spotchzxk.domain.feedback.repository.FeedbackSubmissionRepository;
+import com.spotchzxk.domain.feedback.entity.FeedbackReply;
+import com.spotchzxk.domain.feedback.repository.FeedbackReplyRepository;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.entity.User;
@@ -29,6 +31,7 @@ import java.util.UUID;
 public class FeedbackService {
 
     private final FeedbackSubmissionRepository feedbackRepository;
+    private final FeedbackReplyRepository feedbackReplyRepository;
     private final UserRepository userRepository;
     private final StockRepository stockRepository;
     private final ObjectMapper objectMapper;
@@ -86,8 +89,14 @@ public class FeedbackService {
         }
         FeedbackSubmission feedback = feedbackRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("문의를 찾을 수 없습니다."));
-        feedback.answer(answer.trim());
-        return toAdminResponse(feedbackRepository.save(feedback));
+        feedback.markAnswered();
+        feedbackRepository.save(feedback);
+        feedbackReplyRepository.save(FeedbackReply.builder()
+                .feedbackId(feedback.getId())
+                .content(answer.trim())
+                .createdAt(LocalDateTime.now())
+                .build());
+        return toAdminResponse(feedback);
     }
 
     private Map<String, Object> toResponse(FeedbackSubmission feedback) {
@@ -101,6 +110,13 @@ public class FeedbackService {
         response.put("status", feedback.getStatus());
         response.put("answer", feedback.getAnswer());
         response.put("answeredAt", feedback.getAnsweredAt());
+        response.put("replies", feedbackReplyRepository.findByFeedbackIdOrderByCreatedAtAsc(feedback.getId()).stream()
+                .map(reply -> Map.of(
+                        "id", reply.getId(),
+                        "content", reply.getContent(),
+                        "createdAt", reply.getCreatedAt()
+                ))
+                .toList());
         response.put("createdAt", feedback.getCreatedAt());
         return response;
     }

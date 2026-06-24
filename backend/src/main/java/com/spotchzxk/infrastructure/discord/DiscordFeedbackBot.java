@@ -2,6 +2,8 @@ package com.spotchzxk.infrastructure.discord;
 
 import com.spotchzxk.domain.feedback.entity.FeedbackSubmission;
 import com.spotchzxk.domain.feedback.repository.FeedbackSubmissionRepository;
+import com.spotchzxk.domain.feedback.entity.FeedbackReply;
+import com.spotchzxk.domain.feedback.repository.FeedbackReplyRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.EnumSet;
 public class DiscordFeedbackBot extends ListenerAdapter {
 
     private final FeedbackSubmissionRepository feedbackRepository;
+    private final FeedbackReplyRepository feedbackReplyRepository;
     private final TransactionTemplate transactionTemplate;
 
     @Value("${app.feedback.discord-bot-token:}")
@@ -89,12 +92,20 @@ public class DiscordFeedbackBot extends ListenerAdapter {
 
         String answer = event.getMessage().getContentDisplay().trim();
         if (answer.isBlank()) return;
+        if (feedbackReplyRepository.existsByDiscordMessageId(event.getMessageId())) return;
 
         Boolean saved = transactionTemplate.execute(status ->
                 feedbackRepository.findByDiscordMessageId(referenced.getId())
                         .map(feedback -> {
-                            feedback.answer(answer.length() > 3000 ? answer.substring(0, 3000) : answer);
+                            String content = answer.length() > 3000 ? answer.substring(0, 3000) : answer;
+                            feedback.markAnswered();
                             feedbackRepository.save(feedback);
+                            feedbackReplyRepository.save(FeedbackReply.builder()
+                                    .feedbackId(feedback.getId())
+                                    .content(content)
+                                    .discordMessageId(event.getMessageId())
+                                    .createdAt(java.time.LocalDateTime.now())
+                                    .build());
                             return true;
                         })
                         .orElse(false));

@@ -15,6 +15,7 @@ type FeedbackItem = {
   content: string;
   stockName?: string | null;
   status: 'RECEIVED' | 'ANSWERED';
+  replies?: { id: number; content: string; createdAt: string }[];
   answer?: string | null;
   answeredAt?: string | null;
   createdAt: string;
@@ -132,6 +133,11 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
           {!historyLoading && items.length === 0 && <p className="text-sm text-center py-8" style={{ color: 'var(--text-dim)' }}>접수한 문의가 없습니다.</p>}
           {items.map(item => {
             const open = openId === item.id;
+            const replies = item.replies?.length
+              ? item.replies
+              : item.answer
+                ? [{ id: 0, content: item.answer, createdAt: item.answeredAt ?? item.createdAt }]
+                : [];
             return (
               <button key={item.id} type="button" onClick={() => setOpenId(open ? '' : item.id)}
                 className="w-full text-left rounded-xl border p-4" style={{ background: 'var(--bg-card-secondary)', borderColor: item.status === 'ANSWERED' ? 'var(--accent-border)' : 'var(--border-primary)' }}>
@@ -143,10 +149,16 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
                 </div>
                 {open && <div className="mt-4 pt-4 text-sm leading-relaxed" style={{ borderTop: '1px solid var(--border-primary)' }}>
                   <p className="whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>{item.content}</p>
-                  {item.answer ? <div className="mt-4 rounded-xl p-4" style={{ background: 'var(--accent-soft)' }}>
-                    <p className="text-xs font-black mb-2" style={{ color: 'var(--accent)' }}>운영자 답변</p>
-                    <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{item.answer}</p>
-                    {item.answeredAt && <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>{new Date(item.answeredAt).toLocaleString('ko-KR')}</p>}
+                  {replies.length ? <div className="mt-4 space-y-3">
+                    {replies.map((reply, index) => (
+                      <div key={reply.id} className="rounded-xl p-4" style={{ background: 'var(--accent-soft)' }}>
+                        <p className="text-xs font-black mb-2" style={{ color: 'var(--accent)' }}>
+                          {index === 0 ? '운영자 답변' : `후속 답변 ${index}`}
+                        </p>
+                        <p className="whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{reply.content}</p>
+                        <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>{new Date(reply.createdAt).toLocaleString('ko-KR')}</p>
+                      </div>
+                    ))}
                   </div> : <p className="mt-4 text-xs" style={{ color: 'var(--text-dim)' }}>아직 답변이 등록되지 않았습니다.</p>}
                 </div>}
               </button>
