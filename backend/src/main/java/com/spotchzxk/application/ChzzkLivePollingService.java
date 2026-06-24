@@ -155,10 +155,6 @@ public class ChzzkLivePollingService {
             }
 
             try {
-                String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                if (!("OPEN".equals(status))) {
-                    continue;
-                }
                 Stock paidStock = transactionTemplate.execute(tx ->
                         stockRepository.findById(stock.getChannelId())
                                 .filter(Stock::isLive)
