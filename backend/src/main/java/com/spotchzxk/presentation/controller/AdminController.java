@@ -1,6 +1,7 @@
 package com.spotchzxk.presentation.controller;
 
 import com.spotchzxk.application.AmmMigrationService;
+import com.spotchzxk.application.ChzzkLivePollingService;
 import com.spotchzxk.application.DailyResetService;
 import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AmmMigrationService ammMigrationService;
+    private final ChzzkLivePollingService chzzkLivePollingService;
     private final DailyResetService dailyResetService;
     private final StockSplitService stockSplitService;
     private final StockRepository stockRepository;
@@ -35,6 +37,16 @@ public class AdminController {
 
     @Value("${app.admin-api-key:}")
     private String adminApiKey;
+
+    @PostMapping("/live-cache/refresh")
+    public ResponseEntity<String> refreshLiveCache(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        if (adminApiKey.isBlank() || !adminApiKey.equals(key)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        chzzkLivePollingService.initLiveStockCache();
+        return ResponseEntity.ok("Live stock cache refreshed.");
+    }
 
     @PostMapping("/stock-split/force")
     public ResponseEntity<String> forceStockSplit(
