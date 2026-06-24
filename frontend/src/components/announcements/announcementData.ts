@@ -18,6 +18,31 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_feedback_center_20260624',
+    title: '문의 및 건의 창구 신설 안내',
+    date: '2026년 6월 24일',
+    summary: '사이트 안에서 오류 신고와 기능 건의를 접수하고, 내 문의 내역과 운영자 답변을 확인할 수 있는 문의 창구가 추가되었습니다.',
+    sections: [
+      {
+        title: '문의 창구 이용 안내',
+        rows: [
+          { label: '접수 위치', value: '프로필 → 문의 및 건의', tone: 'accent' },
+          { label: '문의 유형', value: '오류 · 기능 건의 · 계정/거래 · 종목 · 신고 · 기타' },
+          { label: '관련 종목', value: '종목과 관련된 문의는 해당 종목을 선택 가능' },
+        ],
+        note: '문의 내용은 운영자에게 전달되며, 비밀번호나 인증 토큰 등 민감한 개인정보는 입력하지 마세요.',
+      },
+      {
+        title: '답변 확인',
+        rows: [
+          { label: '확인 위치', value: '문의 및 건의 → 내 문의 내역', tone: 'accent' },
+          { label: '처리 상태', value: '접수됨 · 답변 완료' },
+          { label: '운영자 답변', value: '답변이 등록되면 문의 상세에서 확인 가능', tone: 'accent' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'notice_beta_reward_eligibility_20260629',
     title: '베타 보상 지급 기준 안내',
     date: '2026년 6월 29일 18:00 기준',
