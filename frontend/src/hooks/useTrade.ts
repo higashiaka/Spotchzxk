@@ -10,6 +10,9 @@ const parseIntegerAmount = (value: number | string | undefined): bigint => {
   return integerPart ? BigInt(integerPart) : 0n;
 };
 
+const subtractFloorZero = (left: bigint, right: bigint): bigint =>
+  left > right ? left - right : 0n;
+
 /** Parameters required to submit a trade order */
 export interface TradeDetails {
   /** Target streamer channel ID */
@@ -58,7 +61,9 @@ export const useTrade = (userId: string) => {
 
       queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
         const state = old || { balance: '10000000', shares: {} };
-        const newShares: Record<string, number> = { ...state.shares };
+        const newShares: Record<string, string> = { ...state.shares };
+        const currentShares = parseIntegerAmount(newShares[newTrade.streamerId] ?? '0');
+        const tradeQuantity = parseIntegerAmount(newTrade.quantity);
         const estimatedAmount = newTrade.estimatedTotalAmount !== undefined
           ? parseIntegerAmount(newTrade.estimatedTotalAmount)
           : parseIntegerAmount((newTrade.limitPrice ?? newTrade.estimatedExecutionPrice ?? newTrade.estimatedPrice) * Number(newTrade.quantity));
@@ -67,12 +72,12 @@ export const useTrade = (userId: string) => {
         if (newTrade.type === 'buy') {
           newBalance -= estimatedAmount;
           if (newTrade.orderMode !== 'limit') {
-            newShares[newTrade.streamerId] = Number(newShares[newTrade.streamerId] || 0) + Number(newTrade.quantity);
+            newShares[newTrade.streamerId] = (currentShares + tradeQuantity).toString();
           }
         } else {
           if (newTrade.orderMode !== 'limit') {
             newBalance += estimatedAmount;
-            newShares[newTrade.streamerId] = Math.max(0, (newShares[newTrade.streamerId] || 0) - Number(newTrade.quantity));
+            newShares[newTrade.streamerId] = subtractFloorZero(currentShares, tradeQuantity).toString();
           }
         }
 
@@ -100,12 +105,10 @@ export const useTrade = (userId: string) => {
       alert(err.message);
     },
 
-    /** After settle (success or error): re-validates portfolio cache after 3.5s */
+    /** Re-validates immediately so displayed holdings match the committed server state. */
     onSettled: () => {
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
-        queryClient.invalidateQueries({ queryKey: ['history', userId] });
-      }, 3500);
+      queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
+      queryClient.invalidateQueries({ queryKey: ['history', userId] });
     },
   });
 };

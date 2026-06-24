@@ -5,6 +5,7 @@ import { Stock } from '../../hooks/useStocks';
 import { useStockPrice } from '../../hooks/useStockPrice';
 import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
+import { useHoldings } from '../../hooks/useHoldings';
 import { avatarColor, fmt, fmtBigInt, fmtShares, changePct, priceColorClass, tradeColorClass } from '../../utils';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
@@ -142,6 +143,7 @@ export const OrderForm = ({
   const { currentPrice } = useStockPrice(streamer.id, streamer.price);
   const tradeMutation = useTrade(user?.uid || 'spectator');
   const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(user?.uid);
+  const { holdings } = useHoldings(portfolio, [streamer], { includeDefaults: true });
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
   const [limitPriceStr, setLimitPriceStr] = useState('');
 
@@ -150,7 +152,7 @@ export const OrderForm = ({
   const balance: number = Number(portfolio?.balance ?? 0);
   const balanceBigInt = decimalToScaledBigInt(portfolio?.balance ?? '0', 1n);
   const heldBig = parseQuantity(String(portfolio?.shares?.[streamer.id] ?? 0).replace(/\..*$/, ''));
-  const held: number = bigintToSafeNumber(heldBig);
+  const held = holdings.find(holding => holding.streamer.id === streamer.id)?.qty ?? 0;
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
   const coinReserve = parseReserve(streamer.coinReserve);
@@ -346,7 +348,7 @@ export const OrderForm = ({
         {orderType === 'sell' && (
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">현재 보유량</span>
-            <span className="text-xs font-mono font-bold text-white">{fmtShares(heldBig)}</span>
+            <span className="text-xs font-mono font-bold text-white">{fmtShares(held)}</span>
           </div>
         )}
       </div>
