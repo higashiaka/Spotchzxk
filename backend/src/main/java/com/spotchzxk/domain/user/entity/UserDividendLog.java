@@ -33,7 +33,7 @@ public class UserDividendLog {
     @Column(nullable = false, precision = 65, scale = 2)
     private BigDecimal quantity;
 
-    @Column(nullable = false, precision = 65, scale = 4)
+    @Column(nullable = false, precision = 65, scale = 12)
     private BigDecimal ratePerShare;
 
     @Column(nullable = false, precision = 65, scale = 2)
@@ -47,5 +47,4 @@ public class UserDividendLog {
         if (createdAt == null) createdAt = LocalDateTime.now();
     }
 }
-
 

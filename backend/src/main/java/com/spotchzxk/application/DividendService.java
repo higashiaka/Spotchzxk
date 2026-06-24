@@ -60,9 +60,11 @@ public class DividendService {
         BigDecimal ratePerShare = totalPayout
                 .divide(eligibleShares, 12, RoundingMode.FLOOR);
 
-        if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
-
-        int updatedUsers = userShareRepository.distributeDividends(fresh.getChannelId(), ratePerShare);
+        int updatedUsers = userShareRepository.distributeDividends(
+                fresh.getChannelId(),
+                totalPayout,
+                eligibleShares
+        );
 
         if (updatedUsers > 0) {
             fresh.drainFeePool(totalPayout.toBigIntegerExact());
@@ -82,8 +84,9 @@ public class DividendService {
                                 .profileImageUrl(fresh.getProfileImageUrl())
                                 .quantity(dividendQty)
                                 .ratePerShare(ratePerShare)
-                                .amount(ratePerShare.multiply(dividendQty)
-                                        .setScale(2, RoundingMode.HALF_UP))
+                                .amount(dividendQty.multiply(totalPayout)
+                                        .divide(eligibleShares, 0, RoundingMode.FLOOR)
+                                        .setScale(2))
                                 .build();
                     })
                     .collect(Collectors.toList());

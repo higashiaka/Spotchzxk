@@ -10,10 +10,9 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,7 +20,7 @@ import static org.mockito.Mockito.when;
 class DividendServiceTest {
 
     @Test
-    void paysDividendWhenPerShareRateRequiresTwelveDecimalPlaces() {
+    void paysDividendWithoutRelyingOnRoundedPerShareRate() {
         UserShareRepository userShareRepository = mock(UserShareRepository.class);
         UserDividendLogRepository userDividendLogRepository = mock(UserDividendLogRepository.class);
         DividendLogRepository dividendLogRepository = mock(DividendLogRepository.class);
@@ -30,15 +29,18 @@ class DividendServiceTest {
         TradeEngine tradeEngine = mock(TradeEngine.class);
         Stock stock = mock(Stock.class);
 
-        when(stock.getChannelId()).thenReturn("guri");
-        when(stock.getStreamerName()).thenReturn("구리뱅이");
+        BigDecimal eligibleShares =
+                new BigDecimal("500000000000000000000000000000000000000");
+        BigDecimal totalPayout = new BigDecimal("14000000000000000000000");
+
+        when(stock.getChannelId()).thenReturn("jabin");
+        when(stock.getStreamerName()).thenReturn("자빈123");
         when(stock.getProfileImageUrl()).thenReturn("");
         when(stock.getFeePool()).thenReturn(new BigInteger("40000000000000000000000"));
-        when(stockRepository.findById("guri")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("guri"))
-                .thenReturn(new BigDecimal("2300000000000000000000000000000000"));
-        when(userShareRepository.distributeDividends(eq("guri"), any(BigDecimal.class))).thenReturn(1);
-        when(userShareRepository.findByStockChannelIdWithPositiveQuantity("guri")).thenReturn(java.util.List.of());
+        when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
+        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(eligibleShares);
+        when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(1);
+        when(userShareRepository.findByStockChannelIdWithPositiveQuantity("jabin")).thenReturn(List.of());
 
         DividendService service = new DividendService(
                 userShareRepository,
@@ -51,10 +53,7 @@ class DividendServiceTest {
 
         service.payIntervalDividend(stock);
 
-        verify(userShareRepository).distributeDividends(
-                "guri",
-                new BigDecimal("0.000000000006")
-        );
+        verify(userShareRepository).distributeDividends("jabin", totalPayout, eligibleShares);
         verify(stock).drainFeePool(new BigInteger("14000000000000000000000"));
         verify(stockRepository).save(stock);
     }

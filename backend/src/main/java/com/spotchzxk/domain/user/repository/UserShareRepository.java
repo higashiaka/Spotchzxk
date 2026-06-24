@@ -22,8 +22,21 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     Optional<UserShare> findByUserIdAndStockChannelId(String userId, String channelId);
 
     @Modifying(clearAutomatically = true)
-    @Query(value = "UPDATE users u JOIN user_shares s ON u.id = s.user_id SET u.coin_balance = u.coin_balance + FLOOR(s.quantity * :calculatedRate), u.dividend_total = u.dividend_total + FLOOR(s.quantity * :calculatedRate) WHERE s.channel_id = :activeChannelId AND s.quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
-    int distributeDividends(@Param("activeChannelId") String activeChannelId, @Param("calculatedRate") BigDecimal calculatedRate);
+    @Query(value = """
+            UPDATE users u
+            JOIN user_shares s ON u.id = s.user_id
+            SET u.coin_balance = u.coin_balance + FLOOR(s.quantity * :totalPayout / :eligibleShares),
+                u.dividend_total = u.dividend_total + FLOOR(s.quantity * :totalPayout / :eligibleShares)
+            WHERE s.channel_id = :activeChannelId
+              AND s.quantity > 0
+              AND s.user_id != '__house__'
+              AND u.is_bot = 0
+            """, nativeQuery = true)
+    int distributeDividends(
+            @Param("activeChannelId") String activeChannelId,
+            @Param("totalPayout") BigDecimal totalPayout,
+            @Param("eligibleShares") BigDecimal eligibleShares
+    );
 
     @Modifying
     @Query(value = "UPDATE user_shares SET pre_stream_quantity = CASE WHEN user_id = '__house__' THEN 0 ELSE quantity END WHERE channel_id = :channelId", nativeQuery = true)
