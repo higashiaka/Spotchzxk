@@ -73,6 +73,8 @@ app:
     max-new-guests-per-window: ${GUEST_ABUSE_MAX_NEW_GUESTS_PER_WINDOW:3}
     block-seconds: ${GUEST_ABUSE_BLOCK_SECONDS:300}
     trusted-proxy-cidrs: ${GUEST_ABUSE_TRUSTED_PROXY_CIDRS:127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+  feedback:
+    discord-webhook-url: ${DISCORD_FEEDBACK_WEBHOOK_URL:}
 
 bot:
   activity:

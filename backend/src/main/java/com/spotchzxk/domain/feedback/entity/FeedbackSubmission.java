@@ -1,0 +1,44 @@
+package com.spotchzxk.domain.feedback.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "feedback_submissions")
+@Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+public class FeedbackSubmission {
+
+    @Id
+    @Column(length = 36)
+    private String id;
+
+    @Column(name = "user_id", nullable = false, length = 128)
+    private String userId;
+
+    @Column(name = "user_display_name", length = 20)
+    private String userDisplayName;
+
+    @Column(nullable = false, length = 30)
+    private String category;
+
+    @Column(nullable = false, length = 100)
+    private String title;
+
+    @Lob
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String content;
+
+    @Column(name = "page_url", length = 500)
+    private String pageUrl;
+
+    @Column(nullable = false, length = 20)
+    private String status;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+}
