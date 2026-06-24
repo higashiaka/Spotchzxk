@@ -18,6 +18,23 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_beta_reward_eligibility_20260629',
+    title: '베타 보상 지급 기준 안내',
+    date: '2026년 6월 29일 18:00 기준',
+    summary: '베타 보상과 칭호는 2026년 6월 29일 18시(KST)의 계정 상태 및 기록을 기준으로 지급됩니다.',
+    sections: [
+      {
+        title: '보상 지급 기준',
+        rows: [
+          { label: '기준 시각', value: '2026년 6월 29일 18:00 (KST)', tone: 'danger' },
+          { label: '지급 대상', value: '기준 시각 이전까지 구글 계정 연동을 완료한 계정', tone: 'accent' },
+          { label: '칭호 지급', value: '기준 시각의 순위 및 기록을 기준으로 확정', tone: 'accent' },
+        ],
+        note: '게스트 계정은 기준 시각 이전에 구글 계정 연동을 완료해야 베타 보상 지급 대상에 포함됩니다. 기준 시각 이후의 계정 연동이나 순위·기록 변동은 이번 보상 및 칭호 산정에 반영되지 않습니다.',
+      },
+    ],
+  },
+  {
     id: 'notice_trading_suspension_20260613',
     title: '거래 정지 제도 도입 안내',
     date: '운영 정책 업데이트',
