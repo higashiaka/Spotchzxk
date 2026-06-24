@@ -2,8 +2,6 @@ CREATE TABLE feedback_submissions (
     id CHAR(36) NOT NULL,
     user_id VARCHAR(128) NOT NULL,
     user_display_name VARCHAR(20) NULL,
-    stock_id VARCHAR(50) NULL,
-    stock_name VARCHAR(100) NULL,
     category VARCHAR(30) NOT NULL,
     title VARCHAR(100) NOT NULL,
     content TEXT NOT NULL,
