@@ -259,6 +259,17 @@ npm run build
 
 Nginx는 `/opt/spotchzxk/maintenance.flag` 파일이 있으면 503을 반환하고 `documents/maintenance.html`을 서빙한다.
 
+점검 모드 중에도 로컬 프론트엔드에서 운영 API와 WebSocket을 테스트하려면
+`frontend/.env.local`에 Nginx가 허용하는 preview bypass 값을 설정한다.
+
+```dotenv
+VITE_DEV_PROXY_TARGET=https://spotchzxk.xyz
+VITE_DEV_PREVIEW_BYPASS=운영_NGINX_PREVIEW_BYPASS_값
+```
+
+Vite 개발 프록시가 `/api`와 `/ws` 요청에만 `preview_bypass` 쿠키를 추가한다.
+브라우저가 운영 사이트 전체를 우회하는 방식이 아니며 `.env.local`은 Git에 커밋되지 않는다.
+
 점검 시작:
 
 ```bash
