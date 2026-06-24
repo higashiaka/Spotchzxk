@@ -58,7 +58,7 @@ public class DividendService {
         if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) return;
 
         BigDecimal ratePerShare = totalPayout
-                .divide(eligibleShares, 4, RoundingMode.FLOOR);
+                .divide(eligibleShares, 12, RoundingMode.FLOOR);
 
         if (ratePerShare.compareTo(BigDecimal.ZERO) <= 0) return;
 
@@ -175,4 +175,3 @@ public class DividendService {
         });
     }
 }
-
