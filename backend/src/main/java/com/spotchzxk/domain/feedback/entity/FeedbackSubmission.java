@@ -64,6 +64,11 @@ public class FeedbackSubmission {
         this.status = "ANSWERED";
     }
 
+    public void markAnswered() {
+        this.status = "ANSWERED";
+        this.answeredAt = LocalDateTime.now();
+    }
+
     public void attachDiscordMessage(String messageId) {
         this.discordMessageId = messageId;
     }
