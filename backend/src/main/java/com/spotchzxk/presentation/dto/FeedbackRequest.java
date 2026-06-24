@@ -17,6 +17,9 @@ public record FeedbackRequest(
         @Size(max = 3000)
         String content,
 
+        @Size(max = 50)
+        String stockId,
+
         @Size(max = 500)
         String pageUrl
 ) {

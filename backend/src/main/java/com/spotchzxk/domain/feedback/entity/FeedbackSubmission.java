@@ -23,6 +23,12 @@ public class FeedbackSubmission {
     @Column(name = "user_display_name", length = 20)
     private String userDisplayName;
 
+    @Column(name = "stock_id", length = 50)
+    private String stockId;
+
+    @Column(name = "stock_name", length = 100)
+    private String stockName;
+
     @Column(nullable = false, length = 30)
     private String category;
 

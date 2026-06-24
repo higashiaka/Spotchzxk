@@ -221,7 +221,7 @@ function App() {
       case 'announcements':
         return <AnnouncementArchiveView onBack={handleBackFromAnnouncements} />;
       case 'feedback':
-        return <FeedbackView onBack={handleBackFromFeedback} />;
+        return <FeedbackView onBack={handleBackFromFeedback} stocks={streamers} />;
       default:
         return <Sidebar activeTab="profile" {...sidebarProps} />;
     }})();
