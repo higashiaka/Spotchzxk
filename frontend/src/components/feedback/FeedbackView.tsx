@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { apiFetch } from '../../lib/api';
+import type { Stock } from '../../hooks/useStocks';
 
 const categories = [
   ['BUG', '오류 신고'],
@@ -10,8 +11,9 @@ const categories = [
   ['OTHER', '기타'],
 ] as const;
 
-export function FeedbackView({ onBack }: { onBack: () => void }) {
+export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: Stock[] }) {
   const [category, setCategory] = useState('BUG');
+  const [stockId, setStockId] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -30,6 +32,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
           category,
           title: title.trim(),
           content: content.trim(),
+          stockId: stockId || null,
           pageUrl: window.location.href,
         }),
       });
@@ -38,6 +41,7 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
       setReceiptId(String(body.id));
       setTitle('');
       setContent('');
+      setStockId('');
     } catch (err) {
       setError(err instanceof Error ? err.message : '문의 접수에 실패했습니다.');
     } finally {
@@ -72,6 +76,18 @@ export function FeedbackView({ onBack }: { onBack: () => void }) {
             className="w-full rounded-xl border px-3 py-3 outline-none"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
             {categories.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="block text-sm font-bold mb-2 text-white">관련 종목 <span className="font-normal" style={{ color: 'var(--text-dim)' }}>(선택)</span></span>
+          <select value={stockId} onChange={e => setStockId(e.target.value)}
+            className="w-full rounded-xl border px-3 py-3 outline-none"
+            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
+            <option value="">관련 종목 없음</option>
+            {[...stocks].sort((a, b) => a.name.localeCompare(b.name, 'ko')).map(stock => (
+              <option key={stock.id} value={stock.id}>{stock.name}</option>
+            ))}
           </select>
         </label>
 

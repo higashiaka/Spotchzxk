@@ -3,6 +3,8 @@ package com.spotchzxk.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotchzxk.domain.feedback.entity.FeedbackSubmission;
 import com.spotchzxk.domain.feedback.repository.FeedbackSubmissionRepository;
+import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.presentation.dto.FeedbackRequest;
@@ -26,6 +28,7 @@ public class FeedbackService {
 
     private final FeedbackSubmissionRepository feedbackRepository;
     private final UserRepository userRepository;
+    private final StockRepository stockRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${app.feedback.discord-webhook-url:}")
@@ -34,10 +37,16 @@ public class FeedbackService {
     @Transactional
     public FeedbackSubmission submit(String uid, FeedbackRequest request) {
         User user = userRepository.findById(uid).orElse(null);
+        Stock stock = request.stockId() == null || request.stockId().isBlank()
+                ? null
+                : stockRepository.findById(request.stockId().trim())
+                        .orElseThrow(() -> new IllegalArgumentException("선택한 종목을 찾을 수 없습니다."));
         FeedbackSubmission submission = feedbackRepository.save(FeedbackSubmission.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(uid)
                 .userDisplayName(user != null ? user.getDisplayName() : null)
+                .stockId(stock != null ? stock.getChannelId() : null)
+                .stockName(stock != null ? stock.getStreamerName() : null)
                 .category(request.category())
                 .title(request.title().trim())
                 .content(request.content().trim())
@@ -58,6 +67,7 @@ public class FeedbackService {
                     접수번호: `%s`
                     유형: `%s`
                     사용자: `%s` (`%s`)
+                    종목: `%s`
                     제목: **%s**
                     내용:
                     %s
@@ -65,6 +75,9 @@ public class FeedbackService {
                     """.formatted(
                     feedback.getId(), feedback.getCategory(),
                     safe(feedback.getUserDisplayName()), feedback.getUserId(),
+                    feedback.getStockId() == null
+                            ? "-"
+                            : discordSafe(feedback.getStockName()) + " (`" + feedback.getStockId() + "`)",
                     discordSafe(feedback.getTitle()), discordSafe(feedback.getContent()),
                     safe(feedback.getPageUrl()));
             if (message.length() > 1900) message = message.substring(0, 1900) + "\n…";

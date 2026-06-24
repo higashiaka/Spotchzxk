@@ -31,6 +31,8 @@ public class FeedbackController {
             ));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(429).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }
