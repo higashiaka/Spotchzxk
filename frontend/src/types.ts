@@ -1,5 +1,5 @@
 /** Tab identifiers used across the entire app */
-export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'rankings' | 'profile' | 'shop' | 'holdings' | 'settings' | 'guide' | 'announcements';
+export type AppTab = 'home' | 'prices' | 'order' | 'chart' | 'rankings' | 'profile' | 'shop' | 'holdings' | 'settings' | 'guide' | 'announcements' | 'feedback';
 
 /** Live trade event received via STOMP WebSocket */
 export interface LiveTrade {

@@ -29,6 +29,7 @@ const HoldingsView = lazy(() => import('./components/holdings/HoldingsView').the
 const SettingsView = lazy(() => import('./components/settings/SettingsView').then(m => ({ default: m.SettingsView })));
 const GuideView = lazy(() => import('./components/guide/GuideView').then(m => ({ default: m.GuideView })));
 const AnnouncementArchiveView = lazy(() => import('./components/announcements/AnnouncementArchiveView').then(m => ({ default: m.AnnouncementArchiveView })));
+const FeedbackView = lazy(() => import('./components/feedback/FeedbackView').then(m => ({ default: m.FeedbackView })));
 
 
 const TabFallback = () => (
@@ -64,7 +65,7 @@ function App() {
     handleNavigate, handleSwipeToTab, handleSelectStreamer, handleOrderFromDetail,
     handleSelectStreamerForPrices, handleSelectStreamerForOrder,
     handleBackFromPrices, handleBackFromOrder, handleBackFromHoldings,
-    handleBackFromSettings, handleBackFromGuide, handleBackFromAnnouncements,
+    handleBackFromSettings, handleBackFromGuide, handleBackFromAnnouncements, handleBackFromFeedback,
     handleRemoveRecent,
   } = nav;
 
@@ -219,6 +220,8 @@ function App() {
         return <GuideView onBack={handleBackFromGuide} />;
       case 'announcements':
         return <AnnouncementArchiveView onBack={handleBackFromAnnouncements} />;
+      case 'feedback':
+        return <FeedbackView onBack={handleBackFromFeedback} />;
       default:
         return <Sidebar activeTab="profile" {...sidebarProps} />;
     }})();

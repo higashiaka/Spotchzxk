@@ -416,6 +416,13 @@ export const ProfileView = ({
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>지난 공지 보기</span>
         <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
       </button>
+
+      <button type="button" onClick={() => onNavigate('feedback')}
+        className="w-full rounded-xl border px-4 py-3 mt-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
+        style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>문의 및 건의</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>→</span>
+      </button>
     </div>
   );
 };

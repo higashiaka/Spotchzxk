@@ -4,7 +4,7 @@ import { AppTab } from '../types';
 import { mapRawToStock, type Stock } from './useStocks';
 import { apiFetch } from '../lib/api';
 
-const STACKED_TABS = new Set<AppTab>(['order', 'holdings', 'settings', 'guide', 'announcements']);
+const STACKED_TABS = new Set<AppTab>(['order', 'holdings', 'settings', 'guide', 'announcements', 'feedback']);
 
 const pendingStock = (stockId: string): Stock => ({
   id: stockId,
@@ -49,6 +49,7 @@ function parsePathname(pathname: string): { tab: AppTab; stockId: string | null 
     '/settings': 'settings',
     '/guide': 'guide',
     '/announcements': 'announcements',
+    '/feedback': 'feedback',
     '/profile': 'profile',
   };
   return { tab: tabMap[pathname] ?? 'home', stockId: null };
@@ -215,6 +216,11 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
     [handleGoBack],
   );
 
+  const handleBackFromFeedback = useCallback(
+    () => handleGoBack('profile'),
+    [handleGoBack],
+  );
+
   const handleRemoveRecent = useCallback((id: string) => {
     setRecentlyViewedIds(prev => prev.filter(rid => rid !== id));
   }, []);
@@ -237,6 +243,7 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
     handleBackFromSettings,
     handleBackFromGuide,
     handleBackFromAnnouncements,
+    handleBackFromFeedback,
     handleRemoveRecent,
   };
 }
