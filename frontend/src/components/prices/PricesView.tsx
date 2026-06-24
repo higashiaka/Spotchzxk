@@ -9,20 +9,16 @@ import { StockDetail } from './StockDetail';
  *  Shows a searchable stock list when no stock is selected;
  *  switches to StockDetail when a stock is selected */
 export const PricesView = ({
-  streamers, selectedStreamer, user, onSelectStreamer, onBack, onOrder, liveTrades,
+  streamers, selectedStreamer, user, onSelectStreamer, onBack, onOrder, liveTrades, stocksLoading,
 }: {
-  /** Full list of stocks */
   streamers: Stock[];
-  /** Currently selected stock, null if none */
   selectedStreamer: Stock | null;
   user: User | null;
-  /** Handler to select or deselect a stock */
   onSelectStreamer: (s: Stock | null) => void;
   onBack: () => void;
-  /** Handler to navigate to the order screen */
   onOrder: (type: 'buy' | 'sell') => void;
-  /** Live trades passed down to StockDetail */
   liveTrades: LiveTrade[];
+  stocksLoading?: boolean;
 }) => {
   /** Search input state */
   const [search, setSearch] = useState('');
@@ -39,6 +35,28 @@ export const PricesView = ({
     if (search) s = s.filter(st => st.name.toLowerCase().includes(search.toLowerCase()));
     return [...s].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   }, [streamers, search]);
+
+  // Show skeleton while stock data is being fetched for a direct URL access
+  if (stocksLoading && selectedStreamer && !currentSelectedStreamer?.price) {
+    return (
+      <div className="h-full flex flex-col overflow-hidden">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-4 py-2.5 shrink-0 text-sm font-bold transition-colors hover:opacity-70"
+          style={{ color: 'var(--text-dim)', borderBottom: '1px solid var(--border-primary)', background: 'var(--bg-sidebar)' }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+          이전 화면
+        </button>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-dim-token font-mono text-sm animate-pulse">시세 불러오는 중...</div>
+        </div>
+      </div>
+    );
+  }
 
   // Switch to detail view when a stock is selected
   if (currentSelectedStreamer) {

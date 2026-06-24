@@ -37,6 +37,7 @@ export function mapRawToStock(r: any): Stock {
  *  real-time merge updates from STOMP /topic/streamers and /topic/trades */
 export const useStocks = () => {
   const [stocks, setStocks] = useState<Stock[]>(DEFAULT_STOCKS);
+  const [stocksLoading, setStocksLoading] = useState(true);
 
   // Fetch stocks immediately via REST, then again on STOMP reconnect to pick up daily resets.
   useEffect(() => {
@@ -45,10 +46,11 @@ export const useStocks = () => {
       apiFetch('/api/stocks')
         .then(res => res.ok ? res.json() : null)
         .then((rawStocks: any[] | null) => {
-          if (!active || !rawStocks || rawStocks.length === 0) return;
-          setStocks(rawStocks.map(mapRawToStock));
+          if (!active) return;
+          if (rawStocks && rawStocks.length > 0) setStocks(rawStocks.map(mapRawToStock));
+          setStocksLoading(false);
         })
-        .catch(() => {});
+        .catch(() => { if (active) setStocksLoading(false); });
     };
     fetchStocks();
     const unregister = registerOnConnect(fetchStocks);
@@ -118,5 +120,5 @@ export const useStocks = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  return stocks;
+  return { stocks, stocksLoading };
 };

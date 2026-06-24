@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStocks } from './hooks/useStocks';
 import { usePortfolio } from './hooks/usePortfolio';
@@ -17,18 +17,25 @@ import { DesktopTabBar } from './components/layout/DesktopTabBar';
 import { MobileNavBar } from './components/layout/MobileNavBar';
 import { GuestLimitModal } from './components/common/GuestLimitModal';
 import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
-import { HomeView } from './components/home/HomeView';
-import { PricesView } from './components/prices/PricesView';
-import { ChartView } from './components/rankings/ChartView';
-import { UserRankingView } from './components/rankings/UserRankingView';
-import { OrderView } from './components/order/OrderView';
-import { ShopView } from './components/shop/ShopView';
-import { HoldingsView } from './components/holdings/HoldingsView';
-import { SettingsView } from './components/settings/SettingsView';
-import { GuideView } from './components/guide/GuideView';
-import { AnnouncementArchiveView } from './components/announcements/AnnouncementArchiveView';
 import AnnouncementPopup from './components/AnnouncementPopup';
 
+const HomeView = lazy(() => import('./components/home/HomeView').then(m => ({ default: m.HomeView })));
+const PricesView = lazy(() => import('./components/prices/PricesView').then(m => ({ default: m.PricesView })));
+const ChartView = lazy(() => import('./components/rankings/ChartView').then(m => ({ default: m.ChartView })));
+const UserRankingView = lazy(() => import('./components/rankings/UserRankingView').then(m => ({ default: m.UserRankingView })));
+const OrderView = lazy(() => import('./components/order/OrderView').then(m => ({ default: m.OrderView })));
+const ShopView = lazy(() => import('./components/shop/ShopView').then(m => ({ default: m.ShopView })));
+const HoldingsView = lazy(() => import('./components/holdings/HoldingsView').then(m => ({ default: m.HoldingsView })));
+const SettingsView = lazy(() => import('./components/settings/SettingsView').then(m => ({ default: m.SettingsView })));
+const GuideView = lazy(() => import('./components/guide/GuideView').then(m => ({ default: m.GuideView })));
+const AnnouncementArchiveView = lazy(() => import('./components/announcements/AnnouncementArchiveView').then(m => ({ default: m.AnnouncementArchiveView })));
+
+
+const TabFallback = () => (
+  <div className="h-full flex items-center justify-center text-dim-token font-mono text-sm">
+    로딩 중...
+  </div>
+);
 
 function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
@@ -48,7 +55,7 @@ function App() {
     handleLogout, handleLinkGoogle,
   } = useAuth();
 
-  const streamers = useStocks();
+  const { stocks: streamers, stocksLoading } = useStocks();
   const queryClient = useQueryClient();
 
   const nav = useAppNavigation(streamers, isDesktopLayout);
@@ -60,6 +67,30 @@ function App() {
     handleBackFromSettings, handleBackFromGuide, handleBackFromAnnouncements,
     handleRemoveRecent,
   } = nav;
+
+  // Tabs that have been visited at least once — keeps them mounted for instant swipe-back
+  const [visitedTabs, setVisitedTabs] = useState<Set<AppTab>>(() => new Set([activeTab]));
+
+  useEffect(() => {
+    setVisitedTabs(prev => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+
+  // Pre-mount adjacent swipe tabs so the destination is ready before the gesture completes
+  const preloadAdjacentTabs = useCallback((currentTab: AppTab) => {
+    const idx = SWIPE_TABS.indexOf(currentTab);
+    if (idx === -1) return;
+    setVisitedTabs(prev => {
+      const next = new Set(prev);
+      if (idx > 0) next.add(SWIPE_TABS[idx - 1]);
+      if (idx < SWIPE_TABS.length - 1) next.add(SWIPE_TABS[idx + 1]);
+      return next;
+    });
+  }, []);
 
   const streamerNameById = useMemo(
     () => new Map(streamers.map(s => [s.id, s.name])),
@@ -141,7 +172,7 @@ function App() {
   };
 
   const renderTabContent = (tab: AppTab) => {
-    switch (tab) {
+    const inner = (() => { switch (tab) {
       case 'home':
         return (
           <HomeView
@@ -158,6 +189,7 @@ function App() {
             streamers={streamers} selectedStreamer={selectedStreamer} user={user}
             onSelectStreamer={handleSelectStreamerForPrices} onBack={handleBackFromPrices}
             onOrder={handleOrderFromDetail} liveTrades={liveTrades}
+            stocksLoading={stocksLoading}
           />
         );
       case 'chart':
@@ -189,7 +221,8 @@ function App() {
         return <AnnouncementArchiveView onBack={handleBackFromAnnouncements} />;
       default:
         return <Sidebar activeTab="profile" {...sidebarProps} />;
-    }
+    }})();
+    return <Suspense fallback={<TabFallback />}>{inner}</Suspense>;
   };
 
   const mobileRouteClass = mobileRouteMotion ? `mobile-route-enter-${mobileRouteMotion}` : '';
@@ -229,7 +262,10 @@ function App() {
           <div
             ref={swipeViewportRef}
             className="flex-1 overflow-hidden touch-pan-y"
-            onPointerDownCapture={handleSwipePointerDown}
+            onPointerDownCapture={(e) => {
+              preloadAdjacentTabs(activeTab);
+              handleSwipePointerDown(e);
+            }}
             onPointerMoveCapture={handleSwipePointerMove}
             onPointerUpCapture={finishSwipe}
             onPointerCancelCapture={cancelSwipe}
@@ -250,7 +286,7 @@ function App() {
                       className="h-full overflow-hidden shrink-0"
                       style={{ width: swipeViewportWidth || '100%' }}
                     >
-                      {renderTabContent(tab)}
+                      {visitedTabs.has(tab) ? renderTabContent(tab) : null}
                     </div>
                   ))}
                 </div>
