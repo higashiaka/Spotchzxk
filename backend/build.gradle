@@ -37,6 +37,7 @@ dependencies {
 	implementation 'org.springframework.retry:spring-retry'
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 	implementation 'com.microsoft.playwright:playwright:1.49.0'
+	implementation 'net.dv8tion:JDA:5.6.1'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testCompileOnly 'org.projectlombok:lombok'

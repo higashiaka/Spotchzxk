@@ -18,6 +18,11 @@ public class FeedbackController {
 
     private final FeedbackService feedbackService;
 
+    @GetMapping
+    public ResponseEntity<?> mine(@AuthenticationPrincipal String uid) {
+        return ResponseEntity.ok(feedbackService.findMine(uid));
+    }
+
     @PostMapping
     public ResponseEntity<?> submit(
             @AuthenticationPrincipal String uid,
@@ -31,6 +36,8 @@ public class FeedbackController {
             ));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(429).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }
