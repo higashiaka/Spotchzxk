@@ -40,7 +40,7 @@ class DividendServiceTest {
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
         when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(eligibleShares);
         when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(1);
-        when(userShareRepository.findByStockChannelIdWithPositiveQuantity("jabin")).thenReturn(List.of());
+        when(userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity("jabin")).thenReturn(List.of());
 
         DividendService service = new DividendService(
                 userShareRepository,

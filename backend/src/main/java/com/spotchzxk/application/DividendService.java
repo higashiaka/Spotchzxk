@@ -70,13 +70,13 @@ public class DividendService {
             fresh.drainFeePool(totalPayout.toBigIntegerExact());
             stockRepository.save(fresh);
 
-            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(fresh.getChannelId());
+            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
             List<UserDividendLog> logs = shares.stream()
-                    .filter(us -> us.getQuantity().compareTo(BigDecimal.ZERO) > 0
+                    .filter(us -> us.getPreStreamQuantity().compareTo(BigDecimal.ZERO) > 0
                             && !"__house__".equals(us.getUser().getId())
                             && !us.getUser().isBot())
                     .map(us -> {
-                        BigDecimal dividendQty = us.getQuantity();
+                        BigDecimal dividendQty = us.getPreStreamQuantity();
                         return UserDividendLog.builder()
                                 .userId(us.getUser().getId())
                                 .channelId(fresh.getChannelId())

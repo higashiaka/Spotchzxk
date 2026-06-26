@@ -464,6 +464,37 @@ SET SQL_SAFE_UPDATES = 0;
 UPDATE streamers SET total_volume = 0;
 SET SQL_SAFE_UPDATES = 1;
 
+-- Reconcile missing dividend balance from per-user dividend logs.
+-- Preview users whose persisted dividend_total is lower than the log total.
+SELECT
+    u.id AS user_id,
+    COALESCE(l.correct_dividend_total, 0) AS correct_dividend_total,
+    u.dividend_total AS stored_dividend_total,
+    COALESCE(l.correct_dividend_total, 0) - u.dividend_total AS missing_dividend
+FROM users u
+JOIN (
+    SELECT user_id, SUM(amount) AS correct_dividend_total
+    FROM user_dividend_logs
+    GROUP BY user_id
+) l ON l.user_id = u.id
+WHERE COALESCE(l.correct_dividend_total, 0) > u.dividend_total
+ORDER BY missing_dividend DESC;
+
+-- Pay the missing dividend difference to coin_balance and dividend_total.
+-- Run the preview SELECT first, then execute this inside a transaction.
+START TRANSACTION;
+UPDATE users u
+JOIN (
+    SELECT user_id, SUM(amount) AS correct_dividend_total
+    FROM user_dividend_logs
+    GROUP BY user_id
+) l ON l.user_id = u.id
+SET
+    u.coin_balance = u.coin_balance + (l.correct_dividend_total - u.dividend_total),
+    u.dividend_total = l.correct_dividend_total
+WHERE l.correct_dividend_total > u.dividend_total;
+COMMIT;
+
 
 -- ============================================================
 -- 5. Market statistics analysis

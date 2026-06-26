@@ -25,10 +25,10 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Query(value = """
             UPDATE users u
             JOIN user_shares s ON u.id = s.user_id
-            SET u.coin_balance = u.coin_balance + FLOOR(s.quantity * :totalPayout / :eligibleShares),
-                u.dividend_total = u.dividend_total + FLOOR(s.quantity * :totalPayout / :eligibleShares)
+            SET u.coin_balance = u.coin_balance + FLOOR(s.pre_stream_quantity * :totalPayout / :eligibleShares),
+                u.dividend_total = u.dividend_total + FLOOR(s.pre_stream_quantity * :totalPayout / :eligibleShares)
             WHERE s.channel_id = :activeChannelId
-              AND s.quantity > 0
+              AND s.pre_stream_quantity > 0
               AND s.user_id != '__house__'
               AND u.is_bot = 0
             """, nativeQuery = true)
@@ -56,7 +56,7 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Query(value = "DELETE FROM user_shares WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") String userId);
 
-    @Query(value = "SELECT COALESCE(SUM(s.quantity), 0) FROM user_shares s JOIN users u ON u.id = s.user_id WHERE s.channel_id = :channelId AND s.quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
+    @Query(value = "SELECT COALESCE(SUM(s.pre_stream_quantity), 0) FROM user_shares s JOIN users u ON u.id = s.user_id WHERE s.channel_id = :channelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
     BigDecimal sumPreStreamQuantityByChannel(@Param("channelId") String channelId);
 
     @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM user_shares WHERE channel_id = :channelId AND user_id != '__house__'", nativeQuery = true)
