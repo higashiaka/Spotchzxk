@@ -39,7 +39,7 @@ public class StockSplitService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
-    private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(100);
+    private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000);
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
