@@ -50,6 +50,12 @@ public class UserShare {
         this.avgPrice = newAvgPrice;
     }
 
+    public void updateOnLiveBuy(BigDecimal newQuantity, BigDecimal newAvgPrice, BigDecimal boughtQuantity) {
+        updateOnBuy(newQuantity, newAvgPrice);
+        BigDecimal currentDividendQuantity = this.preStreamQuantity != null ? this.preStreamQuantity : BigDecimal.ZERO;
+        this.preStreamQuantity = currentDividendQuantity.add(boughtQuantity);
+    }
+
     public void updateOnSell(BigDecimal newQuantity) {
         this.quantity = newQuantity;
         if (this.preStreamQuantity != null && this.preStreamQuantity.compareTo(newQuantity) > 0) {

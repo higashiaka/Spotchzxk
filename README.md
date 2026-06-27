@@ -14,7 +14,7 @@
 - Firebase Google 로그인 및 익명 게스트 로그인
 - 게스트 abuse protection을 위한 FingerprintJS + 서버 precheck
 - 포트폴리오, 평균단가, 실현손익, 배당/후원 누적 관리
-- 라이브 시작 시점 보유량 기준 1시간 단위 배당
+- 현재 라이브 세션의 배당 기준 수량 기준 1시간 단위 배당
 - 고가 종목 10:1 주식 분할
 - STOMP WebSocket 기반 실시간 가격, 체결, 배당, 확성기, 접속자 수 반영
 - React Query 기반 서버 상태 캐시와 주문 낙관적 업데이트
@@ -123,7 +123,7 @@ User
 | Order | 시장가/지정가 매수·매도 주문 기록. |
 | UserShare | 사용자별 종목 보유량, 평균단가, 배당 기준 수량. |
 | AMM Pool | `coinReserve`와 `shareReserve`로 가격을 산출하는 유동성 풀. |
-| Dividend | 라이브 중인 종목의 방송 시작 시점 보유량 기준 배당. |
+| Dividend | 라이브 중인 종목의 현재 라이브 세션 배당 기준 수량 기준 배당. |
 | Stock Split | 1,000,000원 초과 고가 종목을 10:1로 나누는 가격 안정 장치. |
 
 거래 가격은 CPAMM 모델을 사용합니다.

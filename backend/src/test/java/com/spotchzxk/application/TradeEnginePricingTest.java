@@ -5,6 +5,7 @@ import com.spotchzxk.domain.trading.service.AmmCalculator;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.order.entity.Order;
 import com.spotchzxk.domain.user.entity.User;
+import com.spotchzxk.domain.user.entity.UserShare;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.trading.repository.TradeFailureLogRepository;
@@ -216,6 +217,115 @@ class TradeEnginePricingTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("보유 수량이 부족합니다.");
     }
+
+    @Test
+    void liveBuyAddsToDividendEligibleQuantity() {
+        UserShareRepository userShareRepository = mock(UserShareRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                userShareRepository,
+                mock(StockRepository.class),
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+        String userId = "user-1";
+        String stockId = "stock-1";
+        User user = User.builder()
+                .id(userId)
+                .coinBalance(BigDecimal.valueOf(1_000_000))
+                .build();
+        Stock stock = Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .isLive(true)
+                .currentPrice(BigDecimal.valueOf(10_000))
+                .coinReserve(COIN_RESERVE_BIG)
+                .shareReserve(SHARE_RESERVE_BIG)
+                .build();
+        UserShare share = UserShare.builder()
+                .user(user)
+                .stock(stock)
+                .quantity(BigDecimal.TEN)
+                .preStreamQuantity(BigDecimal.valueOf(3))
+                .avgPrice(BigDecimal.valueOf(100))
+                .build();
+
+        when(userShareRepository.findByUserIdAndStockChannelId(userId, stockId))
+                .thenReturn(Optional.of(share));
+
+        ReflectionTestUtils.invokeMethod(
+                engine,
+                "updateUserShareAndCalculateProfit",
+                user,
+                stock,
+                stockId,
+                true,
+                BigInteger.valueOf(5),
+                BigDecimal.valueOf(1000)
+        );
+
+        assertThat(share.getQuantity()).isEqualByComparingTo("15");
+        assertThat(share.getPreStreamQuantity()).isEqualByComparingTo("8");
+    }
+
+    @Test
+    void nonLiveBuyKeepsDividendEligibleQuantityUnchanged() {
+        UserShareRepository userShareRepository = mock(UserShareRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                userShareRepository,
+                mock(StockRepository.class),
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+        String userId = "user-1";
+        String stockId = "stock-1";
+        User user = User.builder()
+                .id(userId)
+                .coinBalance(BigDecimal.valueOf(1_000_000))
+                .build();
+        Stock stock = Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .isLive(false)
+                .currentPrice(BigDecimal.valueOf(10_000))
+                .coinReserve(COIN_RESERVE_BIG)
+                .shareReserve(SHARE_RESERVE_BIG)
+                .build();
+        UserShare share = UserShare.builder()
+                .user(user)
+                .stock(stock)
+                .quantity(BigDecimal.ZERO)
+                .preStreamQuantity(BigDecimal.ZERO)
+                .avgPrice(BigDecimal.ZERO)
+                .build();
+
+        when(userShareRepository.findByUserIdAndStockChannelId(userId, stockId))
+                .thenReturn(Optional.of(share));
+
+        ReflectionTestUtils.invokeMethod(
+                engine,
+                "updateUserShareAndCalculateProfit",
+                user,
+                stock,
+                stockId,
+                true,
+                BigInteger.valueOf(5),
+                BigDecimal.valueOf(1000)
+        );
+
+        assertThat(share.getQuantity()).isEqualByComparingTo("5");
+        assertThat(share.getPreStreamQuantity()).isEqualByComparingTo("0");
+    }
+
     @Test
     void fractionalSellProceedsFloorsGrossAndAppliesNormalFee() {
         TradeEngine engine = new TradeEngine(

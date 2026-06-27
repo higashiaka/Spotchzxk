@@ -568,7 +568,7 @@ public class TradeEngine {
                             .preStreamQuantity(BigDecimal.ZERO)
                             .avgPrice(BigDecimal.ZERO)
                             .build());
-            updateBoughtShare(share, qty, cost);
+            updateBoughtShare(share, qty, cost, stock.isLive());
             return BigDecimal.ZERO;
         } else {
             UserShare share = userShareRepository.findByUserIdAndStockChannelId(user.getId(), channelId)
@@ -582,14 +582,19 @@ public class TradeEngine {
         }
     }
 
-    private void updateBoughtShare(UserShare share, BigInteger qty, BigDecimal cost) {
+    private void updateBoughtShare(UserShare share, BigInteger qty, BigDecimal cost, boolean isLive) {
         BigDecimal prevQty = share.getQuantity();
-        BigDecimal newQty = prevQty.add(qtyDecimal(qty));
+        BigDecimal boughtQty = qtyDecimal(qty);
+        BigDecimal newQty = prevQty.add(boughtQty);
         BigDecimal prevAvg = share.getAvgPrice() != null ? share.getAvgPrice() : BigDecimal.ZERO;
         BigDecimal newAvg = prevAvg.multiply(prevQty)
                 .add(cost)
                 .divide(newQty, PRICE_SCALE, RoundingMode.HALF_UP);
-        share.updateOnBuy(newQty, newAvg);
+        if (isLive) {
+            share.updateOnLiveBuy(newQty, newAvg, boughtQty);
+        } else {
+            share.updateOnBuy(newQty, newAvg);
+        }
         userShareRepository.save(share);
     }
 
