@@ -41,21 +41,33 @@ public class DividendService {
     private final TradeEngine tradeEngine;
 
     @Transactional
-    public void payIntervalDividend(Stock stock) {
+    public DividendPayoutResult payIntervalDividend(Stock stock) {
         // Re-fetch within transaction to avoid draining a stale feePool from cache
         Stock fresh = stockRepository.findById(stock.getChannelId())
                 .orElseThrow(() -> new IllegalStateException("종목을 찾을 수 없습니다."));
 
         BigDecimal eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
-        if (eligibleShares.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (eligibleShares.compareTo(BigDecimal.ZERO) <= 0) {
+            log.debug("Interval dividend skipped for channel {}: {}", fresh.getChannelId(),
+                    DividendPayoutResult.Reason.NO_ELIGIBLE_SHARES);
+            return DividendPayoutResult.skipped(DividendPayoutResult.Reason.NO_ELIGIBLE_SHARES);
+        }
 
         BigInteger feePool = fresh.getFeePool();
-        if (feePool.signum() <= 0) return;
+        if (feePool.signum() <= 0) {
+            log.debug("Interval dividend skipped for channel {}: {}", fresh.getChannelId(),
+                    DividendPayoutResult.Reason.EMPTY_FEE_POOL);
+            return DividendPayoutResult.skipped(DividendPayoutResult.Reason.EMPTY_FEE_POOL);
+        }
 
         BigDecimal totalPayout = new BigDecimal(feePool)
                 .multiply(FEE_POOL_PAYOUT_RATIO)
                 .setScale(0, RoundingMode.FLOOR);
-        if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) return;
+        if (totalPayout.compareTo(BigDecimal.ZERO) <= 0) {
+            log.debug("Interval dividend skipped for channel {}: feePool={}, reason={}",
+                    fresh.getChannelId(), feePool, DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
+            return DividendPayoutResult.skipped(DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
+        }
 
         BigDecimal ratePerShare = totalPayout
                 .divide(eligibleShares, 12, RoundingMode.FLOOR);
@@ -66,84 +78,90 @@ public class DividendService {
                 eligibleShares
         );
 
-        if (updatedUsers > 0) {
-            fresh.drainFeePool(totalPayout.toBigIntegerExact());
-            stockRepository.save(fresh);
-
-            List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
-            List<UserDividendLog> logs = shares.stream()
-                    .filter(us -> us.getPreStreamQuantity().compareTo(BigDecimal.ZERO) > 0
-                            && !"__house__".equals(us.getUser().getId())
-                            && !us.getUser().isBot())
-                    .map(us -> {
-                        BigDecimal dividendQty = us.getPreStreamQuantity();
-                        return UserDividendLog.builder()
-                                .userId(us.getUser().getId())
-                                .channelId(fresh.getChannelId())
-                                .streamerName(fresh.getStreamerName())
-                                .profileImageUrl(fresh.getProfileImageUrl())
-                                .quantity(dividendQty)
-                                .ratePerShare(ratePerShare)
-                                .amount(dividendQty.multiply(totalPayout)
-                                        .divide(eligibleShares, 0, RoundingMode.FLOOR)
-                                        .setScale(2))
-                                .build();
-                    })
-                    .collect(Collectors.toList());
-            userDividendLogRepository.saveAll(logs);
-
-            // Evict user caches after transaction commits
-            evictUserCachesAfterCommit(logs.stream()
-                    .map(UserDividendLog::getUserId)
-                    .collect(Collectors.toCollection(LinkedHashSet::new)));
-
-            BigDecimal actualPaid = totalPayout;
-            DividendLog logEntry = DividendLog.builder()
-                    .stock(stock)
-                    .totalDividendPool(actualPaid)
-                    .payoutReason("interval")
-                    .streamMinutes(null)
-                    .build();
-            dividendLogRepository.save(logEntry);
-
-            log.debug("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
-                    fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
-
-            // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
-            final String now = LocalDateTime.now().toString();
-            final Map<String, Object> globalPayload = Map.of(
-                    "channelId", fresh.getChannelId(),
-                    "streamerName", fresh.getStreamerName(),
-                    "profileImageUrl", fresh.getProfileImageUrl() != null ? fresh.getProfileImageUrl() : "",
-                    "totalDividendPool", actualPaid,
-                    "streamMinutes", 0L,
-                    "createdAt", now
-            );
-            // Per-user personal dividend notification payloads
-            final List<Map<String, Object>> userPayloads = logs.stream()
-                    .map(ul -> Map.<String, Object>of(
-                            "channelId", ul.getChannelId(),
-                            "streamerName", ul.getStreamerName(),
-                            "profileImageUrl", ul.getProfileImageUrl() != null ? ul.getProfileImageUrl() : "",
-                            "quantity", ul.getQuantity().abs(),
-                            "ratePerShare", ul.getRatePerShare().abs(),
-                            "amount", ul.getAmount().abs(),
-                            "createdAt", ul.getCreatedAt() != null ? ul.getCreatedAt().toString() : now
-                    ))
-                    .collect(Collectors.<Map<String, Object>>toList());
-            final List<String> userIds = logs.stream()
-                    .map(UserDividendLog::getUserId)
-                    .collect(Collectors.toList());
-
-            sendAfterCommit(() -> {
-                // Broadcast to global dividend feed
-                messagingTemplate.convertAndSend("/topic/dividends", globalPayload);
-                // Send personal dividend entry to each user in real-time
-                for (int i = 0; i < userIds.size(); i++) {
-                    messagingTemplate.convertAndSend("/topic/user-dividends/" + userIds.get(i), userPayloads.get(i));
-                }
-            });
+        if (updatedUsers <= 0) {
+            log.warn("Interval dividend failed for channel {}: totalPayout={}, eligibleShares={}, reason={}",
+                    fresh.getChannelId(), totalPayout, eligibleShares,
+                    DividendPayoutResult.Reason.NO_USERS_UPDATED);
+            return DividendPayoutResult.failed(DividendPayoutResult.Reason.NO_USERS_UPDATED);
         }
+
+        fresh.drainFeePool(totalPayout.toBigIntegerExact());
+        stockRepository.save(fresh);
+
+        List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
+        List<UserDividendLog> logs = shares.stream()
+                .filter(us -> us.getPreStreamQuantity().compareTo(BigDecimal.ZERO) > 0
+                        && !"__house__".equals(us.getUser().getId())
+                        && !us.getUser().isBot())
+                .map(us -> {
+                    BigDecimal dividendQty = us.getPreStreamQuantity();
+                    return UserDividendLog.builder()
+                            .userId(us.getUser().getId())
+                            .channelId(fresh.getChannelId())
+                            .streamerName(fresh.getStreamerName())
+                            .profileImageUrl(fresh.getProfileImageUrl())
+                            .quantity(dividendQty)
+                            .ratePerShare(ratePerShare)
+                            .amount(dividendQty.multiply(totalPayout)
+                                    .divide(eligibleShares, 0, RoundingMode.FLOOR)
+                                    .setScale(2))
+                            .build();
+                })
+                .collect(Collectors.toList());
+        userDividendLogRepository.saveAll(logs);
+
+        // Evict user caches after transaction commits
+        evictUserCachesAfterCommit(logs.stream()
+                .map(UserDividendLog::getUserId)
+                .collect(Collectors.toCollection(LinkedHashSet::new)));
+
+        BigDecimal actualPaid = totalPayout;
+        DividendLog logEntry = DividendLog.builder()
+                .stock(stock)
+                .totalDividendPool(actualPaid)
+                .payoutReason("interval")
+                .streamMinutes(null)
+                .build();
+        dividendLogRepository.save(logEntry);
+
+        log.debug("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
+                fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
+
+        // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
+        final String now = LocalDateTime.now().toString();
+        final Map<String, Object> globalPayload = Map.of(
+                "channelId", fresh.getChannelId(),
+                "streamerName", fresh.getStreamerName(),
+                "profileImageUrl", fresh.getProfileImageUrl() != null ? fresh.getProfileImageUrl() : "",
+                "totalDividendPool", actualPaid,
+                "streamMinutes", 0L,
+                "createdAt", now
+        );
+        // Per-user personal dividend notification payloads
+        final List<Map<String, Object>> userPayloads = logs.stream()
+                .map(ul -> Map.<String, Object>of(
+                        "channelId", ul.getChannelId(),
+                        "streamerName", ul.getStreamerName(),
+                        "profileImageUrl", ul.getProfileImageUrl() != null ? ul.getProfileImageUrl() : "",
+                        "quantity", ul.getQuantity().abs(),
+                        "ratePerShare", ul.getRatePerShare().abs(),
+                        "amount", ul.getAmount().abs(),
+                        "createdAt", ul.getCreatedAt() != null ? ul.getCreatedAt().toString() : now
+                ))
+                .collect(Collectors.<Map<String, Object>>toList());
+        final List<String> userIds = logs.stream()
+                .map(UserDividendLog::getUserId)
+                .collect(Collectors.toList());
+
+        sendAfterCommit(() -> {
+            // Broadcast to global dividend feed
+            messagingTemplate.convertAndSend("/topic/dividends", globalPayload);
+            // Send personal dividend entry to each user in real-time
+            for (int i = 0; i < userIds.size(); i++) {
+                messagingTemplate.convertAndSend("/topic/user-dividends/" + userIds.get(i), userPayloads.get(i));
+            }
+        });
+        return DividendPayoutResult.paid();
     }
 
     private void evictUserCachesAfterCommit(Set<String> userIds) {

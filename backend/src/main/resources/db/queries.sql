@@ -495,6 +495,135 @@ SET
 WHERE l.correct_dividend_total > u.dividend_total;
 COMMIT;
 
+-- ============================================================
+-- Dividend incident diagnosis / repair
+-- User: 천재트레이더홍일 (N53hXjDMaxWRPTo13hG4zSFdANG2)
+-- Stock: 세히리 (a1d8f511ebaa95dd792beefdff330e08)
+-- Run the preview queries first. Only run the repair transaction when
+-- the user had pre_stream_quantity > 0 and a dividend interval was
+-- actually missed.
+-- ============================================================
+SET @target_user_id = 'N53hXjDMaxWRPTo13hG4zSFdANG2';
+SET @target_channel_id = 'a1d8f511ebaa95dd792beefdff330e08';
+SET @payout_ratio = 0.35;
+
+SELECT
+    s.channel_id,
+    s.streamer_name,
+    s.is_live,
+    s.live_started_at,
+    s.dividend_accumulation_count,
+    s.fee_pool,
+    FLOOR(s.fee_pool * @payout_ratio) AS next_total_payout,
+    s.pre_stream_float,
+    s.trading_suspended
+FROM stocks s
+WHERE s.channel_id = @target_channel_id;
+
+SELECT
+    u.id AS user_id,
+    u.display_name,
+    u.coin_balance,
+    u.dividend_total,
+    u.is_bot,
+    u.is_guest,
+    us.quantity,
+    us.pre_stream_quantity,
+    us.updated_at
+FROM users u
+LEFT JOIN user_shares us
+    ON us.user_id = u.id
+   AND us.channel_id = @target_channel_id
+WHERE u.id = @target_user_id;
+
+SELECT
+    COALESCE(SUM(s.pre_stream_quantity), 0) AS eligible_shares
+FROM user_shares s
+JOIN users u ON u.id = s.user_id
+WHERE s.channel_id = @target_channel_id
+  AND s.pre_stream_quantity > 0
+  AND s.user_id != '__house__'
+  AND u.is_bot = 0;
+
+SELECT *
+FROM user_dividend_logs
+WHERE user_id = @target_user_id
+  AND channel_id = @target_channel_id
+ORDER BY created_at DESC
+LIMIT 20;
+
+SELECT dl.*
+FROM dividend_logs dl
+WHERE dl.channel_id = @target_channel_id
+ORDER BY dl.created_at DESC
+LIMIT 20;
+
+-- Preview a one-interval manual repair amount using the current stored fee pool.
+SELECT
+    @target_user_id AS user_id,
+    @target_channel_id AS channel_id,
+    us.pre_stream_quantity,
+    eligible.eligible_shares,
+    FLOOR(s.fee_pool * @payout_ratio) AS total_payout,
+    FLOOR(us.pre_stream_quantity * FLOOR(s.fee_pool * @payout_ratio) / eligible.eligible_shares) AS expected_user_payout
+FROM stocks s
+JOIN user_shares us
+    ON us.channel_id = s.channel_id
+   AND us.user_id = @target_user_id
+JOIN (
+    SELECT channel_id, COALESCE(SUM(s2.pre_stream_quantity), 0) AS eligible_shares
+    FROM user_shares s2
+    JOIN users u2 ON u2.id = s2.user_id
+    WHERE s2.channel_id = @target_channel_id
+      AND s2.pre_stream_quantity > 0
+      AND s2.user_id != '__house__'
+      AND u2.is_bot = 0
+    GROUP BY channel_id
+) eligible ON eligible.channel_id = s.channel_id
+WHERE s.channel_id = @target_channel_id;
+
+-- Manual repair template. Fill @repair_amount, @repair_quantity,
+-- @repair_rate_per_share, and @repair_total_pool from the preview or
+-- incident-specific historical evidence before running.
+-- START TRANSACTION;
+-- SET @repair_amount = 0;
+-- SET @repair_quantity = 0;
+-- SET @repair_rate_per_share = 0;
+-- SET @repair_total_pool = 0;
+--
+-- UPDATE users
+-- SET coin_balance = coin_balance + @repair_amount,
+--     dividend_total = dividend_total + @repair_amount
+-- WHERE id = @target_user_id;
+--
+-- INSERT INTO user_dividend_logs (
+--     user_id, channel_id, streamer_name, profile_image_url,
+--     quantity, rate_per_share, amount, created_at
+-- )
+-- SELECT
+--     @target_user_id,
+--     s.channel_id,
+--     s.streamer_name,
+--     s.profile_image_url,
+--     @repair_quantity,
+--     @repair_rate_per_share,
+--     @repair_amount,
+--     NOW()
+-- FROM stocks s
+-- WHERE s.channel_id = @target_channel_id;
+--
+-- INSERT INTO dividend_logs (
+--     channel_id, total_dividend_pool, payout_reason, stream_minutes, created_at
+-- )
+-- SELECT
+--     @target_channel_id,
+--     @repair_total_pool,
+--     'manual_repair',
+--     NULL,
+--     NOW()
+-- WHERE @repair_total_pool > 0;
+-- COMMIT;
+
 
 -- ============================================================
 -- 5. Market statistics analysis

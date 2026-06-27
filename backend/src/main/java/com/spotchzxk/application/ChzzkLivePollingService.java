@@ -226,14 +226,24 @@ public class ChzzkLivePollingService {
             return false;
         }
 
+        long processedIntervals = alreadyPaid;
         long newIntervals = completedIntervals - alreadyPaid;
         for (long i = 0; i < newIntervals; i++) {
-            dividendService.payIntervalDividend(stock);
+            DividendPayoutResult result = dividendService.payIntervalDividend(stock);
+            if (!result.countAsProcessed()) {
+                log.warn("Dividend interval not counted for channel {}: reason={}",
+                        stock.getChannelId(), result.reason());
+                break;
+            }
+            processedIntervals++;
         }
-        stock.updateDividendAccumulation(completedIntervals);
+        if (processedIntervals == alreadyPaid) {
+            return false;
+        }
+        stock.updateDividendAccumulation(processedIntervals);
         stockRepository.save(stock);
         log.debug("Interval dividend paid for channel {}: intervals {} -> {}",
-                stock.getChannelId(), alreadyPaid, completedIntervals);
+                stock.getChannelId(), alreadyPaid, processedIntervals);
         return true;
     }
 

@@ -6,6 +6,8 @@ import com.spotchzxk.domain.user.repository.UserShareRepository;
 import com.spotchzxk.infrastructure.chzzk.ChzzkApiClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -13,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,6 +67,51 @@ class ChzzkLivePollingServiceTest {
 
         verify(chzzkApiClient, never()).fetchChannelStatus("event-live-stock");
         verify(chzzkApiClient, never()).fetchChannelStatus("real-live-channel");
+    }
+
+    @Test
+    void payDueIntervalDividendsDoesNotAdvanceCountWhenDividendFails() {
+        LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(61);
+        Stock stock = stock("real-live-channel", true, liveStartedAt);
+        when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(stock));
+        when(stockRepository.findById("real-live-channel")).thenReturn(java.util.Optional.of(stock));
+        when(dividendService.payIntervalDividend(stock)).thenReturn(DividendPayoutResult.failed(
+                DividendPayoutResult.Reason.NO_USERS_UPDATED));
+        executeTransactions();
+
+        service.initLiveStockCache();
+        service.payDueIntervalDividends();
+
+        verify(dividendService).payIntervalDividend(stock);
+        verify(stockRepository, never()).save(stock);
+        verify(messagingTemplate, never()).convertAndSend("/topic/streamers", List.of(stock));
+        org.assertj.core.api.Assertions.assertThat(stock.getDividendAccumulationCount()).isZero();
+    }
+
+    @Test
+    void payDueIntervalDividendsAdvancesCountWhenDividendIsProcessed() {
+        LocalDateTime liveStartedAt = LocalDateTime.now().minusMinutes(61);
+        Stock stock = stock("real-live-channel", true, liveStartedAt);
+        when(stockRepository.findByIsLiveTrue()).thenReturn(List.of(stock));
+        when(stockRepository.findById("real-live-channel")).thenReturn(java.util.Optional.of(stock));
+        when(dividendService.payIntervalDividend(stock)).thenReturn(DividendPayoutResult.paid());
+        executeTransactions();
+
+        service.initLiveStockCache();
+        service.payDueIntervalDividends();
+
+        verify(dividendService).payIntervalDividend(stock);
+        verify(stockRepository).save(stock);
+        verify(messagingTemplate).convertAndSend("/topic/streamers", List.of(stock));
+        org.assertj.core.api.Assertions.assertThat(stock.getDividendAccumulationCount()).isEqualTo(1);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void executeTransactions() {
+        doAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        }).when(transactionTemplate).execute(any(TransactionCallback.class));
     }
 
     private Stock stock(String channelId, boolean isLive, LocalDateTime liveStartedAt) {
