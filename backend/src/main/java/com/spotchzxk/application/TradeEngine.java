@@ -42,6 +42,7 @@ public class TradeEngine {
     // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to match megaphone/stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int PRICE_SCALE = 6;
+    private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -575,6 +576,9 @@ public class TradeEngine {
     private BigInteger[] updateStock(Stock stock, boolean isBuy, BigInteger qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
         stock.applyTrade(amm.newPrice(), isBuy, qty, userNet);
+        if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) < 0) {
+            stock.suspendTrading();
+        }
         stockRepository.save(stock);
         return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};
     }

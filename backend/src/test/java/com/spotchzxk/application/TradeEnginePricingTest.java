@@ -131,6 +131,51 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void completedTradeSuspendsStockWhenNewPriceFallsBelowOneWon() {
+        StockRepository stockRepository = mock(StockRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                stockRepository,
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+        Stock stock = Stock.builder()
+                .channelId("stock-1")
+                .streamerName("streamer")
+                .currentPrice(BigDecimal.ONE)
+                .coinReserve(BigInteger.valueOf(10))
+                .shareReserve(BigInteger.valueOf(100))
+                .build();
+        AmmCalculator.AmmResult amm = new AmmCalculator.AmmResult(
+                BigInteger.ONE,
+                BigInteger.ZERO,
+                BigInteger.ZERO,
+                BigInteger.ONE,
+                new BigInteger[]{BigInteger.ONE, BigInteger.TEN},
+                new BigDecimal("0.1"),
+                new BigDecimal("0.1")
+        );
+
+        ReflectionTestUtils.invokeMethod(
+                engine,
+                "updateStock",
+                stock,
+                true,
+                BigInteger.ONE,
+                amm,
+                BigDecimal.ONE
+        );
+
+        assertThat(stock.getCurrentPrice()).isLessThan(BigDecimal.ONE);
+        assertThat(stock.isTradingSuspended()).isTrue();
+    }
+
+    @Test
     void newListingBuyLimitIncludesPendingBuyQuantityForMarketOrders() {
         StockRepository stockRepository = mock(StockRepository.class);
         OrderRepository orderRepository = mock(OrderRepository.class);

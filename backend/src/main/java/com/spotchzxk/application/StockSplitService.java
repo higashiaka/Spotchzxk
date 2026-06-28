@@ -39,6 +39,7 @@ public class StockSplitService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
+    private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
     private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000);
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
@@ -220,7 +221,7 @@ public class StockSplitService {
         Stock stock = action.stock();
         if (action.reverse()) {
             stock.applyReverseStockSplit(action.ratio());
-            if (stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+            if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0) {
                 stock.resumeTrading();
             }
             userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
@@ -268,10 +269,9 @@ public class StockSplitService {
 
     private void suspendUnsafePriceStocks(LocalDateTime now) {
         LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
-        List<Stock> targets = stockRepository.findByCurrentPriceLessThan(BigDecimal.ONE).stream()
+        List<Stock> targets = stockRepository.findByCurrentPriceLessThan(MIN_TRADABLE_PRICE).stream()
                 .filter(stock -> !stock.isTradingSuspended())
                 .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                .filter(stock -> stock.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0 || !hasValidAmmPool(stock))
                 .peek(Stock::suspendTrading)
                 .toList();
         if (!targets.isEmpty()) {
