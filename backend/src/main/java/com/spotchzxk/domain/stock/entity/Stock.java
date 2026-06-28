@@ -101,6 +101,9 @@ public class Stock {
     @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     private boolean tradingSuspended;
 
+    @Column(name = "trading_suspension_reason", length = 50)
+    private String tradingSuspensionReason;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
@@ -223,11 +226,17 @@ public class Stock {
     }
 
     public void suspendTrading() {
+        suspendTrading("UNKNOWN");
+    }
+
+    public void suspendTrading(String reason) {
         this.tradingSuspended = true;
+        this.tradingSuspensionReason = reason;
     }
 
     public void resumeTrading() {
         this.tradingSuspended = false;
+        this.tradingSuspensionReason = null;
     }
 
     public void drainFeePool(BigInteger amount) {

@@ -68,6 +68,9 @@ public record StockResponse(
         if (!s.isTradingSuspended()) {
             return null;
         }
+        if (s.getTradingSuspensionReason() != null && !s.getTradingSuspensionReason().isBlank()) {
+            return s.getTradingSuspensionReason();
+        }
         if (s.getCoinReserve() == null || s.getShareReserve() == null
                 || s.getCoinReserve().signum() <= 0 || s.getShareReserve().signum() <= 0) {
             return "INVALID_AMM_POOL";

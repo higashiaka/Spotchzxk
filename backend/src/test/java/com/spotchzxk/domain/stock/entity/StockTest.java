@@ -55,4 +55,22 @@ class StockTest {
         assertThat(stock.getShareReserve()).isEqualTo(BigInteger.TEN);
         assertThat(stock.getCurrentPrice()).isEqualByComparingTo("10.000000");
     }
+
+    @Test
+    void tradingSuspensionReasonIsStoredAndClearedOnResume() {
+        Stock stock = Stock.builder()
+                .channelId("stock-1")
+                .streamerName("streamer")
+                .build();
+
+        stock.suspendTrading("PRICE_BELOW_ONE");
+
+        assertThat(stock.isTradingSuspended()).isTrue();
+        assertThat(stock.getTradingSuspensionReason()).isEqualTo("PRICE_BELOW_ONE");
+
+        stock.resumeTrading();
+
+        assertThat(stock.isTradingSuspended()).isFalse();
+        assertThat(stock.getTradingSuspensionReason()).isNull();
+    }
 }

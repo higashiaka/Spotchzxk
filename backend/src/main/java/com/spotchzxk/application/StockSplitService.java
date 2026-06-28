@@ -40,6 +40,7 @@ public class StockSplitService {
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
     private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
+    private static final String SUSPENSION_REASON_PRICE_BELOW_ONE = "PRICE_BELOW_ONE";
     private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000);
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
@@ -221,7 +222,8 @@ public class StockSplitService {
         Stock stock = action.stock();
         if (action.reverse()) {
             stock.applyReverseStockSplit(action.ratio());
-            if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0) {
+            if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0
+                    && SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
                 stock.resumeTrading();
             }
             userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
@@ -272,7 +274,7 @@ public class StockSplitService {
         List<Stock> targets = stockRepository.findByCurrentPriceLessThan(MIN_TRADABLE_PRICE).stream()
                 .filter(stock -> !stock.isTradingSuspended())
                 .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                .peek(Stock::suspendTrading)
+                .peek(stock -> stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE))
                 .toList();
         if (!targets.isEmpty()) {
             stockRepository.saveAll(targets);

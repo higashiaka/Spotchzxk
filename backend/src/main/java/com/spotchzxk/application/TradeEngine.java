@@ -43,6 +43,8 @@ public class TradeEngine {
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int PRICE_SCALE = 6;
     private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
+    private static final String SUSPENSION_REASON_PRICE_BELOW_ONE = "PRICE_BELOW_ONE";
+    private static final String SUSPENSION_REASON_INVALID_AMM_POOL = "INVALID_AMM_POOL";
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -486,7 +488,7 @@ public class TradeEngine {
     private void suspendUnsafePriceStock(String channelId) {
         stockRepository.findById(channelId).ifPresent(stock -> {
             if (!stock.isTradingSuspended()) {
-                stock.suspendTrading();
+                stock.suspendTrading(SUSPENSION_REASON_INVALID_AMM_POOL);
                 stockRepository.save(stock);
             }
         });
@@ -504,7 +506,7 @@ public class TradeEngine {
         if (stock.getCurrentPrice() == null || stock.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0
                 || stock.getCoinReserve() == null || stock.getShareReserve() == null
                 || stock.getCoinReserve().signum() <= 0 || stock.getShareReserve().signum() <= 0) {
-            stock.suspendTrading();
+            stock.suspendTrading(SUSPENSION_REASON_INVALID_AMM_POOL);
             stockRepository.save(stock);
             evictStockCache(channelId);
             throw new IllegalStateException("가격 또는 AMM 풀이 비정상인 종목입니다. 액면병합 후 거래가 재개됩니다.");
@@ -577,7 +579,7 @@ public class TradeEngine {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
         stock.applyTrade(amm.newPrice(), isBuy, qty, userNet);
         if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) < 0) {
-            stock.suspendTrading();
+            stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE);
         }
         stockRepository.save(stock);
         return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};

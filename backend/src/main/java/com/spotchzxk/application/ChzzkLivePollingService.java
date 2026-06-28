@@ -29,6 +29,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 @Slf4j
 public class ChzzkLivePollingService {
+    private static final String SUSPENSION_REASON_API_UNAVAILABLE = "API_UNAVAILABLE";
+
 
     private static final int MAX_DIVIDEND_PAYOUTS_PER_TICK = 1;
     private static final long DIVIDEND_INTERVAL_MINUTES = 60L;
@@ -263,7 +265,7 @@ public class ChzzkLivePollingService {
             transactionTemplate.executeWithoutResult(tx ->
                     stockRepository.findById(channelId).ifPresent(s -> {
                         if (!s.isTradingSuspended()) {
-                            s.suspendTrading();
+                            s.suspendTrading(SUSPENSION_REASON_API_UNAVAILABLE);
                             stockRepository.save(s);
                             messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
                             log.warn("Trading suspended for channel {} after {} consecutive API failures.", channelId, failures);
@@ -279,7 +281,8 @@ public class ChzzkLivePollingService {
         if (prev >= SUSPEND_THRESHOLD) {
             transactionTemplate.executeWithoutResult(tx ->
                     stockRepository.findById(channelId).ifPresent(s -> {
-                        if (s.isTradingSuspended()) {
+                        if (s.isTradingSuspended()
+                                && SUSPENSION_REASON_API_UNAVAILABLE.equals(s.getTradingSuspensionReason())) {
                             s.resumeTrading();
                             stockRepository.save(s);
                             messagingTemplate.convertAndSend("/topic/streamers", List.of(s));
