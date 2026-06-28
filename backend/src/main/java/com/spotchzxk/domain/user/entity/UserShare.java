@@ -56,6 +56,12 @@ public class UserShare {
         this.preStreamQuantity = currentDividendQuantity.add(boughtQuantity);
     }
 
+    public void applyReverseSplit(BigDecimal newQuantity, BigDecimal newPreStreamQuantity, BigDecimal newAvgPrice) {
+        this.quantity = newQuantity;
+        this.preStreamQuantity = newPreStreamQuantity;
+        this.avgPrice = newAvgPrice;
+    }
+
     public void updateOnSell(BigDecimal newQuantity) {
         this.quantity = newQuantity;
         if (this.preStreamQuantity != null && this.preStreamQuantity.compareTo(newQuantity) > 0) {

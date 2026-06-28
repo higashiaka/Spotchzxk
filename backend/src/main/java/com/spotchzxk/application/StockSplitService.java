@@ -9,6 +9,9 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
+import com.spotchzxk.domain.user.entity.User;
+import com.spotchzxk.domain.user.entity.UserShare;
+import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +27,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,7 @@ public class StockSplitService {
 
     private final StockRepository stockRepository;
     private final UserShareRepository userShareRepository;
+    private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final StockSplitEventRepository stockSplitEventRepository;
     private final StockSplitNoticeRepository stockSplitNoticeRepository;
@@ -221,17 +226,59 @@ public class StockSplitService {
     private void applyAction(StockAction action) {
         Stock stock = action.stock();
         if (action.reverse()) {
+            BigDecimal preSplitPrice = stock.getCurrentPrice();
             stock.applyReverseStockSplit(action.ratio());
             if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0
                     && SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
                 stock.resumeTrading();
             }
-            userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
+            refundAndApplyReverseSplit(stock.getChannelId(), action.ratio(), preSplitPrice);
             stock.syncIssuedShares(userShareRepository.sumQuantityByStock(stock.getChannelId()));
             return;
         }
         stock.applyStockSplit(action.ratio());
         userShareRepository.applyStockSplit(stock.getChannelId(), action.ratio());
+    }
+
+    private void refundAndApplyReverseSplit(String channelId, int ratio, BigDecimal preSplitPrice) {
+        BigDecimal ratioDecimal = BigDecimal.valueOf(ratio);
+        List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositiveQuantity(channelId);
+
+        List<UserShare> toDelete = new ArrayList<>();
+        List<User> updatedUsers = new ArrayList<>();
+
+        for (UserShare share : shares) {
+            BigDecimal oldQty = share.getQuantity();
+            BigDecimal newQty = oldQty.divideToIntegralValue(ratioDecimal)
+                    .setScale(2, RoundingMode.FLOOR);
+
+            // 잘려나간 단수주 코인으로 환불
+            BigDecimal fractional = oldQty.subtract(newQty.multiply(ratioDecimal));
+            if (fractional.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal refund = fractional.multiply(preSplitPrice).setScale(2, RoundingMode.FLOOR);
+                User user = share.getUser();
+                user.updateBalance(user.getCoinBalance().add(refund));
+                updatedUsers.add(user);
+            }
+
+            if (newQty.compareTo(BigDecimal.ZERO) <= 0) {
+                toDelete.add(share);
+            } else {
+                BigDecimal oldPre = share.getPreStreamQuantity() != null ? share.getPreStreamQuantity() : BigDecimal.ZERO;
+                BigDecimal newPre = oldPre.divideToIntegralValue(ratioDecimal).setScale(2, RoundingMode.FLOOR);
+                BigDecimal newAvgPrice = share.getAvgPrice() != null
+                        ? share.getAvgPrice().multiply(ratioDecimal)
+                        : null;
+                share.applyReverseSplit(newQty, newPre, newAvgPrice);
+            }
+        }
+
+        if (!toDelete.isEmpty()) {
+            userShareRepository.deleteAll(toDelete);
+        }
+        if (!updatedUsers.isEmpty()) {
+            userRepository.saveAll(updatedUsers);
+        }
     }
 
     private StockSplitNotice createNotice(LocalDate today, int splitHour, List<StockAction> actions) {
