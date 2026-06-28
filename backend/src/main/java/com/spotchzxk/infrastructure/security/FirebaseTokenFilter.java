@@ -32,6 +32,8 @@ import java.util.concurrent.TimeUnit;
 public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String GOOGLE_PROVIDER_ID = "google.com";
+    private static final String NAVER_PROVIDER_ID = "oidc.naver";
 
     private final UserRepository userRepository;
     private final AccountLinkService accountLinkService;
@@ -63,22 +65,21 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 String uid = decoded.getUid();
 
                 List<GrantedAuthority> authorities = new ArrayList<>();
-                boolean isGoogle = false;
+                boolean isRegisteredSocialProvider = false;
                 Object firebaseObj = decoded.getClaims().get("firebase");
                 if (firebaseObj instanceof Map<?, ?> firebaseClaims) {
-                    isGoogle = "google.com".equals(firebaseClaims.get("sign_in_provider"));
-                    if (!isGoogle) {
-                        Object identitiesObj = firebaseClaims.get("identities");
-                        if (identitiesObj instanceof Map<?, ?> identities) {
-                            isGoogle = identities.containsKey("google.com");
-                        }
-                    }
+                    boolean isGoogle = hasProvider(firebaseClaims, GOOGLE_PROVIDER_ID);
+                    boolean isNaver = hasProvider(firebaseClaims, NAVER_PROVIDER_ID);
+                    isRegisteredSocialProvider = isGoogle || isNaver;
                     if (isGoogle) {
                         authorities.add(new SimpleGrantedAuthority("ROLE_GOOGLE"));
                     }
+                    if (isNaver) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_NAVER"));
+                    }
                 }
 
-                if (isGoogle && checkedUids.getIfPresent(uid) == null) {
+                if (isRegisteredSocialProvider && checkedUids.getIfPresent(uid) == null) {
                     tryUpgradeGuestToRegistered(uid);
                 }
 
@@ -104,6 +105,14 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     private boolean isAuthMeRequest(HttpServletRequest request) {
         return "GET".equalsIgnoreCase(request.getMethod()) && "/api/auth/me".equals(request.getRequestURI());
+    }
+
+    private boolean hasProvider(Map<?, ?> firebaseClaims, String providerId) {
+        if (providerId.equals(firebaseClaims.get("sign_in_provider"))) {
+            return true;
+        }
+        Object identitiesObj = firebaseClaims.get("identities");
+        return identitiesObj instanceof Map<?, ?> identities && identities.containsKey(providerId);
     }
 
     private void tryUpgradeGuestToRegistered(String uid) {
