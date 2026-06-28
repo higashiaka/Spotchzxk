@@ -26,4 +26,6 @@ export interface LiveTrade {
   shareReserve?: string;
   /** Execution timestamp in Unix ms */
   timestamp: number;
+  /** Whether trading was suspended as a result of this trade (e.g. price below 1 won) */
+  tradingSuspended?: boolean;
 }

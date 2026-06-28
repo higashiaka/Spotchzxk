@@ -142,7 +142,7 @@ public class TradeEngine {
 
         broadcastTrade(channelId, savedTrade.streamerName(), false, wholeQty, amm.newPrice(), executedAt,
                 new BigDecimal(amm.userNetAmount()), savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
         processPendingLimitOrders(channelId);
         return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(),
                 "0", orderId, "market");
@@ -175,7 +175,7 @@ public class TradeEngine {
             saveOrder(userId, channelId, false, wholeQty, fallbackPrice, amm.avgPrice(), executedAt,
                     orderId, "market", null, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
-                    stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds);
+                    stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds, stock.isTradingSuspended());
         });
     }
 
@@ -324,7 +324,7 @@ public class TradeEngine {
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
                 savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -395,7 +395,7 @@ public class TradeEngine {
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
                 savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId);
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(), "0", orderId, "limit");
@@ -566,7 +566,7 @@ public class TradeEngine {
             saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.avgPrice(), executedAt,
                     orderId, orderMode, limitPrice, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
-                    stock.getDailyVolume(), stock.getDailyTradingValue());
+                    stock.getDailyVolume(), stock.getDailyTradingValue(), stock.isTradingSuspended());
         });
     }
 
@@ -760,6 +760,7 @@ public class TradeEngine {
         BigInteger[][] poolHolder = new BigInteger[1][];
         BigDecimal[] dailyVolumeHolder = new BigDecimal[1];
         BigDecimal[] dailyTradingValueHolder = new BigDecimal[1];
+        boolean[] tradingSuspendedHolder = new boolean[1];
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             Order freshOrder = orderRepository.findByIdForUpdate(order.getId()).orElse(null);
             if (freshOrder == null || !"pending".equals(freshOrder.getStatus())) return;
@@ -829,6 +830,7 @@ public class TradeEngine {
             poolHolder[0] = updateStock(stock, freshIsBuy, fillQty, amm, userNet);
             dailyVolumeHolder[0] = stock.getDailyVolume();
             dailyTradingValueHolder[0] = stock.getDailyTradingValue();
+            tradingSuspendedHolder[0] = stock.isTradingSuspended();
             if (fillQty.compareTo(remainingQty) >= 0) {
                 freshOrder.complete(amm.avgPrice(), executedAt);
             } else {
@@ -854,7 +856,7 @@ public class TradeEngine {
         BigInteger broadcastQty = order.getQuantity().toBigIntegerExact(); // use original; exact fill qty not available outside tx
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, broadcastQty, amm.newPrice(), executedAt,
                 new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1],
-                dailyVolumeHolder[0], dailyTradingValueHolder[0], order.getId());
+                dailyVolumeHolder[0], dailyTradingValueHolder[0], order.getId(), tradingSuspendedHolder[0]);
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -877,10 +879,15 @@ public class TradeEngine {
 
     private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
                                           BigDecimal dailyVolume, BigDecimal dailyTradingValue,
-                                          BigDecimal fractionalProceeds) {
+                                          BigDecimal fractionalProceeds, boolean tradingSuspended) {
         private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
                                        BigDecimal dailyVolume, BigDecimal dailyTradingValue) {
-            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO);
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, false);
+        }
+        private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
+                                       BigDecimal dailyVolume, BigDecimal dailyTradingValue,
+                                       boolean tradingSuspended) {
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, tradingSuspended);
         }
     }
 
@@ -888,7 +895,8 @@ public class TradeEngine {
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, BigInteger qty,
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
                                 BigInteger coinReserve, BigInteger shareReserve,
-                                BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId) {
+                                BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId,
+                                boolean tradingSuspended) {
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt), candleExecutor);
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", executedPrice.toPlainString()));
@@ -904,7 +912,8 @@ public class TradeEngine {
                 Map.entry("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString()),
                 Map.entry("coinReserve", coinReserve.toString()),
                 Map.entry("shareReserve", shareReserve.toString()),
-                Map.entry("timestamp", executedAt)
+                Map.entry("timestamp", executedAt),
+                Map.entry("tradingSuspended", tradingSuspended)
         ));
     }
 

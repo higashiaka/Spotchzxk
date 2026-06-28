@@ -132,6 +132,7 @@ export const useStocks = () => {
             dailyTradingValue,
             coinReserve: trade.coinReserve ?? stock.coinReserve,
             shareReserve: trade.shareReserve ?? stock.shareReserve,
+            tradingSuspended: trade.tradingSuspended ?? stock.tradingSuspended,
           };
         }));
       } catch (e) {
