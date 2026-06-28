@@ -24,6 +24,9 @@ public class StockSplitNotice {
     @Column(nullable = false)
     private int splitHour;
 
+    @Column(nullable = false, length = 30)
+    private String actionType;
+
     @Column(nullable = false)
     private int thresholdPrice;
 

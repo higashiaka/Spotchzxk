@@ -27,6 +27,17 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     // Sort by trade time (executedAt) when filled, fallback to created_at for pending limit orders
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND status = :status ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 200", nativeQuery = true)
     List<Order> findTop200ByStreamerIdAndStatusOrderByTradedAtDesc(@Param("streamerId") String streamerId, @Param("status") String status);
+
+    @Query(value = """
+            SELECT *
+            FROM orders
+            WHERE streamer_id = :streamerId
+              AND (status = 'completed' OR filled_quantity > 0)
+              AND executed_price IS NOT NULL
+            ORDER BY COALESCE(executed_at, created_at) DESC
+            LIMIT 200
+            """, nativeQuery = true)
+    List<Order> findTop200ExecutedByStreamerIdOrderByTradedAtDesc(@Param("streamerId") String streamerId);
     // Fallback rationale: COALESCE(executed_at, created_at) gives a consistent timestamp column for both states
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) >= :fromMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
     List<Order> findByStreamerIdTradedAtGreaterThanEqual(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs);

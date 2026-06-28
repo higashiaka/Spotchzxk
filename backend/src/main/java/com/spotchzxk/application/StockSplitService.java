@@ -46,6 +46,8 @@ public class StockSplitService {
     private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
     private static final String SUSPENSION_REASON_PRICE_BELOW_ONE = "PRICE_BELOW_ONE";
     private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000);
+    private static final String ACTION_TYPE_STOCK_SPLIT = "STOCK_SPLIT";
+    private static final String ACTION_TYPE_REVERSE_STOCK_SPLIT = "REVERSE_STOCK_SPLIT";
     private static final String EVENT_CHANNEL_PREFIX = "event-";
 
     private final StockRepository stockRepository;
@@ -122,7 +124,8 @@ public class StockSplitService {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalDate today = now.toLocalDate();
         int splitHour = now.getHour();
-        if (!force && stockSplitNoticeRepository.existsBySplitDateAndSplitHour(today, splitHour)) {
+        String actionType = actionType(reverse);
+        if (!force && stockSplitNoticeRepository.existsBySplitDateAndSplitHourAndActionType(today, splitHour, actionType)) {
             log.info("{} already processed for {} {}:00.", actionName(reverse), today, splitHour);
             return 0;
         }
@@ -200,9 +203,9 @@ public class StockSplitService {
     private List<StockAction> findEligibleActions(LocalDateTime now, boolean reverse) {
         LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
         if (reverse) {
-            return stockRepository.findByCurrentPriceLessThan(REVERSE_SPLIT_THRESHOLD_PRICE).stream()
+            return stockRepository.findAll().stream()
                     .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                    .filter(stock -> effectiveAmmPrice(stock).compareTo(BigDecimal.ZERO) > 0)
+                    .filter(stock -> effectiveAmmPrice(stock).compareTo(REVERSE_SPLIT_THRESHOLD_PRICE) < 0)
                     .map(stock -> new StockAction(stock, calcReverseSplitRatio(effectiveAmmPrice(stock)), true))
                     .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
                     .toList();
@@ -226,7 +229,7 @@ public class StockSplitService {
     private void applyAction(StockAction action) {
         Stock stock = action.stock();
         if (action.reverse()) {
-            BigDecimal preSplitPrice = stock.getCurrentPrice();
+            BigDecimal preSplitPrice = effectiveAmmPrice(stock);
             stock.applyReverseStockSplit(action.ratio());
             if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0
                     && SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
@@ -293,6 +296,7 @@ public class StockSplitService {
                 .id(UUID.randomUUID().toString())
                 .splitDate(today)
                 .splitHour(splitHour)
+                .actionType(actionType(reverse))
                 .thresholdPrice(reverse ? REVERSE_SPLIT_THRESHOLD_PRICE.intValue() : SPLIT_THRESHOLD_PRICE.intValue())
                 .splitRatio(representativeRatio)
                 .stockCount(actions.size())
@@ -318,9 +322,11 @@ public class StockSplitService {
 
     private void suspendUnsafePriceStocks(LocalDateTime now) {
         LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
-        List<Stock> targets = stockRepository.findByCurrentPriceLessThan(MIN_TRADABLE_PRICE).stream()
+        List<Stock> targets = stockRepository.findAll().stream()
                 .filter(stock -> !stock.isTradingSuspended())
                 .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
+                .filter(stock -> effectiveAmmPrice(stock).compareTo(BigDecimal.ZERO) > 0)
+                .filter(stock -> effectiveAmmPrice(stock).compareTo(MIN_TRADABLE_PRICE) < 0)
                 .peek(stock -> stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE))
                 .toList();
         if (!targets.isEmpty()) {
@@ -337,14 +343,11 @@ public class StockSplitService {
     }
 
     private BigDecimal effectiveAmmPrice(Stock stock) {
-        if (stock.getCurrentPrice() != null && stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
-            return stock.getCurrentPrice();
+        if (hasValidAmmPool(stock)) {
+            return new BigDecimal(stock.getCoinReserve())
+                    .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
         }
-        if (!hasValidAmmPool(stock)) {
-            return BigDecimal.ZERO;
-        }
-        return new BigDecimal(stock.getCoinReserve())
-                .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
+        return stock.getCurrentPrice() != null ? stock.getCurrentPrice() : BigDecimal.ZERO;
     }
 
     private boolean isEventStock(Stock stock) {
@@ -353,6 +356,10 @@ public class StockSplitService {
 
     private String actionName(boolean reverse) {
         return reverse ? "reverse stock split" : "stock split";
+    }
+
+    private String actionType(boolean reverse) {
+        return reverse ? ACTION_TYPE_REVERSE_STOCK_SPLIT : ACTION_TYPE_STOCK_SPLIT;
     }
 
     private void registerAfterCommit(Runnable task) {

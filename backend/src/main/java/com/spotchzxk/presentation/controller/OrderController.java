@@ -40,8 +40,8 @@ public class OrderController {
             return ResponseEntity.badRequest().build();
         }
         List<PublicOrderResponse> orders = orderRepository
-                .findTop200ByStreamerIdAndStatusOrderByTradedAtDesc(streamerId, "completed")
-                .stream().map(PublicOrderResponse::from).toList();
+                .findTop200ExecutedByStreamerIdOrderByTradedAtDesc(streamerId)
+                .stream().map(PublicOrderResponse::fromExecutedTrade).toList();
         return ResponseEntity.ok(orders);
     }
 }

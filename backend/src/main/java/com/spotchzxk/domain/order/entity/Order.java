@@ -82,9 +82,9 @@ public class Order {
     public void partialFill(BigDecimal partialQty, BigDecimal avgPrice, long executedAt) {
         this.filledQuantity = this.filledQuantity.add(partialQty);
         this.executedPrice = avgPrice;
+        this.executedAt = executedAt;
         if (this.filledQuantity.compareTo(this.quantity) >= 0) {
             this.status = "completed";
-            this.executedAt = executedAt;
         }
     }
 

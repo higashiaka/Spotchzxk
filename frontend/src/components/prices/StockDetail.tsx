@@ -24,6 +24,7 @@ interface StockOrderHistoryItem {
   estimatedPrice: string;
   status: string;
   createdAt: number;
+  executedAt?: number | null;
 }
 
 interface ApiCandle {
@@ -221,7 +222,7 @@ export const StockDetail = ({
             type: order.type,
             quantity: order.quantity,
             price: order.executedPrice ?? order.estimatedPrice,
-            timestamp: order.createdAt,
+            timestamp: order.executedAt ?? order.createdAt,
           }))
           .sort((a, b) => b.timestamp - a.timestamp);
         setStockTrades(trades);

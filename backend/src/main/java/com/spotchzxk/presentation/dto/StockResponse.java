@@ -50,7 +50,7 @@ public record StockResponse(
                 s.getDailyTradingValue(),
                 s.getBasePrice(),
                 s.getListingPrice(),
-                s.getCurrentPrice(),
+                displayPrice(s),
                 s.isLive(),
                 s.getLiveStartedAt(),
                 s.getDividendAccumulationCount(),
@@ -62,6 +62,15 @@ public record StockResponse(
                 suspensionReason(s),
                 s.getListedAt()
         );
+    }
+
+    private static BigDecimal displayPrice(Stock s) {
+        if (s.getCoinReserve() != null && s.getShareReserve() != null
+                && s.getCoinReserve().signum() > 0 && s.getShareReserve().signum() > 0) {
+            return new BigDecimal(s.getCoinReserve())
+                    .divide(new BigDecimal(s.getShareReserve()), AMM_PRICE_SCALE, RoundingMode.HALF_UP);
+        }
+        return s.getCurrentPrice();
     }
 
     private static String suspensionReason(Stock s) {
