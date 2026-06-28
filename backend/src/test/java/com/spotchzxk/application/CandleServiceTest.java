@@ -73,10 +73,10 @@ class CandleServiceTest {
         verify(messagingTemplate).convertAndSend(eq("/topic/candles/" + stockId), update.capture());
 
         OhlcCandle oneMinute = update.getValue().get("1m");
-        assertThat(oneMinute.getOpen()).isEqualTo(1_000);
-        assertThat(oneMinute.getHigh()).isEqualTo(1_000);
-        assertThat(oneMinute.getLow()).isEqualTo(1_000);
-        assertThat(oneMinute.getClose()).isEqualTo(1_000);
+        assertPrice(oneMinute.getOpen(), "1000");
+        assertPrice(oneMinute.getHigh(), "1000");
+        assertPrice(oneMinute.getLow(), "1000");
+        assertPrice(oneMinute.getClose(), "1000");
     }
 
     @Test
@@ -103,10 +103,10 @@ class CandleServiceTest {
         verify(messagingTemplate).convertAndSend(eq("/topic/candles/" + stockId), update.capture());
 
         OhlcCandle oneMinute = update.getValue().get("1m");
-        assertThat(oneMinute.getOpen()).isEqualTo(1_000);
-        assertThat(oneMinute.getHigh()).isEqualTo(1_000);
-        assertThat(oneMinute.getLow()).isEqualTo(1_000);
-        assertThat(oneMinute.getClose()).isEqualTo(1_000);
+        assertPrice(oneMinute.getOpen(), "1000");
+        assertPrice(oneMinute.getHigh(), "1000");
+        assertPrice(oneMinute.getLow(), "1000");
+        assertPrice(oneMinute.getClose(), "1000");
     }
 
     @Test
@@ -143,11 +143,28 @@ class CandleServiceTest {
         assertThat(candles).extracting(OhlcCandle::getBucketStart)
                 .containsExactly(base + 60_000L, base + 120_000L);
         assertThat(candles).allSatisfy(candle -> {
-            assertThat(candle.getOpen()).isEqualTo(1_000);
-            assertThat(candle.getHigh()).isEqualTo(1_000);
-            assertThat(candle.getLow()).isEqualTo(1_000);
-            assertThat(candle.getClose()).isEqualTo(1_000);
+            assertPrice(candle.getOpen(), "1000");
+            assertPrice(candle.getHigh(), "1000");
+            assertPrice(candle.getLow(), "1000");
+            assertPrice(candle.getClose(), "1000");
         });
+    }
+
+    @Test
+    void getCandlesPreservesSubWonExecutedPrices() {
+        String stockId = "stock-1";
+        long base = 1_771_000_020_000L;
+        long before = base + 120_000L;
+        when(orderRepository.findByStreamerIdAndTradedAtBetween(eq(stockId), anyLong(), anyLong()))
+                .thenReturn(List.of(order(stockId, base + 60_000L, new BigDecimal("0.00149"))));
+
+        List<OhlcCandle> candles = service.getCandles(stockId, "1m", 1, before, 0L, 1_000);
+
+        assertThat(candles).hasSize(1);
+        assertPrice(candles.get(0).getOpen(), "0.00149");
+        assertPrice(candles.get(0).getHigh(), "0.00149");
+        assertPrice(candles.get(0).getLow(), "0.00149");
+        assertPrice(candles.get(0).getClose(), "0.00149");
     }
 
     @Test
@@ -164,10 +181,10 @@ class CandleServiceTest {
 
         assertThat(candles).hasSize(2);
         assertThat(candles).allSatisfy(candle -> {
-            assertThat(candle.getOpen()).isEqualTo(900);
-            assertThat(candle.getHigh()).isEqualTo(900);
-            assertThat(candle.getLow()).isEqualTo(900);
-            assertThat(candle.getClose()).isEqualTo(900);
+            assertPrice(candle.getOpen(), "900");
+            assertPrice(candle.getHigh(), "900");
+            assertPrice(candle.getLow(), "900");
+            assertPrice(candle.getClose(), "900");
         });
     }
 
@@ -190,7 +207,7 @@ class CandleServiceTest {
 
         List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 1_000);
 
-        assertThat(candles.get(0).getClose()).isEqualTo(1_000);
+        assertPrice(candles.get(0).getClose(), "1000");
     }
 
     @Test
@@ -212,7 +229,7 @@ class CandleServiceTest {
 
         List<OhlcCandle> candles = service.getCandles(stockId, "1m", 2, before, 0L, 500);
 
-        assertThat(candles.get(0).getClose()).isEqualTo(500);
+        assertPrice(candles.get(0).getClose(), "500");
     }
 
     @Test
@@ -242,26 +259,32 @@ class CandleServiceTest {
                 .findByChannelIdAndExecutedAtGreaterThanOrderByExecutedAtAsc(eq(stockId), splitLookupFrom.capture());
         assertThat(splitLookupFrom.getValue()).isEqualTo(previousOrderAt);
         assertThat(candles).allSatisfy(candle -> {
-            assertThat(candle.getOpen()).isEqualTo(1_000);
-            assertThat(candle.getHigh()).isEqualTo(1_000);
-            assertThat(candle.getLow()).isEqualTo(1_000);
-            assertThat(candle.getClose()).isEqualTo(1_000);
+            assertPrice(candle.getOpen(), "1000");
+            assertPrice(candle.getHigh(), "1000");
+            assertPrice(candle.getLow(), "1000");
+            assertPrice(candle.getClose(), "1000");
         });
     }
 
+    private static void assertPrice(BigDecimal actual, String expected) {
+        assertThat(actual).isEqualByComparingTo(expected);
+    }
+
     private Order order(String stockId, long createdAt, int executedPrice) {
+        return order(stockId, createdAt, BigDecimal.valueOf(executedPrice));
+    }
+
+    private Order order(String stockId, long createdAt, BigDecimal executedPrice) {
         return Order.builder()
                 .id(stockId + "-" + createdAt)
                 .userId("user-1")
                 .streamerId(stockId)
                 .type("buy")
                 .quantity(java.math.BigDecimal.ONE)
-                .estimatedPrice(BigDecimal.valueOf(executedPrice))
-                .executedPrice(BigDecimal.valueOf(executedPrice))
+                .estimatedPrice(executedPrice)
+                .executedPrice(executedPrice)
                 .status("completed")
                 .createdAt(createdAt)
                 .build();
     }
 }
-
-

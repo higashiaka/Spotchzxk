@@ -55,7 +55,8 @@ const calcScaleFactor = (price: number): number => {
 
 const scalePrice = (price: number, sf: number): number => {
   const scaled = sf === 1 ? price : price / sf;
-  return Number.isFinite(scaled) && scaled >= 1 ? Math.round(scaled) : 1;
+  if (!Number.isFinite(scaled)) return 0;
+  return sf === 1 ? scaled : Math.max(scaled, Number.EPSILON);
 };
 
 const maxChartInputPrice = (candles: ApiCandle[], currentPrice: number): number => {
