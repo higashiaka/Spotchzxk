@@ -186,9 +186,10 @@ export const InteractiveChart = ({
     if (seriesRef.current) chart.removeSeries(seriesRef.current);
 
     const lineColor = color === '#FF5252' ? '#FF3B30' : '#007AFF';
-    const priceFormat = scaleFactor > 1
-      ? { type: 'custom' as const, formatter: (p: number) => formatScaledPrice(p, scaleFactor) }
-      : { type: 'price' as const, precision: 0, minMove: 1 };
+    const priceFormat = {
+      type: 'custom' as const,
+      formatter: (p: number) => formatScaledPrice(p, scaleFactor),
+    };
     if (chartType === 'candle') {
       seriesRef.current = chart.addCandlestickSeries({
         upColor: '#FF3B30', downColor: '#007AFF',
