@@ -39,7 +39,7 @@ class SitemapControllerTest {
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 false, null, 0,
                 BigDecimal.ZERO, BigInteger.ZERO, BigInteger.ZERO,
-                0, false, null
+                0, false, null, null
         );
     }
 }

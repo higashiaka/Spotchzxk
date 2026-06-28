@@ -44,6 +44,7 @@ export function mapRawToStock(r: any, previous?: Stock): Stock {
     shareReserve: String(r.shareReserve ?? previous?.shareReserve ?? '0'),
     listedAt: r.listedAt ?? previous?.listedAt ?? null,
     tradingSuspended: r.tradingSuspended ?? previous?.tradingSuspended ?? false,
+    tradingSuspensionReason: r.tradingSuspensionReason ?? previous?.tradingSuspensionReason ?? null,
   };
 }
 

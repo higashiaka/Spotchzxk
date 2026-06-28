@@ -129,6 +129,19 @@ const maxAffordableMarketBuyQuantity = (
   return low;
 };
 
+const tradingSuspensionLabel = (reason?: string | null): string => {
+  switch (reason) {
+    case 'PRICE_BELOW_ONE':
+      return '거래 정지 종목: 1원 미만 가격 보호';
+    case 'INVALID_AMM_POOL':
+      return '거래 정지 종목: AMM 풀 보호';
+    case 'API_UNAVAILABLE':
+      return '거래 정지 종목: API 응답 없음';
+    default:
+      return '거래 정지 종목';
+  }
+};
+
 export const OrderForm = ({
   streamer, user, qtyStr, setQtyStr, orderType, setOrderType, embedded = false,
 }: {
@@ -199,6 +212,7 @@ export const OrderForm = ({
   };
 
   const isSuspended = streamer.tradingSuspended ?? false;
+  const suspensionLabel = tradingSuspensionLabel(streamer.tradingSuspensionReason);
   const canBuy = !!user && qtyBig > 0n && balanceBigInt >= totalCost && !isSuspended;
   const canSell = !!user
     && (sellAll ? held > 0 && orderMode === 'market' : qtyBig > 0n && heldBig >= qtyBig)
@@ -338,7 +352,7 @@ export const OrderForm = ({
 
       {isSuspended && (
         <div className="mb-4 rounded-xl px-3 py-2.5 text-xs font-bold text-center bg-[#FF525220] text-[#FF5252] border border-[#FF525240]">
-          거래 정지 종목 — API 응답 없음
+          {suspensionLabel}
         </div>
       )}
 
