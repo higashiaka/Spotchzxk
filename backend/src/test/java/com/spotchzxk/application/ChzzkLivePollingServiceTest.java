@@ -4,6 +4,7 @@ import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import com.spotchzxk.infrastructure.chzzk.ChzzkApiClient;
+import com.spotchzxk.presentation.dto.StockResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.TransactionStatus;
@@ -84,7 +85,9 @@ class ChzzkLivePollingServiceTest {
 
         verify(dividendService).payIntervalDividend(stock);
         verify(stockRepository, never()).save(stock);
-        verify(messagingTemplate, never()).convertAndSend("/topic/streamers", List.of(stock));
+        verify(messagingTemplate, never()).convertAndSend(
+                org.mockito.Mockito.eq("/topic/streamers"),
+                any(Object.class));
         org.assertj.core.api.Assertions.assertThat(stock.getDividendAccumulationCount()).isZero();
     }
 
@@ -102,7 +105,7 @@ class ChzzkLivePollingServiceTest {
 
         verify(dividendService).payIntervalDividend(stock);
         verify(stockRepository).save(stock);
-        verify(messagingTemplate).convertAndSend("/topic/streamers", List.of(stock));
+        verify(messagingTemplate).convertAndSend("/topic/streamers", List.of(StockResponse.from(stock)));
         org.assertj.core.api.Assertions.assertThat(stock.getDividendAccumulationCount()).isEqualTo(1);
     }
 

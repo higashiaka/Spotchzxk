@@ -19,6 +19,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class StockService {
 
     private static final int MIN_FOLLOWER_COUNT = 100;
+    private static final int AMM_PRICE_SCALE = 18;
 
     private final StockRepository stockRepository;
     private final OrderRepository orderRepository;
@@ -48,7 +50,7 @@ public class StockService {
         int safeDepth = Math.max(1, Math.min(depth, 20));
         return new OrderBookDto(
                 channelId,
-                stock.getCurrentPrice().toPlainString(),
+                displayPrice(stock).toPlainString(),
                 toOrderBookEntries(orderRepository.findAskLevels(channelId, safeDepth)),
                 toOrderBookEntries(orderRepository.findBidLevels(channelId, safeDepth))
         );
@@ -61,6 +63,15 @@ public class StockService {
                         (row[1] instanceof BigDecimal qty ? qty : new BigDecimal(String.valueOf(row[1]))).toPlainString()
                 ))
                 .collect(Collectors.toList());
+    }
+
+    private static BigDecimal displayPrice(Stock stock) {
+        if (stock.getCoinReserve() != null && stock.getShareReserve() != null
+                && stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0) {
+            return new BigDecimal(stock.getCoinReserve())
+                    .divide(new BigDecimal(stock.getShareReserve()), AMM_PRICE_SCALE, RoundingMode.HALF_UP);
+        }
+        return stock.getCurrentPrice();
     }
 
     /**
