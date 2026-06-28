@@ -474,9 +474,23 @@ public class TradeEngine {
 
     AmmCalculator.AmmResult calculateAmmTrade(String channelId, boolean isBuy, BigInteger qty) {
         BigInteger[] pool = loadAmmPool(channelId);
+        if (pool[0] == null || pool[1] == null || pool[0].signum() <= 0 || pool[1].signum() <= 0) {
+            suspendUnsafePriceStock(channelId);
+        }
         return isBuy
                 ? AmmCalculator.calcBuy(pool[0], pool[1], qty)
                 : AmmCalculator.calcSell(pool[0], pool[1], qty);
+    }
+
+    private void suspendUnsafePriceStock(String channelId) {
+        stockRepository.findById(channelId).ifPresent(stock -> {
+            if (!stock.isTradingSuspended()) {
+                stock.suspendTrading();
+                stockRepository.save(stock);
+            }
+        });
+        evictStockCache(channelId);
+        throw new IllegalStateException("가격 또는 AMM 풀이 비정상인 종목입니다. 액면병합 후 거래가 재개됩니다.");
     }
 
     private void validateTrade(String userId, String channelId, boolean isBuy, BigInteger qty, BigDecimal cost,
@@ -485,6 +499,14 @@ public class TradeEngine {
                 .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         if (stock.isTradingSuspended()) {
             throw new IllegalStateException("현재 거래가 정지된 종목입니다.");
+        }
+        if (stock.getCurrentPrice() == null || stock.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0
+                || stock.getCoinReserve() == null || stock.getShareReserve() == null
+                || stock.getCoinReserve().signum() <= 0 || stock.getShareReserve().signum() <= 0) {
+            stock.suspendTrading();
+            stockRepository.save(stock);
+            evictStockCache(channelId);
+            throw new IllegalStateException("가격 또는 AMM 풀이 비정상인 종목입니다. 액면병합 후 거래가 재개됩니다.");
         }
 
         if (!isBuy) {

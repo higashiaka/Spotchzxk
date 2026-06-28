@@ -8,27 +8,42 @@ export type { Stock } from '../data/stocks';
 export { DEFAULT_STOCKS };
 
 /** Maps a raw backend response object to the client-side Stock model */
-export function mapRawToStock(r: any): Stock {
+const toFiniteNumber = (value: unknown, fallback: number): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const toPositivePrice = (value: unknown, fallback: number): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+export function mapRawToStock(r: any, previous?: Stock): Stock {
+  const fallbackPrice = previous?.price && previous.price > 0 ? previous.price : 1000;
+
   return {
-    id: r.channelId || r.id,
-    name: r.streamerName || r.name,
-    price: Number(r.currentPrice ?? r.price ?? 1000),
-    totalVolume: Number(r.dailyVolume ?? r.totalVolume ?? 0),
-    dailyTradingValue: Number(r.dailyTradingValue ?? 0),
-    basePrice: Number(r.basePrice ?? 1000),
-    followers: Number(r.followerCount ?? r.followers ?? 0),
-    listingPrice: Number(r.listingPrice ?? 0),
-    profileImageUrl: r.profileImageUrl,
-    isLive: r.isLive ?? false,
-    totalSupply: Number(r.totalSupply ?? 0),
-    baseBroadcastHours: Number(r.baseBroadcastHours ?? 1),
-    liveStartedAt: r.liveStartedAt ?? null,
-    dividendAccumulationCount: Number(r.dividendAccumulationCount ?? 0),
-    preStreamFloat: Number(r.preStreamFloat ?? 0),
-    coinReserve: String(r.coinReserve ?? '0'),
-    shareReserve: String(r.shareReserve ?? '0'),
-    listedAt: r.listedAt ?? null,
-    tradingSuspended: r.tradingSuspended ?? false,
+    id: r.channelId || r.id || previous?.id,
+    name: r.streamerName || r.name || previous?.name,
+    price: toPositivePrice(r.currentPrice ?? r.price, fallbackPrice),
+    totalVolume: toFiniteNumber(r.dailyVolume ?? r.totalVolume, previous?.totalVolume ?? 0),
+    dailyTradingValue: toFiniteNumber(r.dailyTradingValue, previous?.dailyTradingValue ?? 0),
+    basePrice: toPositivePrice(r.basePrice, previous?.basePrice ?? 1000),
+    followers: toFiniteNumber(r.followerCount ?? r.followers, previous?.followers ?? 0),
+    listingPrice: toFiniteNumber(r.listingPrice, previous?.listingPrice ?? 0),
+    profileImageUrl: r.profileImageUrl ?? previous?.profileImageUrl,
+    isLive: r.isLive ?? previous?.isLive ?? false,
+    totalSupply: toFiniteNumber(r.totalSupply, previous?.totalSupply ?? 0),
+    baseBroadcastHours: toFiniteNumber(r.baseBroadcastHours, previous?.baseBroadcastHours ?? 1),
+    liveStartedAt: r.liveStartedAt ?? previous?.liveStartedAt ?? null,
+    dividendAccumulationCount: toFiniteNumber(
+      r.dividendAccumulationCount,
+      previous?.dividendAccumulationCount ?? 0,
+    ),
+    preStreamFloat: toFiniteNumber(r.preStreamFloat, previous?.preStreamFloat ?? 0),
+    coinReserve: String(r.coinReserve ?? previous?.coinReserve ?? '0'),
+    shareReserve: String(r.shareReserve ?? previous?.shareReserve ?? '0'),
+    listedAt: r.listedAt ?? previous?.listedAt ?? null,
+    tradingSuspended: r.tradingSuspended ?? previous?.tradingSuspended ?? false,
   };
 }
 
@@ -47,7 +62,12 @@ export const useStocks = () => {
         .then(res => res.ok ? res.json() : null)
         .then((rawStocks: any[] | null) => {
           if (!active) return;
-          if (rawStocks && rawStocks.length > 0) setStocks(rawStocks.map(mapRawToStock));
+          if (rawStocks && rawStocks.length > 0) {
+            setStocks(prev => {
+              const prevById = new Map(prev.map(stock => [stock.id, stock]));
+              return rawStocks.map(raw => mapRawToStock(raw, prevById.get(raw.channelId || raw.id)));
+            });
+          }
           setStocksLoading(false);
         })
         .catch(() => { if (active) setStocksLoading(false); });
@@ -64,10 +84,11 @@ export const useStocks = () => {
   useEffect(() => {
     const handleMessage = (rawStocks: any[]) => {
       if (!rawStocks || rawStocks.length === 0) return;
-      const dbStocks = rawStocks.map(mapRawToStock);
-      const dbMap = new Map(dbStocks.map(s => [s.id, s]));
 
       setStocks(prev => {
+        const prevMap = new Map(prev.map(s => [s.id, s]));
+        const dbStocks = rawStocks.map(raw => mapRawToStock(raw, prevMap.get(raw.channelId || raw.id)));
+        const dbMap = new Map(dbStocks.map(s => [s.id, s]));
         const merged = prev.map(s => {
           const db = dbMap.get(s.id);
           return db ? { ...s, ...db } : s;
@@ -105,7 +126,7 @@ export const useStocks = () => {
             : stock.dailyTradingValue + Number(trade.tradingValue ?? 0);
           return {
             ...stock,
-            price: Number(trade.price),
+            price: toPositivePrice(trade.price, stock.price),
             totalVolume: dailyVolume,
             dailyTradingValue,
             coinReserve: trade.coinReserve ?? stock.coinReserve,

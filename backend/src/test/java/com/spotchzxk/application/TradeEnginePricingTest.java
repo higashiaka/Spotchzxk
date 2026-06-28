@@ -85,6 +85,52 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void uninitializedPool_throwsBeforeZeroPriceTradeCanBeCalculated() {
+        assertThatThrownBy(() -> AmmCalculator.calcBuy(BigInteger.ZERO, SHARE_RESERVE_BIG, BigInteger.ONE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AMM");
+
+        assertThatThrownBy(() -> AmmCalculator.calcSell(COIN_RESERVE_BIG, BigInteger.ZERO, BigInteger.ONE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AMM");
+
+        assertThatThrownBy(() -> AmmCalculator.price(BigInteger.ZERO, SHARE_RESERVE_BIG))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AMM");
+    }
+
+    @Test
+    void calculateAmmTradeSuspendsStockWhenPoolIsInvalid() {
+        StockRepository stockRepository = mock(StockRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                stockRepository,
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+        String stockId = "stock-1";
+        Stock stock = Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .currentPrice(BigDecimal.ZERO)
+                .coinReserve(BigInteger.ZERO)
+                .shareReserve(SHARE_RESERVE_BIG)
+                .build();
+
+        when(stockRepository.findById(stockId)).thenReturn(Optional.of(stock));
+
+        assertThatThrownBy(() -> engine.calculateAmmTrade(stockId, true, BigInteger.ONE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("가격 또는 AMM");
+        assertThat(stock.isTradingSuspended()).isTrue();
+    }
+
+    @Test
     void newListingBuyLimitIncludesPendingBuyQuantityForMarketOrders() {
         StockRepository stockRepository = mock(StockRepository.class);
         OrderRepository orderRepository = mock(OrderRepository.class);

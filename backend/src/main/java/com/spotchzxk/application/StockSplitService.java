@@ -120,6 +120,9 @@ public class StockSplitService {
             return 0;
         }
 
+        if (reverse) {
+            suspendUnsafePriceStocks(now);
+        }
         List<StockAction> actions = findEligibleActions(now, reverse);
         if (actions.isEmpty()) {
             log.info("No stocks met {} threshold.", actionName(reverse));
@@ -191,9 +194,9 @@ public class StockSplitService {
         LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
         if (reverse) {
             return stockRepository.findByCurrentPriceLessThan(REVERSE_SPLIT_THRESHOLD_PRICE).stream()
-                    .filter(stock -> stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0)
                     .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                    .map(stock -> new StockAction(stock, calcReverseSplitRatio(stock.getCurrentPrice()), true))
+                    .filter(stock -> effectiveAmmPrice(stock).compareTo(BigDecimal.ZERO) > 0)
+                    .map(stock -> new StockAction(stock, calcReverseSplitRatio(effectiveAmmPrice(stock)), true))
                     .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
                     .toList();
         }
@@ -217,6 +220,9 @@ public class StockSplitService {
         Stock stock = action.stock();
         if (action.reverse()) {
             stock.applyReverseStockSplit(action.ratio());
+            if (stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+                stock.resumeTrading();
+            }
             userShareRepository.applyReverseStockSplit(stock.getChannelId(), action.ratio());
             stock.syncIssuedShares(userShareRepository.sumQuantityByStock(stock.getChannelId()));
             return;
@@ -258,6 +264,38 @@ public class StockSplitService {
         if (price.compareTo(BigDecimal.TEN) < 0)           return 10_000;
         if (price.compareTo(BigDecimal.valueOf(100)) < 0)  return 1_000;
         return 10;
+    }
+
+    private void suspendUnsafePriceStocks(LocalDateTime now) {
+        LocalDateTime eligibleListedAt = now.minusHours(AntiWhalePolicy.NEW_LISTING_HOURS);
+        List<Stock> targets = stockRepository.findByCurrentPriceLessThan(BigDecimal.ONE).stream()
+                .filter(stock -> !stock.isTradingSuspended())
+                .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
+                .filter(stock -> stock.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0 || !hasValidAmmPool(stock))
+                .peek(Stock::suspendTrading)
+                .toList();
+        if (!targets.isEmpty()) {
+            stockRepository.saveAll(targets);
+            log.warn("Suspended {} stocks with unsafe price or AMM pool: {}",
+                    targets.size(),
+                    targets.stream().map(Stock::getChannelId).collect(Collectors.joining(", ")));
+        }
+    }
+
+    private boolean hasValidAmmPool(Stock stock) {
+        return stock.getCoinReserve() != null && stock.getShareReserve() != null
+                && stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0;
+    }
+
+    private BigDecimal effectiveAmmPrice(Stock stock) {
+        if (stock.getCurrentPrice() != null && stock.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return stock.getCurrentPrice();
+        }
+        if (!hasValidAmmPool(stock)) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal(stock.getCoinReserve())
+                .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
     }
 
     private boolean isEventStock(Stock stock) {

@@ -265,6 +265,13 @@ public class Stock {
         this.shareReserve = nonNull(this.shareReserve)
                 .divide(BigInteger.valueOf(ratio))
                 .max(BigInteger.ONE);
+        if (nonNull(this.coinReserve).signum() > 0 && this.shareReserve.signum() > 0) {
+            BigDecimal computed = new BigDecimal(this.coinReserve)
+                    .divide(new BigDecimal(this.shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
+            this.currentPrice = computed.compareTo(BigDecimal.ZERO) == 0
+                    ? new BigDecimal("0.000001")
+                    : computed;
+        }
     }
 
     private BigInteger nonNull(BigInteger value) {

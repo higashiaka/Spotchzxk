@@ -36,4 +36,23 @@ class StockTest {
         assertThat(stock.getPreStreamFloat()).isEqualByComparingTo("78.90");
         assertThat(stock.getShareReserve()).isEqualTo(BigInteger.valueOf(100));
     }
+
+    @Test
+    void applyReverseStockSplitRecomputesZeroCurrentPriceFromAmmPool() {
+        Stock stock = Stock.builder()
+                .channelId("stock-1")
+                .streamerName("streamer")
+                .currentPrice(BigDecimal.ZERO)
+                .basePrice(BigDecimal.ZERO)
+                .listingPrice(BigDecimal.valueOf(1_000))
+                .totalSupply(BigDecimal.valueOf(100_000))
+                .coinReserve(BigInteger.valueOf(100))
+                .shareReserve(BigInteger.valueOf(1_000_000_000))
+                .build();
+
+        stock.applyReverseStockSplit(100_000_000);
+
+        assertThat(stock.getShareReserve()).isEqualTo(BigInteger.TEN);
+        assertThat(stock.getCurrentPrice()).isEqualByComparingTo("10.000000");
+    }
 }

@@ -21,7 +21,7 @@ public final class AmmCalculator {
     }
 
     public static BigInteger buyCost(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
-        validatePoolAndQty(coinReserve, qty);
+        validatePoolAndQty(coinReserve, shareReserve, qty);
         if (qty.compareTo(shareReserve) >= 0) {
             throw new IllegalStateException("주문 수량이 AMM 유동성을 초과합니다. 수량을 줄여주세요.");
         }
@@ -36,7 +36,7 @@ public final class AmmCalculator {
     }
 
     public static BigInteger sellRevenue(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
-        validatePoolAndQty(coinReserve, qty);
+        validatePoolAndQty(coinReserve, shareReserve, qty);
         BigInteger num = coinReserve.multiply(qty);
         BigInteger den = shareReserve.add(qty);
         return num.divide(den);
@@ -65,7 +65,8 @@ public final class AmmCalculator {
     }
 
     public static BigDecimal price(BigInteger coinReserve, BigInteger shareReserve) {
-        if (shareReserve.signum() <= 0) {
+        if (coinReserve == null || shareReserve == null
+                || coinReserve.signum() <= 0 || shareReserve.signum() <= 0) {
             throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         }
         return new BigDecimal(coinReserve).divide(new BigDecimal(shareReserve), PRICE_SCALE, RoundingMode.HALF_UP);
@@ -123,8 +124,9 @@ public final class AmmCalculator {
         );
     }
 
-    private static void validatePoolAndQty(BigInteger coinReserve, BigInteger qty) {
-        if (coinReserve.signum() <= 0) {
+    private static void validatePoolAndQty(BigInteger coinReserve, BigInteger shareReserve, BigInteger qty) {
+        if (coinReserve == null || shareReserve == null
+                || coinReserve.signum() <= 0 || shareReserve.signum() <= 0) {
             throw new IllegalStateException("AMM 풀이 초기화되지 않은 종목입니다. 잠시 후 다시 시도해주세요.");
         }
         if (qty == null || qty.signum() <= 0) {
