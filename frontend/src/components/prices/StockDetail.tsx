@@ -29,10 +29,10 @@ interface StockOrderHistoryItem {
 
 interface ApiCandle {
   bucketStart: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
+  open: number | string;
+  high: number | string;
+  low: number | string;
+  close: number | string;
 }
 
 interface FanRankingEntry {
@@ -53,14 +53,15 @@ const calcScaleFactor = (price: number): number => {
   return Math.pow(10, Math.floor(Math.log10(price)) - 8);
 };
 
-const scalePrice = (price: number, sf: number): number => {
-  const scaled = sf === 1 ? price : price / sf;
+const scalePrice = (price: number | string, sf: number): number => {
+  const numericPrice = Number(price);
+  const scaled = sf === 1 ? numericPrice : numericPrice / sf;
   if (!Number.isFinite(scaled)) return 0;
   return sf === 1 ? scaled : Math.max(scaled, Number.EPSILON);
 };
 
 const maxChartInputPrice = (candles: ApiCandle[], currentPrice: number): number => {
-  const candleHigh = candles.reduce((max, candle) => Math.max(max, candle.high), 0);
+  const candleHigh = candles.reduce((max, candle) => Math.max(max, Number(candle.high)), 0);
   return Math.max(candleHigh, currentPrice);
 };
 
