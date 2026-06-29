@@ -5,13 +5,13 @@ import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.application.CandleService;
+import com.spotchzxk.domain.trading.service.MarketPrice;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZoneId;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +45,7 @@ public class CandleController {
         long listedAtMs = stock.getListedAt() != null
                 ? stock.getListedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 : 0L;
-        BigDecimal fallbackPrice = displayPrice(stock);
+        BigDecimal fallbackPrice = MarketPrice.spotPrice(stock);
 
         long beforeMs = before != null ? before : System.currentTimeMillis();
         List<OhlcCandle> candles = candleService.getCandles(stockId, interval, count, beforeMs, listedAtMs, fallbackPrice);
@@ -63,15 +63,6 @@ public class CandleController {
                 "markers", splitMarkers,
                 "splitEvents", splitMarkers,
                 "priceScale", "current"));
-    }
-
-    private static BigDecimal displayPrice(Stock stock) {
-        if (stock.getCoinReserve() != null && stock.getShareReserve() != null
-                && stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0) {
-            return new BigDecimal(stock.getCoinReserve())
-                    .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
-        }
-        return stock.getCurrentPrice();
     }
 }
 

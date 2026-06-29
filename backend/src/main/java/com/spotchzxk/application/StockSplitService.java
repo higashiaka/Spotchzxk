@@ -9,6 +9,7 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
+import com.spotchzxk.domain.trading.service.MarketPrice;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.entity.UserShare;
 import com.spotchzxk.domain.user.repository.UserRepository;
@@ -43,8 +44,6 @@ public class StockSplitService {
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final BigDecimal SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000_000);
     private static final int SPLIT_RATIO = 10;
-    private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
-    private static final String SUSPENSION_REASON_PRICE_BELOW_ONE = "PRICE_BELOW_ONE";
     private static final BigDecimal REVERSE_SPLIT_THRESHOLD_PRICE = BigDecimal.valueOf(1_000);
     private static final String ACTION_TYPE_STOCK_SPLIT = "STOCK_SPLIT";
     private static final String ACTION_TYPE_REVERSE_STOCK_SPLIT = "REVERSE_STOCK_SPLIT";
@@ -205,8 +204,8 @@ public class StockSplitService {
         if (reverse) {
             return stockRepository.findAll().stream()
                     .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                    .filter(stock -> effectiveAmmPrice(stock).compareTo(REVERSE_SPLIT_THRESHOLD_PRICE) < 0)
-                    .map(stock -> new StockAction(stock, calcReverseSplitRatio(effectiveAmmPrice(stock)), true))
+                    .filter(stock -> MarketPrice.spotPrice(stock).compareTo(REVERSE_SPLIT_THRESHOLD_PRICE) < 0)
+                    .map(stock -> new StockAction(stock, calcReverseSplitRatio(MarketPrice.spotPrice(stock)), true))
                     .sorted(Comparator.comparing(action -> action.stock().getStreamerName()))
                     .toList();
         }
@@ -229,12 +228,9 @@ public class StockSplitService {
     private void applyAction(StockAction action) {
         Stock stock = action.stock();
         if (action.reverse()) {
-            BigDecimal preSplitPrice = effectiveAmmPrice(stock);
+            BigDecimal preSplitPrice = MarketPrice.spotPrice(stock);
             stock.applyReverseStockSplit(action.ratio());
-            if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) >= 0
-                    && SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
-                stock.resumeTrading();
-            }
+            MarketPrice.syncPriceSuspension(stock);
             refundAndApplyReverseSplit(stock.getChannelId(), action.ratio(), preSplitPrice);
             stock.syncIssuedShares(userShareRepository.sumQuantityByStock(stock.getChannelId()));
             return;
@@ -325,9 +321,9 @@ public class StockSplitService {
         List<Stock> targets = stockRepository.findAll().stream()
                 .filter(stock -> !stock.isTradingSuspended())
                 .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
-                .filter(stock -> effectiveAmmPrice(stock).compareTo(BigDecimal.ZERO) > 0)
-                .filter(stock -> effectiveAmmPrice(stock).compareTo(MIN_TRADABLE_PRICE) < 0)
-                .peek(stock -> stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE))
+                .filter(stock -> MarketPrice.spotPrice(stock).compareTo(BigDecimal.ZERO) > 0)
+                .filter(stock -> MarketPrice.spotPrice(stock).compareTo(MarketPrice.MIN_TRADABLE_PRICE) < 0)
+                .peek(stock -> stock.suspendTrading(MarketPrice.REASON_PRICE_BELOW_ONE))
                 .toList();
         if (!targets.isEmpty()) {
             stockRepository.saveAll(targets);
@@ -335,19 +331,6 @@ public class StockSplitService {
                     targets.size(),
                     targets.stream().map(Stock::getChannelId).collect(Collectors.joining(", ")));
         }
-    }
-
-    private boolean hasValidAmmPool(Stock stock) {
-        return stock.getCoinReserve() != null && stock.getShareReserve() != null
-                && stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0;
-    }
-
-    private BigDecimal effectiveAmmPrice(Stock stock) {
-        if (hasValidAmmPool(stock)) {
-            return new BigDecimal(stock.getCoinReserve())
-                    .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
-        }
-        return stock.getCurrentPrice() != null ? stock.getCurrentPrice() : BigDecimal.ZERO;
     }
 
     private boolean isEventStock(Stock stock) {

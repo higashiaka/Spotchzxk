@@ -14,6 +14,7 @@ import com.spotchzxk.domain.trading.entity.TradeFailureLog;
 import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
 import com.spotchzxk.domain.trading.repository.TradeFailureLogRepository;
 import com.spotchzxk.domain.trading.service.AmmCalculator;
+import com.spotchzxk.domain.trading.service.MarketPrice;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -42,9 +43,7 @@ public class TradeEngine {
     // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to match megaphone/stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int PRICE_SCALE = 6;
-    private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
-    private static final String SUSPENSION_REASON_PRICE_BELOW_ONE = "PRICE_BELOW_ONE";
-    private static final String SUSPENSION_REASON_INVALID_AMM_POOL = "INVALID_AMM_POOL";
+    private static final String SUSPENSION_REASON_INVALID_AMM_POOL = MarketPrice.REASON_INVALID_AMM_POOL;
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -578,11 +577,7 @@ public class TradeEngine {
     private BigInteger[] updateStock(Stock stock, boolean isBuy, BigInteger qty, AmmCalculator.AmmResult amm, BigDecimal userNet) {
         stock.applyAmmTrade(amm.newPool()[0], amm.newPool()[1], amm.feePoolAmount());
         stock.applyTrade(amm.newPrice(), isBuy, qty, userNet);
-        if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) < 0) {
-            stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE);
-        } else if (SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
-            stock.resumeTrading();
-        }
+        MarketPrice.syncPriceSuspension(stock);
         stockRepository.save(stock);
         return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};
     }
@@ -670,15 +665,6 @@ public class TradeEngine {
             return Long.MIN_VALUE;
         }
         return value.longValue();
-    }
-
-    private BigDecimal displayPrice(BigInteger coinReserve, BigInteger shareReserve, BigDecimal fallbackPrice) {
-        if (coinReserve != null && shareReserve != null
-                && coinReserve.signum() > 0 && shareReserve.signum() > 0) {
-            return new BigDecimal(coinReserve)
-                    .divide(new BigDecimal(shareReserve), 18, RoundingMode.HALF_UP);
-        }
-        return fallbackPrice;
     }
 
     private BigDecimal qtyDecimal(BigInteger qty) {
@@ -908,7 +894,7 @@ public class TradeEngine {
                                 BigInteger coinReserve, BigInteger shareReserve,
                                 BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId,
                                 boolean tradingSuspended) {
-        BigDecimal displayPrice = displayPrice(coinReserve, shareReserve, executedPrice);
+        BigDecimal displayPrice = MarketPrice.spotPrice(coinReserve, shareReserve, executedPrice);
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, displayPrice, executedAt), candleExecutor);
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", displayPrice.toPlainString()));

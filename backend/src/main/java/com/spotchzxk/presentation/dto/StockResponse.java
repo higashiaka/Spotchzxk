@@ -3,10 +3,10 @@ package com.spotchzxk.presentation.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.spotchzxk.domain.stock.entity.Stock;
+import com.spotchzxk.domain.trading.service.MarketPrice;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 public record StockResponse(
@@ -36,9 +36,6 @@ public record StockResponse(
         String tradingSuspensionReason,
         LocalDateTime listedAt
 ) {
-    private static final BigDecimal MIN_TRADABLE_PRICE = BigDecimal.ONE;
-    private static final int AMM_PRICE_SCALE = 18;
-
     public static StockResponse from(Stock s) {
         return new StockResponse(
                 s.getChannelId(),
@@ -50,7 +47,7 @@ public record StockResponse(
                 s.getDailyTradingValue(),
                 s.getBasePrice(),
                 s.getListingPrice(),
-                displayPrice(s),
+                MarketPrice.spotPrice(s),
                 s.isLive(),
                 s.getLiveStartedAt(),
                 s.getDividendAccumulationCount(),
@@ -59,36 +56,8 @@ public record StockResponse(
                 s.getShareReserve(),
                 s.getLiquidityTier(),
                 s.isTradingSuspended(),
-                suspensionReason(s),
+                MarketPrice.suspensionReason(s),
                 s.getListedAt()
         );
-    }
-
-    private static BigDecimal displayPrice(Stock s) {
-        if (s.getCoinReserve() != null && s.getShareReserve() != null
-                && s.getCoinReserve().signum() > 0 && s.getShareReserve().signum() > 0) {
-            return new BigDecimal(s.getCoinReserve())
-                    .divide(new BigDecimal(s.getShareReserve()), AMM_PRICE_SCALE, RoundingMode.HALF_UP);
-        }
-        return s.getCurrentPrice();
-    }
-
-    private static String suspensionReason(Stock s) {
-        if (!s.isTradingSuspended()) {
-            return null;
-        }
-        if (s.getTradingSuspensionReason() != null && !s.getTradingSuspensionReason().isBlank()) {
-            return s.getTradingSuspensionReason();
-        }
-        if (s.getCoinReserve() == null || s.getShareReserve() == null
-                || s.getCoinReserve().signum() <= 0 || s.getShareReserve().signum() <= 0) {
-            return "INVALID_AMM_POOL";
-        }
-        BigDecimal ammPrice = new BigDecimal(s.getCoinReserve())
-                .divide(new BigDecimal(s.getShareReserve()), AMM_PRICE_SCALE, RoundingMode.HALF_UP);
-        if (ammPrice.compareTo(MIN_TRADABLE_PRICE) < 0) {
-            return "PRICE_BELOW_ONE";
-        }
-        return "API_UNAVAILABLE";
     }
 }

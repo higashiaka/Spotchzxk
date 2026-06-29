@@ -7,6 +7,7 @@ import com.spotchzxk.domain.stock.entity.StockSplitEvent;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
+import com.spotchzxk.domain.trading.service.MarketPrice;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -150,7 +151,7 @@ public class CandleService {
             // If a trade occurred this minute, it was already broadcast by onTrade ??skip
             if (tradedStockIds.contains(stockId)) continue;
 
-            BigDecimal price = displayPrice(stock);
+            BigDecimal price = MarketPrice.spotPrice(stock);
             Map<String, OhlcCandle> update = new HashMap<>();
             for (String interval : ALL_INTERVALS) {
                 long bms = INTERVAL_MS.get(interval);
@@ -355,14 +356,6 @@ public class CandleService {
         return a.compareTo(b) <= 0 ? a : b;
     }
 
-    private static BigDecimal displayPrice(Stock stock) {
-        if (stock.getCoinReserve() != null && stock.getShareReserve() != null
-                && stock.getCoinReserve().signum() > 0 && stock.getShareReserve().signum() > 0) {
-            return new BigDecimal(stock.getCoinReserve())
-                    .divide(new BigDecimal(stock.getShareReserve()), 18, RoundingMode.HALF_UP);
-        }
-        return stock.getCurrentPrice();
-    }
 }
 
 
