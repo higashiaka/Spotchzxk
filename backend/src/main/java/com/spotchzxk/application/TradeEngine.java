@@ -144,7 +144,7 @@ public class TradeEngine {
                 new BigDecimal(amm.userNetAmount()), savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
                 savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
         processPendingLimitOrders(channelId);
-        return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(),
+        return new TradeResponse("executed", amm.newPrice().toPlainString(), newBalance.toPlainString(),
                 "0", orderId, "market");
     }
 
@@ -172,7 +172,7 @@ public class TradeEngine {
             userShareRepository.delete(share);
             addToUserBalance(userId, new BigDecimal(amm.userNetAmount()).add(fractionalProceeds));
             addToUserRealizedProfit(userId, realizedProfit);
-            saveOrder(userId, channelId, false, wholeQty, fallbackPrice, amm.avgPrice(), executedAt,
+            saveOrder(userId, channelId, false, wholeQty, fallbackPrice, amm.newPrice(), executedAt,
                     orderId, "market", null, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
                     stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds, stock.isTradingSuspended());
@@ -329,7 +329,7 @@ public class TradeEngine {
             processPendingLimitOrders(channelId);
         }
 
-        return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(),
+        return new TradeResponse("executed", amm.newPrice().toPlainString(), newBalance.toPlainString(),
                 "0", orderId, "market");
     }
 
@@ -398,7 +398,7 @@ public class TradeEngine {
                 savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
         processPendingLimitOrders(channelId);
 
-        return new TradeResponse("executed", amm.avgPrice().toPlainString(), newBalance.toPlainString(), "0", orderId, "limit");
+        return new TradeResponse("executed", amm.newPrice().toPlainString(), newBalance.toPlainString(), "0", orderId, "limit");
     }
 
     private TradeResponse createPendingLimitOrder(String userId, String channelId, boolean isBuy, BigInteger qty,
@@ -563,7 +563,7 @@ public class TradeEngine {
             if (!isBuy) {
                 addToUserRealizedProfit(userId, realizedProfit);
             }
-            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.avgPrice(), executedAt,
+            saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.newPrice(), executedAt,
                     orderId, orderMode, limitPrice, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
                     stock.getDailyVolume(), stock.getDailyTradingValue(), stock.isTradingSuspended());
@@ -580,6 +580,8 @@ public class TradeEngine {
         stock.applyTrade(amm.newPrice(), isBuy, qty, userNet);
         if (stock.getCurrentPrice().compareTo(MIN_TRADABLE_PRICE) < 0) {
             stock.suspendTrading(SUSPENSION_REASON_PRICE_BELOW_ONE);
+        } else if (SUSPENSION_REASON_PRICE_BELOW_ONE.equals(stock.getTradingSuspensionReason())) {
+            stock.resumeTrading();
         }
         stockRepository.save(stock);
         return new BigInteger[]{stock.getCoinReserve(), stock.getShareReserve()};
@@ -841,9 +843,9 @@ public class TradeEngine {
             dailyTradingValueHolder[0] = stock.getDailyTradingValue();
             tradingSuspendedHolder[0] = stock.isTradingSuspended();
             if (fillQty.compareTo(remainingQty) >= 0) {
-                freshOrder.complete(amm.avgPrice(), executedAt);
+                freshOrder.complete(amm.newPrice(), executedAt);
             } else {
-                freshOrder.partialFill(qtyDecimal(fillQty), amm.avgPrice(), executedAt);
+                freshOrder.partialFill(qtyDecimal(fillQty), amm.newPrice(), executedAt);
             }
             orderRepository.save(freshOrder);
             resultHolder[0] = amm;
