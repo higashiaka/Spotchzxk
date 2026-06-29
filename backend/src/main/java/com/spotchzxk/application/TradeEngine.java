@@ -670,6 +670,15 @@ public class TradeEngine {
         return value.longValue();
     }
 
+    private BigDecimal displayPrice(BigInteger coinReserve, BigInteger shareReserve, BigDecimal fallbackPrice) {
+        if (coinReserve != null && shareReserve != null
+                && coinReserve.signum() > 0 && shareReserve.signum() > 0) {
+            return new BigDecimal(coinReserve)
+                    .divide(new BigDecimal(shareReserve), 18, RoundingMode.HALF_UP);
+        }
+        return fallbackPrice;
+    }
+
     private BigDecimal qtyDecimal(BigInteger qty) {
         return new BigDecimal(qty);
     }
@@ -897,16 +906,17 @@ public class TradeEngine {
                                 BigInteger coinReserve, BigInteger shareReserve,
                                 BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId,
                                 boolean tradingSuspended) {
-        CompletableFuture.runAsync(() -> candleService.onTrade(channelId, executedPrice, executedAt), candleExecutor);
+        BigDecimal displayPrice = displayPrice(coinReserve, shareReserve, executedPrice);
+        CompletableFuture.runAsync(() -> candleService.onTrade(channelId, displayPrice, executedAt), candleExecutor);
         asyncBroadcast.send("/topic/prices/" + channelId,
-                Map.of("streamerId", channelId, "price", executedPrice.toPlainString()));
+                Map.of("streamerId", channelId, "price", displayPrice.toPlainString()));
         asyncBroadcast.send("/topic/trades", Map.ofEntries(
                 Map.entry("id", orderId),
                 Map.entry("streamerId", channelId),
                 Map.entry("streamerName", streamerName != null ? streamerName : channelId),
                 Map.entry("type", isBuy ? "buy" : "sell"),
                 Map.entry("quantity", qty.toString()),
-                Map.entry("price", executedPrice.toPlainString()),
+                Map.entry("price", displayPrice.toPlainString()),
                 Map.entry("tradingValue", toLongCap(cost)),
                 Map.entry("dailyVolume", dailyVolume != null ? dailyVolume.toPlainString() : qty.toString()),
                 Map.entry("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString()),

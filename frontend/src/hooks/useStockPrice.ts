@@ -12,7 +12,10 @@ export interface StockPriceData {
   direction: 'up' | 'down' | 'none';
 }
 
-const toScaled = (value: number): number => Number(value.toFixed(6));
+const toPriceNumber = (value: unknown, fallback = 0): number => {
+  const n = toFiniteNumber(value, fallback);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
 
 /** Tracks real-time price of a stock by subscribing to STOMP /topic/prices/{channelId}.
  *  Also syncs with fallbackPrice (streamer.price) so that /topic/trades updates are
@@ -20,7 +23,7 @@ const toScaled = (value: number): number => Number(value.toFixed(6));
  *  @param channelId - Channel ID of the stock to subscribe
  *  @param fallbackPrice - External price source (e.g. from useStocks / /topic/trades) */
 export const useStockPrice = (channelId: string, fallbackPrice: number = 100): StockPriceData => {
-  const safeFallbackPrice = toScaled(toFiniteNumber(fallbackPrice, 100));
+  const safeFallbackPrice = toPriceNumber(fallbackPrice, 100);
   const [priceData, setPriceData] = useState<StockPriceData>({
     currentPrice: safeFallbackPrice,
     previousPrice: null,
@@ -44,7 +47,7 @@ export const useStockPrice = (channelId: string, fallbackPrice: number = 100): S
     const subscription = subscribeStomp(`/topic/prices/${channelId}`, (message) => {
       try {
         const { price } = JSON.parse(message.body);
-        const newPrice = toScaled(toFiniteNumber(price));
+        const newPrice = toPriceNumber(price);
         if (newPrice <= 0) return;
         // Sync ref so a subsequent fallback update with the same value is a no-op
         prevFallbackRef.current = newPrice;

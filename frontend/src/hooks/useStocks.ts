@@ -132,6 +132,9 @@ export const useStocks = () => {
         const trade = JSON.parse(message.body) as LiveTrade;
         setStocks(prev => prev.map(stock => {
           if (stock.id !== trade.streamerId) return stock;
+          const coinReserve = trade.coinReserve ?? stock.coinReserve;
+          const shareReserve = trade.shareReserve ?? stock.shareReserve;
+          const ammPrice = toAmmPrice(coinReserve, shareReserve);
           const dailyVolume = trade.dailyVolume !== undefined
             ? Number(trade.dailyVolume)
             : stock.totalVolume + Number(trade.quantity);
@@ -140,11 +143,11 @@ export const useStocks = () => {
             : stock.dailyTradingValue + Number(trade.tradingValue ?? 0);
           return {
             ...stock,
-            price: toPositivePrice(trade.price, stock.price),
+            price: ammPrice ?? toPositivePrice(trade.price, stock.price),
             totalVolume: dailyVolume,
             dailyTradingValue,
-            coinReserve: trade.coinReserve ?? stock.coinReserve,
-            shareReserve: trade.shareReserve ?? stock.shareReserve,
+            coinReserve,
+            shareReserve,
             tradingSuspended: trade.tradingSuspended ?? stock.tradingSuspended,
           };
         }));
