@@ -65,6 +65,19 @@ const maxChartInputPrice = (candles: ApiCandle[], currentPrice: number): number 
   return Math.max(candleHigh, currentPrice);
 };
 
+const withCurrentPriceTail = (candles: ApiCandle[], currentPrice: number): ApiCandle[] => {
+  if (candles.length === 0 || !Number.isFinite(currentPrice) || currentPrice <= 0) return candles;
+
+  const last = candles[candles.length - 1];
+  const adjustedLast = {
+    ...last,
+    high: Math.max(Number(last.high), currentPrice),
+    low: Math.min(Number(last.low), currentPrice),
+    close: currentPrice,
+  };
+  return [...candles.slice(0, -1), adjustedLast];
+};
+
 const toChartCandle = (c: ApiCandle, sf: number): Candle => {
   const open = scalePrice(c.open, sf);
   const high = scalePrice(c.high, sf);
@@ -112,14 +125,18 @@ export const StockDetail = ({
   const rawCandlesRef = useRef<ApiCandle[]>([]);
   const hasMoreCandlesRef = useRef(true);
   const isLoadingMoreCandlesRef = useRef(false);
-
-  const scaleFactor = useMemo(
-    () => calcScaleFactor(maxChartInputPrice(rawCandles, currentPrice)),
+  const displayRawCandles = useMemo(
+    () => withCurrentPriceTail(rawCandles, currentPrice),
     [rawCandles, currentPrice],
   );
+
+  const scaleFactor = useMemo(
+    () => calcScaleFactor(maxChartInputPrice(displayRawCandles, currentPrice)),
+    [displayRawCandles, currentPrice],
+  );
   const candles = useMemo(
-    () => rawCandles.map(c => toChartCandle(c, scaleFactor)),
-    [rawCandles, scaleFactor],
+    () => displayRawCandles.map(c => toChartCandle(c, scaleFactor)),
+    [displayRawCandles, scaleFactor],
   );
 
   useEffect(() => { rawCandlesRef.current = rawCandles; }, [rawCandles]);
