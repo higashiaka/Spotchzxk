@@ -29,7 +29,7 @@ export const announcements: AnnouncementItem[] = [
           { label: '종목 추가권', value: '10개 지급', tone: 'accent' },
           { label: '칭호', value: '베타 참여자 칭호 지급', tone: 'accent' },
         ],
-        note: '보상은 프로필에서 확인할 수 있습니다.',
+        note: '칭호 선택은 설정 화면에서 가능합니다.',
       },
       {
         title: '예정',
