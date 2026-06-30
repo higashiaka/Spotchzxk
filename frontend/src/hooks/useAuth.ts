@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 const HAS_LINKED_ACCOUNT_KEY = 'has_linked_account';
 const GUEST_SOFT_LOGGED_OUT_KEY = 'guest_soft_logged_out';
 const PENDING_GUEST_MERGE_KEY = 'pendingGuestMerge';
+const SOCIAL_PROVIDER_IDS = new Set(['google.com', 'oidc.naver']);
 
 export type GuestLimitNotice = { retryAtMs: number };
 export type SuspensionNotice = {
@@ -24,6 +25,9 @@ type FirebaseAuthError = Error & {
   code?: string;
   credential?: Parameters<typeof signInWithCredential>[1];
 };
+
+const hasSocialProvider = (u: User | null | undefined) =>
+  !!u && (u.providerData.some(p => SOCIAL_PROVIDER_IDS.has(p.providerId)) || u.uid.startsWith('naver:'));
 
 export const guestLimitLabel = (retryAtMs: number, nowMs: number) => {
   const remainingSeconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
@@ -100,7 +104,10 @@ export function useAuth() {
         await signOut(auth);
       }
       localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
-      await signInWithPopup(auth, provider);
+      const credential = await signInWithPopup(auth, provider);
+      if (hasSocialProvider(credential.user)) {
+        localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
+      }
     } catch (err: unknown) {
       const authErr = err as FirebaseAuthError;
       if (authErr.code === 'auth/popup-closed-by-user') return;
@@ -137,10 +144,11 @@ export function useAuth() {
       setAuthChecking(false);
 
       const pendingGuestUid = localStorage.getItem(PENDING_GUEST_MERGE_KEY);
-      const hasSocialProvider = u?.providerData.some(p =>
-        p.providerId === 'google.com' || p.providerId === 'oidc.naver'
-      );
-      if (pendingGuestUid && u && hasSocialProvider) {
+      const isSocialUser = hasSocialProvider(u);
+      if (isSocialUser) {
+        localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
+      }
+      if (pendingGuestUid && u && isSocialUser) {
         localStorage.removeItem(PENDING_GUEST_MERGE_KEY);
         try {
           const res = await apiFetch('/api/auth/link-social', {
@@ -232,6 +240,7 @@ export function useAuth() {
           }
           const { customToken } = await res.json();
           await signInWithCustomToken(auth, customToken);
+          localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
         } catch {
           alert('네이버 로그인 중 오류가 발생했습니다.');
         }
@@ -254,6 +263,7 @@ export function useAuth() {
     try {
       let precheckToken: string | undefined;
       let fingerprintHash: string | undefined;
+      let createdAnonymousThisAttempt = false;
 
       if (localStorage.getItem(HAS_LINKED_ACCOUNT_KEY) === 'true') {
         alert('This browser already used a linked account. Please continue with social login.');
@@ -283,6 +293,7 @@ export function useAuth() {
           ? precheckBody.precheckToken
           : undefined;
         await signInAnonymously(auth);
+        createdAnonymousThisAttempt = true;
       } else {
         setUser(auth.currentUser);
       }
@@ -294,7 +305,9 @@ export function useAuth() {
       if (res.status === 429 || res.status === 403) {
         const body = await res.json().catch(() => ({}));
         const retryAfterSeconds = Number(body.retryAfterSeconds ?? 300);
-        await signOut(auth);
+        if (createdAnonymousThisAttempt) {
+          await signOut(auth);
+        }
         setGuestLimitNotice({ retryAtMs: Date.now() + retryAfterSeconds * 1000 });
         return;
       }

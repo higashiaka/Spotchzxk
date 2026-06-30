@@ -23,9 +23,7 @@ public class GuestService {
     }
 
     public boolean requiresPrecheckForGuestRegistration(String uid) {
-        return userRepository.findById(uid)
-                .map(User::isGuest)
-                .orElse(true);
+        return !userRepository.existsById(uid);
     }
 
     @Transactional
