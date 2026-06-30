@@ -45,6 +45,7 @@ public class TradeEngine {
     // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to match megaphone/stock-add costs
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int PRICE_SCALE = 6;
+    private static final BigDecimal MIN_STORABLE_PRICE = new BigDecimal("0.000001");
     private static final String SUSPENSION_REASON_INVALID_AMM_POOL = MarketPrice.REASON_INVALID_AMM_POOL;
     private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
 
@@ -455,6 +456,9 @@ public class TradeEngine {
         BigDecimal limit1 = limitReservationAmount(limitPrice, BigInteger.ONE, isBuy);
         boolean unit1Ok = isBuy ? net1.compareTo(limit1) <= 0
                                 : net1.compareTo(limitPrice) >= 0;
+        if (!isBuy && !isPostTradePriceSafe(test)) {
+            unit1Ok = false;
+        }
         if (!unit1Ok) return BigInteger.ZERO;
 
         BigInteger lo = BigInteger.ONE;
@@ -469,6 +473,9 @@ public class TradeEngine {
             BigDecimal floor = limitPrice.multiply(new BigDecimal(mid));
             boolean ok = isBuy ? userNet.compareTo(ceiling) <= 0
                                : userNet.compareTo(floor) >= 0;
+            if (!isBuy && !isPostTradePriceSafe(amm)) {
+                ok = false;
+            }
             if (ok) lo = mid;
             else hi = mid.subtract(BigInteger.ONE);
         }
@@ -501,9 +508,24 @@ public class TradeEngine {
         if (pool[0] == null || pool[1] == null || pool[0].signum() <= 0 || pool[1].signum() <= 0) {
             suspendUnsafePriceStock(channelId);
         }
-        return isBuy
+        AmmCalculator.AmmResult amm = isBuy
                 ? AmmCalculator.calcBuy(pool[0], pool[1], qty)
                 : AmmCalculator.calcSell(pool[0], pool[1], qty);
+        validatePostTradePrice(isBuy, amm);
+        return amm;
+    }
+
+    private void validatePostTradePrice(boolean isBuy, AmmCalculator.AmmResult amm) {
+        if (isBuy) {
+            return;
+        }
+        if (!isPostTradePriceSafe(amm)) {
+            throw validationError("매도 후 가격이 최소 표시 단위(0.000001원) 미만이 되어 주문이 취소되었습니다. 수량을 줄여주세요.");
+        }
+    }
+
+    private boolean isPostTradePriceSafe(AmmCalculator.AmmResult amm) {
+        return amm.newPrice().compareTo(MIN_STORABLE_PRICE) >= 0;
     }
 
     private void suspendUnsafePriceStock(String channelId) {
@@ -806,6 +828,9 @@ public class TradeEngine {
             boolean fullFillOk = freshIsBuy
                     ? userNet.compareTo(limitCeiling) <= 0
                     : userNet.compareTo(limitFloor) >= 0;
+            if (!freshIsBuy && !isPostTradePriceSafe(amm)) {
+                fullFillOk = false;
+            }
 
             BigInteger fillQty = remainingQty;
             if (!fullFillOk) {
@@ -817,6 +842,7 @@ public class TradeEngine {
                         ? AmmCalculator.calcBuy(stock.getCoinReserve(), stock.getShareReserve(), fillQty)
                         : AmmCalculator.calcSell(stock.getCoinReserve(), stock.getShareReserve(), fillQty);
                 userNet = new BigDecimal(amm.userNetAmount());
+                if (!freshIsBuy && !isPostTradePriceSafe(amm)) return;
             }
 
             if (freshIsBuy) {

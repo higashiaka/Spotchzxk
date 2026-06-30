@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Register the CHZZK partner channels captured from the partner page.
+#
+# Default usage uses the embedded channel list:
+#   ADMIN_API_KEY=<key> bash bulk_relist_from_partner_html.sh [BASE_URL]
+#
+# You can also pass a saved partner-page HTML snippet to override the embedded list:
+#   ADMIN_API_KEY=<key> bash bulk_relist_from_partner_html.sh <HTML_FILE> [BASE_URL]
+#
+# Optional:
+#   BATCH_SIZE=50 ADMIN_API_KEY=<key> bash bulk_relist_from_partner_html.sh https://spotchzxk.xyz
+
+ARG1="${1:-}"
+ARG2="${2:-}"
+ADMIN_KEY="${ADMIN_API_KEY:?ADMIN_API_KEY environment variable is required}"
+BATCH_SIZE="${BATCH_SIZE:-100}"
+
+if [[ -n "$ARG1" && -f "$ARG1" ]]; then
+  HTML_FILE="$ARG1"
+  BASE_URL="${ARG2:-https://spotchzxk.xyz}"
+else
+  HTML_FILE=""
+  BASE_URL="${ARG1:-https://spotchzxk.xyz}"
+fi
+
+if ! [[ "$BATCH_SIZE" =~ ^[0-9]+$ ]] || [[ "$BATCH_SIZE" -lt 1 ]]; then
+  echo "BATCH_SIZE must be a positive integer" >&2
+  exit 1
+fi
+
+TMP_IDS="$(mktemp)"
+TMP_BODY="$(mktemp)"
+trap 'rm -f "$TMP_IDS" "$TMP_BODY"' EXIT
+
+if [[ -n "$HTML_FILE" ]]; then
+  grep -Eo 'href="/[0-9a-fA-F]{32}"' "$HTML_FILE" \
+    | sed -E 's/^href="\/([0-9a-fA-F]{32})"$/\1/' \
+    | tr '[:upper:]' '[:lower:]' \
+    | sort -u > "$TMP_IDS"
+else
+  cat > "$TMP_IDS" <<'CHANNEL_IDS'
+034449b176b163a705b9c0e81f7a51c2
+07cc727b7001fbc0d7491b57180c29a1
+083c66a5cfce51967bcad5c1b0b86e5d
+089185efc29a8fbe14ea294dc85f9661
+0a0a0b83c6af289507ef57a5f3d623c0
+0b33823ac81de48d5b78a38cdbc0ab94
+0d027498b18371674fac3ed17247e6b8
+0dad8baf12a436f722faa8e5001c5011
+0dcec72cd1033032a77dfced6c0c91f8
+0de024a1ca4a64f1a23a95ff9eeee5a5
+0de8f1807076169b7eb9218137e99c51
+0e604eba7206f04b1e5f15e0a1cb2616
+1161eb13d304f943542d0c8640928544
+11dbf9d1799e34363d756a5212f41aec
+17aa057a8248b53affe30512a91481f5
+17d8605fc37fb5ef49f5f67ae786fe4e
+17f0cfcba4ff608de5eabb5110d134d0
+1906dd57f578c255feca54700bcccfc9
+19e3b97ca1bca954d1ac84cf6862e0dc
+1a1dd9ce56fb61a37ffb6f69f6d5b978
+1ad5aa0f6c6741b072528fad5e5e76b1
+1aeb0ca60649660a2e534592ce480f34
+1b0561f3051c10a24b9d8ec9a6cb3374
+1c231568d0b13de5703b3f6a5e86dc47
+1d030c16b3c708b1196d96c36d32709c
+2086f44c7b09a17cef6786f21389db3b
+20ef78f064ebfd8dd4f7ec8a3a222fd2
+219d8e65810a77d6e42c7df018d9632b
+21a0de8b586c517181d76f183272de57
+22a8aa0dda121327692faeae44758efa
+261ac936dceaa344c8ef3031f2640834
+26ae7850ad5b6b09ca864d482dc7fa50
+2708947b66f527fd74e6b3d6bcc1349b
+29f20622463916fa48ad735057b145ce
+2c3d33db0543d96700ec6d1ad83090a2
+2cc562e9370970d567c1a25c5c7d0e77
+2d4aa2f79b0a397d032c479ef1b37a67
+2eee29ce69664154d8bc478825941259
+32fb866e323242b770cdc790f991a6f6
+343fc0e877aa8ca0cad5106b33d6fa95
+3497a9a7221cc3ee5d3f95991d9f95e9
+368ca51e82c85583e059fe669ef0f028
+36ddb9bb4f17593b60f1b63cec86611d
+377edf46550ebf1d98b15d7e6da63890
+37b461a8196dc63fd729db0251f8cdb0
+37d4cf307027dc7474357b6c0d98f748
+390efc6c5186f85427b2d61297a9d4ed
+3aef9a2c159402f5912509d583d46733
+3e825479d71ead63b76de0d6f6b5dc83
+3fab37f4883eee95423be3546af001c8
+42597020c1a79fb151bd9b9beaa9779b
+430e71940e6d51309fa6a47fe01e3b30
+4325b1d5bbc321fad3042306646e2e50
+434479f33f8afd5bb5089ce4b61babe4
+4515b179f86b67b4981e16190817c580
+458f6ec20b034f49e0fc6d03921646d2
+45e71a76e949e16a34764deb962f9d9f
+475313e6c26639d5763628313b4c130e
+47c49bff55111a6cfd30bb299e9d2e5d
+4a1eb484a0e13d256944e9fe5d8b4f67
+4b00ded9b083e31c29dc509d7e063c7a
+4d0b7d3f825ea982b95f0a5c2b4782d3
+4d39d99252f247f06de349ccc0d444a7
+4d812b586ff63f8a2946e64fa860bbf5
+4de764d9dad3b25602284be6db3ac647
+4ebef1eb4194611996dc38abf1d226d1
+4f891095bc91025428ba2e8c375ef86c
+516937b5f85cbf2249ce31b0ad046b0f
+52fd9d4ab4e019ada4576ae81a2ec78e
+554e99695decc451d57788b1fd5d5c07
+55e243bd868e55adf3524c85f8db51b5
+5777797bab18388e7044ed7bac3c56c8
+57b81c7f224d53221eac898330066927
+59cbccdbc14b3e9318e0d477a35c64c5
+59dd654778e3d0b64f3ed06baece805d
+5d53f8fa5bef9b1bd4dc884f9907c079
+5ea7f30aa23d7426e9f71bf11c9df0d1
+5f44570b82fb82d4814ef9502cf6401a
+5f800579267362c952f76f3c6fe695b2
+64d76089fba26b180d9c9e48a32600d9
+65a53076fe1a39636082dd6dba8b8a4b
+65c3035bdc598c81f15a8fe0e958b3ce
+67c0edbb3127f93271c552d1dc1e5341
+68f895c59a1043bc5019b5e08c83a5c5
+6ab86891e07489743437594c6e4dbf3a
+6bd0bb97d31365e7834d8113bb01d889
+6cac96d5c9b7a9fd28903aa32fc61749
+6e06f5e1907f17eff543abd06cb62891
+732f6f16d20991243ec3f2d7afed8821
+74f9f433dd8866bf69f6c930a64d06a8
+7549c4fb46e0385ab1558f328aa6a8f9
+758a4f4c9036f25945e2062871ca68b0
+75bd327f6ba6f57106c79fe3f2c3d19f
+75cbf189b3bb8f9f687d2aca0d0a382b
+798e100206987b59805cfb75f927e965
+7b1acb37b35928ff690d011296a9e5ab
+7c802d1b0c9c2872952fe1b8ba4268bd
+7ce8032370ac5121dcabce7bad375ced
+7efa5b40ee1729ac57d3adbebf3ddb3c
+80b36a0ae8e887e893ce0014dbfece4a
+819204d0fc2db01ae640c2e7d599ee9b
+84be298681c287441d614db925803c4d
+8803cee946a9e610a76fbdee98d98c61
+8a59b34b46271960c1bf172bb0fac758
+8b3e8e3a13201cff0836c69cfab62f45
+8fd39bb8de623317de90654718638b10
+93fe884808459fb4e4a3c7d64f0eef03
+952e7d21b36d75675894f97e4975bf9f
+9adba4145af3cc748ea371ccd318de16
+9d4f299325b38f9183bdb90b8849d912
+a121dab6835c0613dd5f8ef5acd1f155
+a55bc2d4504e55c5f248a80475e60538
+a67b328bcc8eea4451ccfa754bc19ae1
+a6c4ddb09cdb160478996007bff35296
+a7e175625fdea5a7d98428302b7aa57f
+a86031fdfeb1b223ad1172cf6ba4b94e
+a9a343510e132ea3026ff3cf682820b5
+a9ab391cdd3faef4ca2ee782e96e5c59
+abe8aa82baf3d3ef54ad8468ee73e7fc
+ac6a03808bffbe58b3bfb0e25271836e
+aed9d6557bebfb21ab3d081b862cdd2d
+aedecd121e2cf471fd8510f980cac8b1
+af3323d30e11ae42c39d7203c7e07fa2
+affa78deac0b23d2046b8ed4856c1e62
+b044e3a3b9259246bc92e863e7d3f3b8
+b1099827eb54bab6771bae5c85e887b7
+b382fba9b6dd982814ffdf0e14961c18
+b40ce4b4204a494a97c55c251e092424
+b5da9cbcab300065236b4309ecaf19b7
+b5ed5db484d04faf4d150aedd362f34b
+b628d1039a84ecc703804e17acee2eb3
+b68af124ae2f1743a1dcbf5e2ab41e0b
+b8263cd74372864eacb2d5bd16551882
+b82e8bc2505e37156b2d1140ba1fc05c
+bad6d7da33aec001343a51b85a70fcdb
+bd07973b6021d72512240c01a386d5c9
+bdc57cc4217173f0e89f63fba2f1c6e5
+be83ec844c05d2099cda8a715349bb9c
+bee4b42475b5937226b8b7ccbe2eb2dc
+bf4df7913fcc6c4bd0932a37310a761f
+c0d9723cbb75dc223c6aa8a9d4f56002
+c100f81959d1c17044be0541eed56f5b
+c65ca7335aaeb2ca0c985078223017c0
+c7323bedccf4abf257c1ce1f465c4707
+c7ded8ea6b0605d3c78e18650d2df83b
+c847a58a1599988f6154446c75366523
+c892177b4d613127d8c587e9da11d384
+ca1850b2eceb7f86146695fd9bb9cefc
+cba6252383865efc07b615a1f5634273
+cd04c50c6ff488ac96f8900e26e5b993
+d185099b64dd8ca6b96a51ee3e9011c2
+d313d208af312efb8dc7184d9564be3d
+d6fc3283fe0938bca8d65093e4c2bb94
+dbd6e0689ff9debf8bb00a415786654c
+dc740d5bb5680666b6bf2ebc58a8203f
+dc7fb0d085cfbbe90e11836e3b85b784
+dcd75ef0f2c664e3270de18696ad43bf
+de27c33ee2364c4e5007867bb3b96001
+dec8d19f0bc4be90a4e8b5d57df9c071
+dfa2c2a85b1ba7131ba9a76fc3d5e224
+dff5fc9706f8260682ce6eb93acaad64
+e112cad680f895d13769c43f56171b4a
+e14259667937be6e561d28ab156718be
+e351edbd85f1ebf4eb975c21179a4c43
+e980f6ab9c02d2449f13a1fb55d62cb2
+e9ff6a0d42f604ac57fcd53f1c3b9bc0
+eabd1ce81f7ad48d46ebf854d1d98bc3
+eaf7b569c9992d0e57db0059eb5c0eeb
+ec06ddfe1b47d336f96e652330e9f1b4
+ec30975bd41d3179fe7734ddbf760acb
+ec63f122d921707806fc27e42c7a997d
+ed21d36a44d1956520189a784afc27ed
+effe648202c8f7fba081c2f2aeea1979
+f00f6d46ecc6d735b96ecf376b9e5212
+f20881fce506174330ecb58342c4c70d
+f2a7843599c11e809046eb5d6720ce6a
+f39c3d74e33a81ab3080356b91bb8de5
+f3f7af23c948938651fd244014ff1204
+f4c0ddf59bb8e788e393cd5a8a1296b2
+fbec5329377f51e567b1e6d12ea3f8a9
+fc00d47a77ed2d1156cd5997eba30310
+fc5a0a137f6127fe8dacd97cd473b625
+fd91ae67d83bd43ea9ea3322eb055683
+fe558c6d1b8ef3206ac0bc0419f3f564
+feb20a676694b1163fed010da0848303
+CHANNEL_IDS
+fi
+
+TOTAL="$(wc -l < "$TMP_IDS" | tr -d '[:space:]')"
+
+if [[ "$TOTAL" -eq 0 ]]; then
+  echo "No channel IDs found" >&2
+  exit 1
+fi
+
+echo "Found $TOTAL unique channel IDs"
+echo "Posting to $BASE_URL/api/admin/stocks/bulk in batches of $BATCH_SIZE"
+
+START=1
+BATCH_NO=1
+
+while [[ "$START" -le "$TOTAL" ]]; do
+  END=$((START + BATCH_SIZE - 1))
+
+  sed -n "${START},${END}p" "$TMP_IDS" \
+    | python3 -c 'import json, sys; print(json.dumps({"channelIds": [line.strip() for line in sys.stdin if line.strip()]}))' \
+    > "$TMP_BODY"
+
+  COUNT="$(python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))["channelIds"]))' "$TMP_BODY")"
+  echo "Batch $BATCH_NO: $COUNT channels"
+
+  curl -sS -X POST "$BASE_URL/api/admin/stocks/bulk" \
+    -H "Content-Type: application/json" \
+    -H "X-Admin-Key: $ADMIN_KEY" \
+    --data-binary "@$TMP_BODY" \
+    | python3 -m json.tool
+
+  START=$((END + 1))
+  BATCH_NO=$((BATCH_NO + 1))
+done

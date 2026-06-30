@@ -138,6 +138,36 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void sellTradeRejectedBeforePriceRoundsBelowMinimumStorableUnit() {
+        StockRepository stockRepository = mock(StockRepository.class);
+        TradeEngine engine = new TradeEngine(
+                mock(UserRepository.class),
+                mock(UserShareRepository.class),
+                stockRepository,
+                mock(OrderRepository.class),
+                mock(AsyncBroadcastService.class),
+                mock(PlatformTransactionManager.class),
+                mock(CandleService.class),
+                mock(TradeFailureLogRepository.class),
+                mock(RankCacheService.class)
+        );
+        String stockId = "stock-1";
+        Stock stock = Stock.builder()
+                .channelId(stockId)
+                .streamerName("streamer")
+                .currentPrice(new BigDecimal("0.000001"))
+                .coinReserve(BigInteger.ONE)
+                .shareReserve(BigInteger.valueOf(2_000_000))
+                .build();
+
+        when(stockRepository.findById(stockId)).thenReturn(Optional.of(stock));
+
+        assertThatThrownBy(() -> engine.calculateAmmTrade(stockId, false, BigInteger.ONE))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("0.000001");
+    }
+
+    @Test
     void completedTradeSuspendsStockWhenNewPriceFallsBelowOneWon() {
         StockRepository stockRepository = mock(StockRepository.class);
         TradeEngine engine = new TradeEngine(
