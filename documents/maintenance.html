@@ -3,56 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>점검 중 — Spotchzxk</title>
+  <title>오픈 준비 중 - Spotchzxk</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0f0f10;
-      color: #e8e8e8;
-      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      background: #0f1117;
+      color: #e8eefc;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
     }
     .container {
+      width: min(480px, calc(100vw - 40px));
       text-align: center;
-      padding: 2rem;
-      max-width: 480px;
+      padding: 32px 20px;
     }
-    .icon { font-size: 3rem; margin-bottom: 1.2rem; }
+    .brand {
+      margin-bottom: 20px;
+      font-size: 28px;
+      font-weight: 800;
+      color: #39d98a;
+    }
     h1 {
-      font-size: 1.6rem;
-      font-weight: 700;
-      margin-bottom: 0.8rem;
+      margin-bottom: 12px;
+      font-size: 26px;
+      font-weight: 800;
       color: #ffffff;
     }
     p {
-      font-size: 0.95rem;
-      color: #aaa;
+      margin-bottom: 8px;
+      font-size: 15px;
       line-height: 1.7;
-      margin-bottom: 0.5rem;
+      color: #a9b6cf;
     }
-    .time {
-      margin-top: 1.5rem;
-      font-size: 0.85rem;
-      color: #666;
+    .open-at {
+      margin-top: 22px;
+      font-size: 14px;
+      color: #dce6ff;
+    }
+    .timer {
+      margin-top: 14px;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(38px, 12vw, 64px);
+      font-weight: 900;
+      letter-spacing: 0;
+      color: #ffffff;
+    }
+    .label {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #74819a;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="icon">🔧</div>
-    <h1>서비스 점검 중입니다</h1>
-    <p>더 나은 서비스를 위해 점검을 진행하고 있습니다.</p>
-    <p>잠시 후 다시 접속해 주세요.</p>
-    <p class="time" id="time"></p>
-  </div>
+  <main class="container">
+    <div class="brand">Spotchzxk</div>
+    <h1>정식 오픈 준비 중입니다</h1>
+    <p>서비스 안정화를 위해 마지막 점검을 진행하고 있습니다.</p>
+    <p>잠시 후 더 안정적인 모습으로 찾아뵙겠습니다.</p>
+    <p class="open-at">2026년 7월 1일 00:00 오픈 예정</p>
+    <div class="timer" id="timer">--:--:--</div>
+    <div class="label" id="label">오픈까지 남은 시간</div>
+  </main>
+
   <script>
-    const el = document.getElementById('time');
-    // 점검 예정 종료 시각을 설정하려면 아래 주석을 해제하고 날짜를 입력하세요.
-    // const end = new Date('2025-01-01T03:00:00+09:00');
-    // if (end > new Date()) el.textContent = '예상 종료: ' + end.toLocaleString('ko-KR');
+    const openAt = new Date("2026-07-01T00:00:00+09:00").getTime();
+    const timer = document.getElementById("timer");
+    const label = document.getElementById("label");
+
+    function pad(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function renderCountdown() {
+      const remaining = openAt - Date.now();
+
+      if (remaining <= 0) {
+        timer.textContent = "00:00:00";
+        label.textContent = "곧 오픈됩니다";
+        setTimeout(() => window.location.reload(), 3000);
+        return;
+      }
+
+      const totalSeconds = Math.floor(remaining / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      timer.textContent = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    renderCountdown();
+    setInterval(renderCountdown, 1000);
   </script>
 </body>
 </html>
