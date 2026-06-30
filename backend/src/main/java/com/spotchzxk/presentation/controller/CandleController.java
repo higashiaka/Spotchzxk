@@ -60,7 +60,6 @@ public class CandleController {
 
         return ResponseEntity.ok(Map.of(
                 "candles", candles,
-                "markers", splitMarkers,
                 "splitEvents", splitMarkers,
                 "priceScale", "current"));
     }

@@ -11,7 +11,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -56,7 +55,7 @@ public class DailyResetService {
 
         log.warn("Daily reset was not recorded for {}. Running catch-up reset. source={}, lastResetDate={}",
                 today, source, lastResetDate.map(LocalDate::toString).orElse("none"));
-        transactionTemplate.executeWithoutResult(status -> performDailyReset());
+        transactionTemplate.executeWithoutResult(status -> performDailyReset(false));
     }
 
     /**
@@ -65,14 +64,13 @@ public class DailyResetService {
      * and resets daily_volume/daily_trading_value to 0.
      */
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
-    @Transactional
     public void performDailyReset() {
-        performDailyReset(false);
+        transactionTemplate.executeWithoutResult(status -> performDailyReset(false));
     }
 
-    @Transactional
     public int forceDailyReset() {
-        return performDailyReset(true);
+        Integer result = transactionTemplate.execute(status -> performDailyReset(true));
+        return result != null ? result : 0;
     }
 
     private int performDailyReset(boolean force) {

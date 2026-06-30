@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import jakarta.annotation.PostConstruct;
@@ -57,6 +59,7 @@ public class ChzzkLivePollingService {
         // Restore failure counters for already-suspended channels so they stay suspended across restarts
         stockRepository.findAll().stream()
                 .filter(s -> s.isTradingSuspended() && !isEventStock(s))
+                .filter(s -> SUSPENSION_REASON_API_UNAVAILABLE.equals(s.getTradingSuspensionReason()))
                 .forEach(s -> apiFailureCount.put(s.getChannelId(), SUSPEND_THRESHOLD));
     }
 
@@ -268,7 +271,8 @@ public class ChzzkLivePollingService {
                         if (!s.isTradingSuspended()) {
                             s.suspendTrading(SUSPENSION_REASON_API_UNAVAILABLE);
                             stockRepository.save(s);
-                            messagingTemplate.convertAndSend("/topic/streamers", List.of(StockResponse.from(s)));
+                            StockResponse payload = StockResponse.from(s);
+                            sendAfterCommit(() -> messagingTemplate.convertAndSend("/topic/streamers", List.of(payload)));
                             log.warn("Trading suspended for channel {} after {} consecutive API failures.", channelId, failures);
                         }
                     }));
@@ -286,11 +290,25 @@ public class ChzzkLivePollingService {
                                 && SUSPENSION_REASON_API_UNAVAILABLE.equals(s.getTradingSuspensionReason())) {
                             s.resumeTrading();
                             stockRepository.save(s);
-                            messagingTemplate.convertAndSend("/topic/streamers", List.of(StockResponse.from(s)));
+                            StockResponse payload = StockResponse.from(s);
+                            sendAfterCommit(() -> messagingTemplate.convertAndSend("/topic/streamers", List.of(payload)));
                             log.debug("Trading resumed for channel {} (API recovered).", channelId);
                         }
                     }));
         }
+    }
+
+    private void sendAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 }
 

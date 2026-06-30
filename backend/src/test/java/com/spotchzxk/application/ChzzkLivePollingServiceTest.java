@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doAnswer;
@@ -109,12 +110,40 @@ class ChzzkLivePollingServiceTest {
         org.assertj.core.api.Assertions.assertThat(stock.getDividendAccumulationCount()).isEqualTo(1);
     }
 
+    @Test
+    void initLiveStockCacheRestoresOnlyApiUnavailableSuspensions() {
+        Stock apiSuspended = stock("api-suspended", false, null);
+        apiSuspended.suspendTrading("API_UNAVAILABLE");
+        Stock priceSuspended = stock("price-suspended", false, null);
+        priceSuspended.suspendTrading("PRICE_BELOW_ONE");
+
+        when(stockRepository.findByIsLiveTrue()).thenReturn(List.of());
+        when(stockRepository.findAll()).thenReturn(List.of(apiSuspended, priceSuspended));
+        when(chzzkApiClient.fetchChannelStatus("api-suspended")).thenReturn("CLOSE");
+        when(chzzkApiClient.fetchChannelStatus("price-suspended")).thenReturn("CLOSE");
+        when(stockRepository.findById("api-suspended")).thenReturn(java.util.Optional.of(apiSuspended));
+        executeTransactions();
+
+        service.initLiveStockCache();
+        service.pollLiveStatus();
+
+        org.assertj.core.api.Assertions.assertThat(apiSuspended.isTradingSuspended()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(priceSuspended.isTradingSuspended()).isTrue();
+        verify(stockRepository).save(apiSuspended);
+        verify(messagingTemplate).convertAndSend("/topic/streamers", List.of(StockResponse.from(apiSuspended)));
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private void executeTransactions() {
         doAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(mock(TransactionStatus.class));
         }).when(transactionTemplate).execute(any(TransactionCallback.class));
+        doAnswer(invocation -> {
+            Consumer<TransactionStatus> callback = invocation.getArgument(0);
+            callback.accept(mock(TransactionStatus.class));
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any(Consumer.class));
     }
 
     private Stock stock(String channelId, boolean isLive, LocalDateTime liveStartedAt) {

@@ -124,11 +124,6 @@ public class ChzzkApiClient {
                 log.debug("Chzzk API content null for channel {} - channel inactive", channelId);
                 return "INACTIVE";
             }
-            if (content.isNull() || content.isMissingNode()) {
-                // content:null = channel deleted or has not streamed for a long time
-                log.warn("Chzzk API content null for channel {} — channel inactive", channelId);
-                return "INACTIVE";
-            }
             String status = content.path("status").asText("");
             return status.isEmpty() ? "CLOSE" : status.toUpperCase();
         } catch (Exception e) {

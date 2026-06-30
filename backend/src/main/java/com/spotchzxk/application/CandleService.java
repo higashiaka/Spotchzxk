@@ -10,6 +10,7 @@ import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.trading.service.MarketPrice;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.annotation.PreDestroy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
@@ -52,6 +54,14 @@ public class CandleService {
     private final ConcurrentHashMap<String, Map<String, OhlcCandle>> pendingBroadcasts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ScheduledFuture<?>> broadcastTimers = new ConcurrentHashMap<>();
     private final ScheduledThreadPoolExecutor broadcastScheduler = new ScheduledThreadPoolExecutor(2);
+
+    @PreDestroy
+    public void shutdownBroadcastScheduler() {
+        broadcastTimers.values().forEach(timer -> timer.cancel(false));
+        broadcastTimers.clear();
+        pendingBroadcasts.clear();
+        broadcastScheduler.shutdown();
+    }
 
     private Object lockFor(String stockId) {
         return stockLocks.computeIfAbsent(stockId, k -> new Object());
@@ -108,15 +118,21 @@ public class CandleService {
             return existing;
         });
         // Cancel previous timer and reschedule — broadcast fires 300 ms after the last trade
-        ScheduledFuture<?> prev = broadcastTimers.put(stockId,
-                broadcastScheduler.schedule(() -> {
+        broadcastTimers.compute(stockId, (key, previous) -> {
+            if (previous != null) previous.cancel(false);
+            AtomicReference<ScheduledFuture<?>> self = new AtomicReference<>();
+            ScheduledFuture<?> next = broadcastScheduler.schedule(() -> {
+                    if (!broadcastTimers.remove(stockId, self.get())) {
+                        return;
+                    }
                     Map<String, OhlcCandle> payload = pendingBroadcasts.remove(stockId);
-                    broadcastTimers.remove(stockId);
                     if (payload != null) {
                         messagingTemplate.convertAndSend("/topic/candles/" + stockId, payload);
                     }
-                }, 300, TimeUnit.MILLISECONDS));
-        if (prev != null) prev.cancel(false);
+                }, 300, TimeUnit.MILLISECONDS);
+            self.set(next);
+            return next;
+        });
     }
 
     private Map<String, OhlcCandle> recordTradeAndCompute(String stockId, BigDecimal executedPrice, long timestamp) {

@@ -33,9 +33,7 @@ public class StockController {
 
     @GetMapping("/{channelId}")
     public ResponseEntity<StockResponse> getStock(@PathVariable String channelId) {
-        return stockService.getAllStocks().stream()
-                .filter(stock -> stock.channelId().equals(channelId))
-                .findFirst()
+        return stockService.getStock(channelId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

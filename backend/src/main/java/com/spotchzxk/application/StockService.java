@@ -42,6 +42,10 @@ public class StockService {
         return stockRepository.findAll().stream().map(StockResponse::from).toList();
     }
 
+    public Optional<StockResponse> getStock(String channelId) {
+        return stockRepository.findById(channelId).map(StockResponse::from);
+    }
+
     public OrderBookDto getOrderBook(String channelId, int depth) {
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
