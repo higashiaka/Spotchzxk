@@ -20,13 +20,18 @@ class SitemapControllerTest {
     @Test
     void reusesGeneratedSitemapForRepeatedRequests() {
         StockService stockService = mock(StockService.class);
-        when(stockService.getAllStocks()).thenReturn(List.of(stock("channel-1")));
+        when(stockService.getAllStocks()).thenReturn(List.of(
+                stock("channel-1"),
+                stock("bad\"><script>alert(1)</script>&id")
+        ));
         SitemapController controller = new SitemapController(stockService);
 
         ResponseEntity<String> first = controller.sitemap();
         ResponseEntity<String> second = controller.sitemap();
 
         assertThat(first.getBody()).contains("https://spotchzxk.xyz/stocks/channel-1");
+        assertThat(first.getBody()).contains("bad&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&amp;id");
+        assertThat(first.getBody()).doesNotContain("bad\"><script>alert(1)</script>&id");
         assertThat(second.getBody()).isEqualTo(first.getBody());
         assertThat(first.getHeaders().getCacheControl()).isEqualTo("max-age=3600, public");
         verify(stockService, times(1)).getAllStocks();

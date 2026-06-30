@@ -19,14 +19,12 @@ public class TradeController {
 
     private final TradeEngine tradeEngine;
 
-    @GetMapping("/health")
-    public ResponseEntity<String> health() {
-        return ResponseEntity.ok("ok");
-    }
-
     @PostMapping("/api/trade")
     public ResponseEntity<?> trade(@Valid @RequestBody TradeRequest req,
                                    @AuthenticationPrincipal String uid) {
+        if (uid == null || uid.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
         req.setUserId(uid);
         try {
             return ResponseEntity.ok(tradeEngine.submitTrade(req));
@@ -41,6 +39,9 @@ public class TradeController {
     @PostMapping("/api/trade/cancel")
     public ResponseEntity<?> cancel(@RequestParam("orderId") String orderId,
                                     @AuthenticationPrincipal String uid) {
+        if (uid == null || uid.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
         try {
             return ResponseEntity.ok(tradeEngine.cancelLimitOrder(uid, orderId));
         } catch (IllegalStateException e) {

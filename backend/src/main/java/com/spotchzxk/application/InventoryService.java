@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +23,7 @@ public class InventoryService {
     private final UserRepository userRepository;
     private final TitleRepository titleRepository;
     private final UserItemRepository userItemRepository;
+    private final TitleResponseMapper titleResponseMapper;
 
     public Map<String, Object> getInventory(String userId) {
         User user = portfolioService.getOrCreate(userId);
@@ -40,7 +40,7 @@ public class InventoryService {
                 .toList());
 
         List<Map<String, Object>> titles = titleRepository.findByUserIdOrderByGrantedAtDesc(userId).stream()
-                .map(this::title)
+                .map(titleResponseMapper::toResponse)
                 .toList();
 
         Map<String, Object> response = new HashMap<>();
@@ -71,47 +71,4 @@ public class InventoryService {
         );
     }
 
-    private Map<String, Object> title(Title title) {
-        return Map.of(
-                "id", title.getId(),
-                "label", titleLabel(title.getTitleType()),
-                "description", titleDescription(title),
-                "tone", titleTone(title.getTitleType()),
-                "awardedAt", title.getGrantedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        );
-    }
-
-    private String titleLabel(String type) {
-        return switch (type) {
-            case "BETA_SEASON" -> "베타 개척자";
-            case "BETA_TIER" -> "베타 티어";
-            case "BETA_REALIZED_TOP" -> "베타 수익왕";
-            case "BETA_DIVIDEND_TOP" -> "베타 배당왕";
-            case "BETA_FAN_TOP" -> "베타 대표 팬";
-            case "CHEER_1" -> "후원 팬";
-            case "CHEER_2" -> "열성 팬";
-            case "CHEER_3" -> "대표 팬";
-            default -> type;
-        };
-    }
-
-    private String titleDescription(Title title) {
-        if (title.getStockId() != null && title.getTitleType().startsWith("CHEER_")) {
-            return "이 스트리머 종목의 팬 랭킹 칭호";
-        }
-        if ("BETA_TIER".equals(title.getTitleType())) {
-            return "베타 시즌 종료 시점의 최종 티어 기준 칭호";
-        }
-        return "정식 전환 및 시즌 보상 칭호";
-    }
-
-    private String titleTone(String type) {
-        return switch (type) {
-            case "BETA_SEASON", "BETA_TIER", "CHEER_3" -> "gold";
-            case "BETA_DIVIDEND_TOP" -> "blue";
-            case "BETA_REALIZED_TOP", "CHEER_2" -> "green";
-            case "BETA_FAN_TOP", "CHEER_1" -> "red";
-            default -> "gray";
-        };
-    }
 }

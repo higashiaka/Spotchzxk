@@ -25,9 +25,9 @@ public class RankingController {
             @RequestParam(defaultValue = "realized") String type
     ) {
         var users = switch (type) {
-            case "dividend" -> userRepository.findTop50ByIsBotFalseOrderByDividendTotalDesc();
-            case "donation" -> userRepository.findTop50ByIsBotFalseOrderByDonationTotalDesc();
-            default -> userRepository.findTop50ByIsBotFalseOrderByRealizedProfitDesc();
+            case "dividend" -> userRepository.findTop50NonGuestNonBotByDividendTotal();
+            case "donation" -> userRepository.findTop50NonGuestNonBotByDonationTotal();
+            default -> userRepository.findTop50NonGuestNonBotByRealizedProfit();
         };
 
         List<Map<String, Object>> rankings = new ArrayList<>();

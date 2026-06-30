@@ -19,8 +19,7 @@ public class SitemapController {
     private static final String BASE_URL = "https://spotchzxk.xyz";
     private static final Duration CACHE_DURATION = Duration.ofHours(1);
     private final StockService stockService;
-    private volatile String cachedSitemap;
-    private volatile long cacheExpiresAt;
+    private volatile SitemapCache cachedSitemap;
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
     public ResponseEntity<String> sitemap() {
@@ -33,20 +32,21 @@ public class SitemapController {
 
     private String getCachedSitemap() {
         long now = System.currentTimeMillis();
-        String sitemap = cachedSitemap;
-        if (sitemap != null && now < cacheExpiresAt) {
-            return sitemap;
+        SitemapCache cache = cachedSitemap;
+        if (cache != null && now < cache.expiresAt()) {
+            return cache.content();
         }
 
         synchronized (this) {
             now = System.currentTimeMillis();
-            if (cachedSitemap != null && now < cacheExpiresAt) {
-                return cachedSitemap;
+            cache = cachedSitemap;
+            if (cache != null && now < cache.expiresAt()) {
+                return cache.content();
             }
 
-            cachedSitemap = buildSitemap(stockService.getAllStocks());
-            cacheExpiresAt = now + CACHE_DURATION.toMillis();
-            return cachedSitemap;
+            String content = buildSitemap(stockService.getAllStocks());
+            cachedSitemap = new SitemapCache(content, now + CACHE_DURATION.toMillis());
+            return content;
         }
     }
 
@@ -63,7 +63,7 @@ public class SitemapController {
 
         for (StockResponse stock : stocks) {
             sb.append("  <url>\n");
-            sb.append("    <loc>").append(BASE_URL).append("/stocks/").append(stock.channelId()).append("</loc>\n");
+            sb.append("    <loc>").append(escapeXml(BASE_URL + "/stocks/" + stock.channelId())).append("</loc>\n");
             sb.append("    <changefreq>hourly</changefreq>\n");
             sb.append("    <priority>0.8</priority>\n");
             sb.append("  </url>\n");
@@ -71,5 +71,17 @@ public class SitemapController {
 
         sb.append("</urlset>");
         return sb.toString();
+    }
+
+    private String escapeXml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
+    }
+
+    private record SitemapCache(String content, long expiresAt) {
     }
 }

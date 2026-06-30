@@ -18,7 +18,7 @@ public class CheerLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false, length = 255)
+    @Column(name = "user_id", nullable = false, length = 128)
     private String userId;
 
     @Column(name = "stock_id", nullable = false, length = 50)
