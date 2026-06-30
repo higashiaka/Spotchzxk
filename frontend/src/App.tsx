@@ -299,6 +299,7 @@ function App() {
             )}
           </div>
         )}
+
       </div>
 
       <MobileNavBar activeTab={activeTab} onNavigate={handleNavigate} />

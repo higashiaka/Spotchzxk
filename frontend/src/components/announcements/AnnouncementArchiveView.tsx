@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { announcements } from './announcementData';
+import { LegalFooter } from '../legal/LegalFooter';
 
 export const AnnouncementArchiveView = ({ onBack }: { onBack: () => void }) => {
   const [index, setIndex] = useState(0);
@@ -150,6 +151,7 @@ export const AnnouncementArchiveView = ({ onBack }: { onBack: () => void }) => {
               다음
             </button>
           </div>
+          <LegalFooter />
         </div>
       </div>
     </div>

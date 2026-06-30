@@ -7,6 +7,7 @@ import { Ticker } from '../Ticker';
 import { useVisibleMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
 import { MegaphonePostList } from '../common/MegaphonePostList';
+import { LegalFooter } from '../legal/LegalFooter';
 
 const formatFeedTime = (value: number | string | null | undefined): string => {
   if (value == null) return '-';
@@ -324,6 +325,7 @@ export const HomeView = ({
           </div>
         </div>
 
+        <LegalFooter />
       </div>
 
       {/* Full trade feed modal */}

@@ -1,3 +1,5 @@
+import { LegalFooter } from '../legal/LegalFooter';
+
 export const GuideView = ({ onBack }: { onBack: () => void }) => {
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 pb-24 hide-scrollbar touch-pan-y">
@@ -73,6 +75,7 @@ export const GuideView = ({ onBack }: { onBack: () => void }) => {
           ]}
         />
       </div>
+      <LegalFooter />
     </div>
   );
 };

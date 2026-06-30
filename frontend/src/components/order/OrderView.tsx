@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { changePct, priceColorClass, fmt, fmtCompact, fmtPct } from '../../utils';
+import { LegalFooter } from '../legal/LegalFooter';
 import { OrderForm } from './OrderForm';
 
 /** Order screen component.
@@ -105,6 +106,8 @@ export const OrderView = ({
           );
         })}
       </div>
+
+      <LegalFooter />
     </div>
   );
 };

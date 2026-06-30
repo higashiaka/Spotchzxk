@@ -7,6 +7,7 @@ import { useTrade } from '../../hooks/useTrade';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { useHoldings } from '../../hooks/useHoldings';
 import { avatarColor, fmt, fmtBigInt, fmtShares, changePct, priceColorClass, tradeColorClass } from '../../utils';
+import { LegalFooter } from '../legal/LegalFooter';
 import { OrderBookPanel } from './OrderBookPanel';
 import { PendingOrdersPanel } from './PendingOrdersPanel';
 
@@ -405,6 +406,7 @@ export const OrderForm = ({
           <PendingOrdersPanel userId={user?.uid} streamerId={streamer.id} />
         </div>
       )}
+      {!embedded && <LegalFooter />}
     </form>
   );
 };

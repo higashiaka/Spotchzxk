@@ -4,6 +4,7 @@ import { apiFetch } from '../../lib/api';
 import { subscribeStomp, registerOnConnect } from '../../lib/stompClient';
 import { avatarColor, fmtKorean, priceColor } from '../../utils';
 import { betaRewardTiers, betaTitleToneStyle } from '../rewards/betaRewards';
+import { LegalFooter } from '../legal/LegalFooter';
 
 type RankingType = 'realized' | 'dividend' | 'beta';
 
@@ -105,7 +106,7 @@ export function UserRankingView() {
         >
           <span className="w-6 md:w-10 mr-3 md:mr-5 text-center">#</span>
           <span className="flex-1">유저</span>
-          <span className="hidden md:block w-36 text-left">칭호</span>
+          <span className="w-24 md:w-36 text-left">칭호</span>
           <span className="w-32 md:w-48 text-right">{valueLabel}</span>
         </div>
       )}
@@ -167,9 +168,9 @@ export function UserRankingView() {
                 </div>
                 <p className="text-white text-sm md:text-lg font-bold truncate">{entry.displayName}</p>
               </div>
-              <div className="hidden md:block w-36 text-left shrink-0">
+              <div className="w-24 md:w-36 text-left shrink-0">
                 {entry.titleLabel && (
-                  <span className="text-xs font-bold px-2 py-1 rounded-md border" style={betaTitleToneStyle(entry.titleTone ?? 'gray')}>
+                  <span className="text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded-md border" style={betaTitleToneStyle(entry.titleTone ?? 'gray')}>
                     {entry.titleLabel}
                   </span>
                 )}
@@ -185,6 +186,7 @@ export function UserRankingView() {
             </div>
           ))
         )}
+        <LegalFooter />
       </div>
     </div>
   );

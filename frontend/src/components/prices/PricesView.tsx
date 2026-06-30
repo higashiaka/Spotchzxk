@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { LiveTrade } from '../../types';
 import { changePct, priceColor, avatarColor, fmt, fmtPct } from '../../utils';
+import { LegalFooter } from '../legal/LegalFooter';
 import { StockDetail } from './StockDetail';
 
 /** Prices screen component.
@@ -153,6 +154,8 @@ export const PricesView = ({
           );
         })}
       </div>
+
+      <LegalFooter />
     </div>
   );
 };

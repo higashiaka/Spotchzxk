@@ -4,6 +4,7 @@ import { AppTab } from '../../types';
 import { fmt, priceColor, avatarColor, fmtPct } from '../../utils';
 import { useHoldings } from '../../hooks/useHoldings';
 import { OrderHistory } from '../../hooks/useTransactionHistory';
+import { LegalFooter } from '../legal/LegalFooter';
 
 /** Sort key for the holdings list */
 type SortKey = 'recent' | 'value' | 'pct' | 'name';
@@ -240,6 +241,7 @@ export const HoldingsView = ({
             );
           })
         )}
+        <LegalFooter />
       </div>
     </div>
   );

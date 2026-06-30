@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../../contexts/ThemeContext';
 import { apiFetch } from '../../lib/api';
 import { betaTitleToneStyle, UserTitle } from '../rewards/betaRewards';
+import { LegalFooter } from '../legal/LegalFooter';
 
 export const SettingsView = ({
   userId,
@@ -157,6 +158,7 @@ export const SettingsView = ({
           ))}
         </div>
       </div>
+      <LegalFooter />
     </div>
   );
 };

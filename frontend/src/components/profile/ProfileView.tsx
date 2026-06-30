@@ -9,6 +9,7 @@ import { useHoldings } from '../../hooks/useHoldings';
 import { useDividendHistory } from '../../hooks/useDividendHistory';
 import { useNicknameEdit } from '../../hooks/useNicknameEdit';
 import { betaRewardTiers, betaTitleToneStyle, UserTitle } from '../rewards/betaRewards';
+import { LegalFooter } from '../legal/LegalFooter';
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
@@ -456,6 +457,10 @@ export const ProfileView = ({
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>문의 및 건의</span>
         <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>→</span>
       </button>
+
+      <div className="md:hidden">
+        <LegalFooter />
+      </div>
     </div>
   );
 };

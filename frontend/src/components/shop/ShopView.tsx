@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { User } from 'firebase/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
@@ -7,6 +8,7 @@ import {
   useMegaphoneUsesToday,
   useMegaphoneSubmit,
 } from '../../hooks/useMegaphone';
+import { LegalFooter } from '../legal/LegalFooter';
 
 /** Cost per megaphone use in KRW */
 const MEGAPHONE_PRICE = 30_000_000;
@@ -96,7 +98,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
   /** Optional message input value */
   const [message, setMessage] = useState('');
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.7)' }}
@@ -355,6 +357,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
           </span>
         </div>
       </div>
+      <LegalFooter />
     </div>
   );
 };
@@ -364,7 +367,7 @@ function InventoryModal({ portfolio, onClose }: { portfolio: any; onClose: () =>
   const titles = Array.isArray(portfolio?.titles) ? portfolio.titles : [];
   const selectedTitleId = portfolio?.selectedTitleId ? String(portfolio.selectedTitleId) : '';
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
@@ -432,7 +435,8 @@ function InventoryModal({ portfolio, onClose }: { portfolio: any; onClose: () =>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -1,6 +1,7 @@
 import { UIEvent, useEffect, useMemo, useState } from 'react';
 import { Stock } from '../../hooks/useStocks';
 import { avatarColor, changePct, fmt, fmtCompact, fmtCompactWon, priceColor, fmtPct } from '../../utils';
+import { LegalFooter } from '../legal/LegalFooter';
 
 /** Category types selectable in the chart screen */
 type ChartCategory = 'volume' | 'value' | 'surge' | 'drop' | 'new' | 'dividend';
@@ -286,6 +287,7 @@ export const ChartView = ({
             );
           })
         )}
+        <LegalFooter />
       </div>
     </div>
   );

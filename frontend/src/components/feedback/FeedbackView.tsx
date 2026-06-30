@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import type { Stock } from '../../hooks/useStocks';
+import { LegalFooter } from '../legal/LegalFooter';
 
 const categories = [
   ['BUG', '오류 신고'], ['SUGGESTION', '기능 건의'], ['ACCOUNT', '계정·거래 문의'],
@@ -170,6 +171,7 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
           {error && <p className="text-sm font-bold text-red-400">{error}</p>}
         </div>
       )}
+      <LegalFooter />
     </div>
   );
 }

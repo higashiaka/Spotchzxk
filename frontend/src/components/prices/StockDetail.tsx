@@ -14,6 +14,7 @@ import { Candle } from '../chart/chartUtils';
 import { OrderForm } from '../order/OrderForm';
 import { OrderBookPanel } from '../order/OrderBookPanel';
 import { PendingOrdersPanel } from '../order/PendingOrdersPanel';
+import { LegalFooter } from '../legal/LegalFooter';
 
 interface StockOrderHistoryItem {
   id: string;
@@ -747,6 +748,8 @@ export const StockDetail = ({
         </div>
 
       </div>
+
+      <LegalFooter />
     </div>
   );
 };
