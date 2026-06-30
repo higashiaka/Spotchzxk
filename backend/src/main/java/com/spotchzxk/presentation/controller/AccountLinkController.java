@@ -27,6 +27,18 @@ public class AccountLinkController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Merges a guest account into the currently logged-in social account.
+     * Supports Google and Naver Firebase providers.
+     */
+    @PostMapping("/link-social")
+    public ResponseEntity<Void> linkSocial(
+            @AuthenticationPrincipal String socialUid,
+            @Valid @RequestBody LinkGoogleRequest req) {
+        accountLinkService.mergeGuestIntoRegistered(req.guestUid(), socialUid);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/upgrade-guest")
     public ResponseEntity<Void> upgradeGuest(@AuthenticationPrincipal String uid) {
         accountLinkService.upgradeGuest(uid);

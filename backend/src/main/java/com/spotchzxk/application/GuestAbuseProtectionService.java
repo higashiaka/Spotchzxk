@@ -12,6 +12,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
@@ -148,27 +150,31 @@ public class GuestAbuseProtectionService {
         return remoteAddr;
     }
 
-    private String networkKey(String ip) {
+    String networkKey(String ip) {
         if (ip == null || ip.isBlank()) {
             return "";
         }
         String normalized = ip.trim().toLowerCase(Locale.ROOT);
-        if (normalized.contains(":")) {
-            String[] parts = normalized.split(":");
-            StringBuilder prefix = new StringBuilder();
-            int limit = Math.min(4, parts.length);
-            for (int i = 0; i < limit; i++) {
-                if (i > 0) prefix.append(':');
-                prefix.append(parts[i]);
+        try {
+            InetAddress address = InetAddress.getByName(normalized);
+            byte[] bytes = address.getAddress();
+            if (address instanceof Inet4Address) {
+                return (bytes[0] & 0xFF) + "."
+                        + (bytes[1] & 0xFF) + "."
+                        + (bytes[2] & 0xFF) + ".0/24";
             }
-            return prefix + "::/64";
-        }
-
-        String[] octets = normalized.split("\\.");
-        if (octets.length != 4) {
+            if (address instanceof Inet6Address) {
+                return "%02x%02x:%02x%02x:%02x%02x:%02x%02x::/64".formatted(
+                        bytes[0] & 0xFF, bytes[1] & 0xFF,
+                        bytes[2] & 0xFF, bytes[3] & 0xFF,
+                        bytes[4] & 0xFF, bytes[5] & 0xFF,
+                        bytes[6] & 0xFF, bytes[7] & 0xFF
+                );
+            }
+        } catch (UnknownHostException e) {
             return normalized;
         }
-        return octets[0] + "." + octets[1] + "." + octets[2] + ".0/24";
+        return normalized;
     }
 
     private String normalizeFingerprint(String fingerprintHash) {

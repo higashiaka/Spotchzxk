@@ -22,6 +22,12 @@ public class GuestService {
         return userRepository.existsById(uid);
     }
 
+    public boolean requiresPrecheckForGuestRegistration(String uid) {
+        return userRepository.findById(uid)
+                .map(User::isGuest)
+                .orElse(true);
+    }
+
     @Transactional
     public Map<String, String> registerGuest(String uid) {
         User existing = userRepository.findById(uid).orElse(null);

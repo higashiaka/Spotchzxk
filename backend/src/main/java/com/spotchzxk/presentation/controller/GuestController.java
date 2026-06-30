@@ -45,7 +45,10 @@ public class GuestController {
     public ResponseEntity<Map<String, Object>> register(@AuthenticationPrincipal String uid,
                                                         @RequestBody(required = false) GuestRegisterRequest req,
                                                         HttpServletRequest request) {
-        if (!guestService.exists(uid)) {
+        if (uid == null || uid.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("error", "unauthorized"));
+        }
+        if (guestService.requiresPrecheckForGuestRegistration(uid)) {
             String precheckToken = req != null ? req.precheckToken() : null;
             String fingerprintHash = req != null ? req.fingerprintHash() : null;
             if (!guestAbuseProtectionService.consumePrecheckPermit(precheckToken, request, fingerprintHash)) {

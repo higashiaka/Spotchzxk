@@ -79,8 +79,12 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                     }
                 }
 
-                if (isRegisteredSocialProvider && checkedUids.getIfPresent(uid) == null) {
-                    tryUpgradeGuestToRegistered(uid);
+                if (isRegisteredSocialProvider) {
+                    try {
+                        checkedUids.get(uid, this::tryUpgradeGuestToRegistered);
+                    } catch (RuntimeException e) {
+                        log.warn("Failed to auto-upgrade guest for uid={}: {}", uid, e.getMessage());
+                    }
                 }
 
                 var user = userRepository.findById(uid).orElse(null);
@@ -115,7 +119,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         return identitiesObj instanceof Map<?, ?> identities && identities.containsKey(providerId);
     }
 
-    private void tryUpgradeGuestToRegistered(String uid) {
+    private boolean tryUpgradeGuestToRegistered(String uid) {
         try {
             userRepository.findById(uid).ifPresent(user -> {
                 if (user.isGuest()) {
@@ -123,9 +127,9 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                     log.info("Auto-upgraded guest to registered: uid={}", uid);
                 }
             });
-            checkedUids.put(uid, Boolean.TRUE);
+            return true;
         } catch (Exception e) {
-            log.warn("Failed to auto-upgrade guest for uid={}: {}", uid, e.getMessage());
+            throw new IllegalStateException(e);
         }
     }
 }

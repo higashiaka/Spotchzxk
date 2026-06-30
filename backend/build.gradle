@@ -50,6 +50,13 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+tasks.register('deleteFirebaseGuestUsers', JavaExec) {
+	group = 'operations'
+	description = 'Dry-run Firebase Auth anonymous user deletion. Pass --args="--execute" to delete.'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.spotchzxk.ops.DeleteFirebaseGuestUsers'
+}
+
 bootRun {
 	jvmArgs = ['-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8']
 	def envFile = file('.env')

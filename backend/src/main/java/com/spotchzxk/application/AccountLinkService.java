@@ -30,12 +30,17 @@ public class AccountLinkService {
      */
     @Transactional
     public void mergeGuestIntoGoogle(String guestUid, String googleUid) {
-        if (guestUid.equals(googleUid)) return;
+        mergeGuestIntoRegistered(guestUid, googleUid);
+    }
+
+    @Transactional
+    public void mergeGuestIntoRegistered(String guestUid, String registeredUid) {
+        if (guestUid.equals(registeredUid)) return;
 
         User guestUser = userRepository.findById(guestUid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "게스트 계정을 찾을 수 없습니다."));
 
-        if (userRepository.existsById(googleUid)) {
+        if (userRepository.existsById(registeredUid)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Google account already exists; refusing to overwrite it with guest data."
@@ -44,7 +49,7 @@ public class AccountLinkService {
 
         // Create Google user by transferring the guest balance and profile data.
         User googleUser = User.builder()
-                .id(googleUid)
+                .id(registeredUid)
                 .coinBalance(guestUser.getCoinBalance())
                 .displayName(guestUser.getDisplayName())
                 .realizedProfit(guestUser.getRealizedProfit())
@@ -68,8 +73,8 @@ public class AccountLinkService {
         }
 
         // Bulk-migrate all records that have a FK pointing to the guest over to the Google account
-        userShareRepository.updateUserId(guestUid, googleUid);
-        orderRepository.updateUserId(guestUid, googleUid);
+        userShareRepository.updateUserId(guestUid, registeredUid);
+        orderRepository.updateUserId(guestUid, registeredUid);
 
         // Issue #14: migrate user_shares and orders to googleUid first, then delete guest User (no CASCADE)
         userRepository.deleteById(guestUid);
@@ -77,7 +82,7 @@ public class AccountLinkService {
         // Cache eviction runs after commit to avoid evicting before the transaction is visible to other threads
         registerAfterCommit(() -> {
             tradeEngine.evictUserCache(guestUid);
-            tradeEngine.evictUserCache(googleUid);
+            tradeEngine.evictUserCache(registeredUid);
         });
     }
 
@@ -86,6 +91,7 @@ public class AccountLinkService {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요."));
         user.markAsRegistered();
+        userRepository.save(user);
         registerAfterCommit(() -> tradeEngine.evictUserCache(uid));
     }
 
