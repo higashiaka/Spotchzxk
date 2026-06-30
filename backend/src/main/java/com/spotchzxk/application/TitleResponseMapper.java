@@ -22,7 +22,16 @@ public class TitleResponseMapper {
     private String label(String type) {
         return switch (type) {
             case "BETA_SEASON" -> "베타 개척자";
-            case "BETA_TIER" -> "베타 티어";
+            case "BETA_CHALLENGER" -> "베타 챌린저";
+            case "BETA_GRANDMASTER" -> "베타 그랜드마스터";
+            case "BETA_MASTER" -> "베타 마스터";
+            case "BETA_DIAMOND" -> "베타 다이아몬드";
+            case "BETA_EMERALD" -> "베타 에메랄드";
+            case "BETA_PLATINUM" -> "베타 플래티넘";
+            case "BETA_GOLD" -> "베타 골드";
+            case "BETA_SILVER" -> "베타 실버";
+            case "BETA_BRONZE" -> "베타 브론즈";
+            case "BETA_IRON" -> "베타 아이언";
             case "BETA_REALIZED_TOP" -> "베타 수익왕";
             case "BETA_DIVIDEND_TOP" -> "베타 배당왕";
             case "BETA_FAN_TOP" -> "베타 대표 팬";
@@ -45,9 +54,10 @@ public class TitleResponseMapper {
 
     private String tone(String type) {
         return switch (type) {
-            case "BETA_SEASON", "BETA_TIER", "CHEER_3" -> "gold";
-            case "BETA_DIVIDEND_TOP" -> "blue";
-            case "BETA_REALIZED_TOP", "CHEER_2" -> "green";
+            case "BETA_SEASON", "BETA_CHALLENGER", "BETA_GRANDMASTER", "BETA_MASTER", "CHEER_3" -> "gold";
+            case "BETA_DIAMOND", "BETA_DIVIDEND_TOP" -> "blue";
+            case "BETA_EMERALD", "BETA_PLATINUM", "BETA_REALIZED_TOP", "CHEER_2" -> "green";
+            case "BETA_GOLD" -> "gold";
             case "BETA_FAN_TOP", "CHEER_1" -> "red";
             default -> "gray";
         };
