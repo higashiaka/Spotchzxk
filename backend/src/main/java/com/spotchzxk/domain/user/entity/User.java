@@ -80,6 +80,13 @@ public class User {
     @Column(name = "selected_title_id")
     private Long selectedTitleId;
 
+    @Column(name = "naver_uid", length = 100, unique = true)
+    private String naverUid;
+
+    public void linkNaver(String naverUid) {
+        this.naverUid = naverUid;
+    }
+
     public void updateBalance(BigDecimal newBalance) {
         this.coinBalance = newBalance;
     }

@@ -53,6 +53,7 @@ function App() {
     suspensionNotice, isAdmin,
     handleGoogleLogin, handleNaverLogin, handleGuestLogin, handleGuestLimitGoogleLogin,
     handleLogout, handleLinkGoogle, handleLinkNaver,
+    naverLinked,
   } = useAuth();
 
   const { stocks: streamers, stocksLoading } = useStocks();
@@ -164,6 +165,7 @@ function App() {
     onReset: handleReset,
     onLinkGoogle: handleLinkGoogle,
     onLinkNaver: handleLinkNaver,
+    naverLinked,
     onSelect: handleSelectStreamer,
     onNavigate: handleNavigate,
   };

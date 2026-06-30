@@ -22,6 +22,7 @@ export const Sidebar = ({
   onReset,
   onLinkGoogle,
   onLinkNaver,
+  naverLinked,
   onSelect,
   onNavigate,
 }: {
@@ -57,6 +58,8 @@ export const Sidebar = ({
   onLinkGoogle: () => void;
   /** Naver account link handler */
   onLinkNaver: () => void;
+  /** Whether current user already has Naver linked */
+  naverLinked: boolean;
   /** Stock selection handler */
   onSelect: (s: Stock) => void;
   /** Tab navigation handler */
@@ -132,6 +135,7 @@ export const Sidebar = ({
           onReset={onReset}
           onLinkGoogle={onLinkGoogle}
           onLinkNaver={onLinkNaver}
+          naverLinked={naverLinked}
           isResetting={isResetting}
           remainingResets={remainingResets}
           onSelect={onSelect}

@@ -13,6 +13,7 @@ import java.util.List;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, String> {
+    java.util.Optional<User> findByNaverUid(String naverUid);
     @Query(value = "SELECT * FROM users WHERE is_bot = 0 AND is_guest = 0 ORDER BY realized_profit DESC LIMIT 50", nativeQuery = true)
     List<User> findTop50NonGuestNonBotByRealizedProfit();
 

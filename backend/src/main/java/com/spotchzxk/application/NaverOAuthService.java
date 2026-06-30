@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
+import com.spotchzxk.domain.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -20,7 +23,10 @@ import java.nio.charset.StandardCharsets;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class NaverOAuthService {
+
+    private final UserRepository userRepository;
 
     @Value("${app.naver.client-id}")
     private String clientId;
@@ -39,13 +45,35 @@ public class NaverOAuthService {
     public String createFirebaseCustomToken(String code, String state) {
         String accessToken = fetchAccessToken(code, state);
         String naverId = fetchNaverId(accessToken);
-        String uid = "naver:" + naverId;
+        String naverUid = "naver:" + naverId;
+
+        // 이미 연동된 기존 유저가 있으면 그 유저의 UID로 토큰 생성
+        String firebaseUid = userRepository.findByNaverUid(naverUid)
+                .map(user -> user.getId())
+                .orElse(naverUid);
+
         try {
-            return FirebaseAuth.getInstance().createCustomToken(uid);
+            return FirebaseAuth.getInstance().createCustomToken(firebaseUid);
         } catch (FirebaseAuthException e) {
             log.error("Failed to create Firebase custom token for Naver uid={}", naverId, e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create auth token");
         }
+    }
+
+    @Transactional
+    public void linkNaverAccount(String currentUid, String code, String state) {
+        String accessToken = fetchAccessToken(code, state);
+        String naverId = fetchNaverId(accessToken);
+        String naverUid = "naver:" + naverId;
+
+        // 이미 다른 계정에 연동된 경우 거부
+        userRepository.findByNaverUid(naverUid).ifPresent(existing -> {
+            if (!existing.getId().equals(currentUid)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 다른 계정에 연동된 네이버 아이디입니다.");
+            }
+        });
+
+        userRepository.findById(currentUid).ifPresent(user -> user.linkNaver(naverUid));
     }
 
     private String fetchAccessToken(String code, String state) {

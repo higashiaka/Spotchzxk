@@ -44,10 +44,12 @@ public class AuthController {
                     .toList()
             ));
         }
+        boolean naverLinked = user != null && user.getNaverUid() != null;
         return ResponseEntity.ok(Map.of(
             "authenticated", auth.isAuthenticated(),
             "principal", auth.getPrincipal(),
             "suspended", false,
+            "naverLinked", naverLinked,
             "authorities", auth.getAuthorities().stream()
                 .map(a -> a.getAuthority())
                 .toList()

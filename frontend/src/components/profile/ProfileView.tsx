@@ -12,7 +12,7 @@ import { betaRewardTiers, betaTitleToneStyle, UserTitle } from '../rewards/betaR
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
-  onLoginGoogle, onLoginNaver, onLoginGuest, onLogout, onReset, onLinkGoogle, onLinkNaver, isResetting, remainingResets,
+  onLoginGoogle, onLoginNaver, onLoginGuest, onLogout, onReset, onLinkGoogle, onLinkNaver, naverLinked, isResetting, remainingResets,
   onSelect: _onSelect, onNavigate,
 }: {
   user: User | null;
@@ -28,6 +28,7 @@ export const ProfileView = ({
   onReset: () => void;
   onLinkGoogle: () => void;
   onLinkNaver: () => void;
+  naverLinked: boolean;
   isResetting: boolean;
   remainingResets: number;
   onSelect: (s: Stock) => void;
@@ -153,7 +154,7 @@ export const ProfileView = ({
   }
 
   const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
-  const isNaverLinked = user.providerData.some(p => p.providerId === 'oidc.naver');
+  const isNaverLinked = naverLinked || user.providerData.some(p => p.providerId === 'oidc.naver');
   const isSocialLinked = isGoogleLinked || isNaverLinked;
 
   return (

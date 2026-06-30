@@ -39,6 +39,7 @@ export function useAuth() {
   const [guestLimitNow, setGuestLimitNow] = useState(Date.now());
   const [suspensionNotice, setSuspensionNotice] = useState<SuspensionNotice | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [naverLinked, setNaverLinked] = useState(false);
   const queryClient = useQueryClient();
   const userUid = user?.uid;
 
@@ -53,6 +54,7 @@ export function useAuth() {
       const body = await res.json().catch(() => ({}));
       const authorities = Array.isArray(body.authorities) ? body.authorities : [];
       setIsAdmin(authorities.includes('ROLE_ADMIN'));
+      setNaverLinked(body.naverLinked === true);
       if (body.suspended) {
         setSuspensionNotice({
           reason: String(body.suspensionReason ?? 'Policy violation'),
@@ -130,6 +132,7 @@ export function useAuth() {
       } else {
         setSuspensionNotice(null);
         setIsAdmin(false);
+        setNaverLinked(false);
       }
       setAuthChecking(false);
 
@@ -343,24 +346,54 @@ export function useAuth() {
   const handleLinkNaver = useCallback(async () => {
     if (!user) return;
     const wasAnonymous = user.isAnonymous;
-    try {
-      await linkWithPopup(user, naverProvider);
-      await user.getIdToken(true);
-      await user.reload();
-      setUser(auth.currentUser);
-      localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
-      if (wasAnonymous) await upgradeGuest('Naver');
-    } catch (err: unknown) {
-      const authErr = err as FirebaseAuthError;
-      if (authErr.code === 'auth/popup-closed-by-user') return;
-      if (authErr.code === 'auth/credential-already-in-use') {
-        await handleSocialCredentialInUse(authErr, user.uid, 'Naver');
-        return;
-      }
-      console.error(authErr);
-      alert('Naver account linking failed: ' + (authErr.message ?? ''));
-    }
-  }, [handleSocialCredentialInUse, upgradeGuest, user]);
+
+    const state = Math.random().toString(36).slice(2);
+    const clientId = import.meta.env.VITE_NAVER_CLIENT_ID as string;
+    const redirectUri = encodeURIComponent(`${window.location.origin}/naver-callback`);
+    const naverAuthUrl =
+      `https://nid.naver.com/oauth2.0/authorize?response_type=code` +
+      `&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
+
+    const popup = window.open(naverAuthUrl, 'naverLink', 'width=500,height=600,left=200,top=100');
+
+    return new Promise<void>((resolve) => {
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== 'NAVER_AUTH_CODE') return;
+        window.removeEventListener('message', handleMessage);
+        clearInterval(closedCheck);
+        try {
+          const res = await apiFetch('/api/auth/naver/link', {
+            method: 'POST',
+            body: JSON.stringify({ code: event.data.code, state: event.data.state }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert('네이버 연동 실패: ' + (body.message ?? '알 수 없는 오류'));
+            resolve();
+            return;
+          }
+          localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
+          setNaverLinked(true);
+          if (wasAnonymous) await upgradeGuest('Naver');
+          alert('네이버 계정이 연동되었습니다.');
+        } catch {
+          alert('네이버 연동 중 오류가 발생했습니다.');
+        }
+        resolve();
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const closedCheck = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(closedCheck);
+          window.removeEventListener('message', handleMessage);
+          resolve();
+        }
+      }, 500);
+    });
+  }, [upgradeGuest, user]);
 
   return {
     user,
@@ -369,6 +402,7 @@ export function useAuth() {
     guestLimitNow,
     suspensionNotice,
     isAdmin,
+    naverLinked,
     handleGoogleLogin,
     handleNaverLogin,
     handleGuestLogin,
