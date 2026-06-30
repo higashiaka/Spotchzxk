@@ -39,8 +39,6 @@ const TabFallback = () => (
 
 function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
   useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
     const update = () => setIsDesktopLayout(media.matches);
@@ -138,10 +136,6 @@ function App() {
     activeSwipeIndex, isSwipeTab,
     handleSwipePointerDown, handleSwipePointerMove, finishSwipe, cancelSwipe,
   } = swipe;
-
-  const handleToggleSidebarCollapsed = useCallback(() => {
-    setIsSidebarCollapsed(prev => !prev);
-  }, []);
 
   if (authChecking) {
     return (
@@ -250,34 +244,8 @@ function App() {
       )}
 
       {isDesktopLayout && (
-        <div className="relative flex shrink-0">
-          <Sidebar
-            activeTab={activeTab}
-            collapsed={isSidebarCollapsed}
-            {...sidebarProps}
-          />
-          <button
-            type="button"
-            onClick={handleToggleSidebarCollapsed}
-            className="hidden md:flex absolute right-[-14px] top-1/2 -translate-y-1/2 z-30 w-7 h-40 items-center justify-center rounded-r-xl border border-l-0 transition-colors hover:opacity-90 active:opacity-70"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-primary)',
-              color: 'var(--text-dim)',
-              boxShadow: '0 12px 28px rgba(0, 0, 0, 0.24)',
-            }}
-            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d={isSidebarCollapsed ? 'M9 5l7 7-7 7' : 'M15 19l-7-7 7-7'}
-              />
-            </svg>
-          </button>
+        <div className="flex shrink-0">
+          <Sidebar activeTab={activeTab} {...sidebarProps} />
         </div>
       )}
 

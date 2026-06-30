@@ -10,7 +10,7 @@ type LegalSection = {
 
 const SERVICE_NAME = 'Spotchzxk';
 const OPERATOR_NAME = 'Spotchzxk 운영자';
-const CONTACT_EMAIL = 'chzzkstocks@gmail.com';
+const CONTACT_EMAIL = 'help@spotchzxk.xyz';
 const EFFECTIVE_DATE = '2026년 6월 30일';
 
 const terms: LegalSection[] = [

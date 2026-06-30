@@ -110,7 +110,7 @@ export function UserRankingView() {
             랭킹 데이터가 없습니다
           </div>
         ) : (
-          rankings.map(entry => (
+          rankings.filter(entry => entry.value > 0).map(entry => (
             <div
               key={`${rankingType}-${entry.rank}-${entry.displayName}`}
               className="flex items-center px-4 py-3 md:px-8 md:py-5"
@@ -147,7 +147,7 @@ export function UserRankingView() {
                   className="text-sm md:text-lg font-bold font-mono"
                   style={{ color: priceColor(entry.value) }}
                 >
-                  {`${entry.value >= 0 ? '+' : ''}${fmtKorean(Math.abs(entry.value))}`}
+                  {`+${fmtKorean(entry.value)}`}
                 </p>
               </div>
             </div>
