@@ -39,6 +39,7 @@ const TabFallback = () => (
 
 function App() {
   const [isDesktopLayout, setIsDesktopLayout] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
@@ -137,6 +138,10 @@ function App() {
     activeSwipeIndex, isSwipeTab,
     handleSwipePointerDown, handleSwipePointerMove, finishSwipe, cancelSwipe,
   } = swipe;
+
+  const handleToggleSidebarCollapsed = useCallback(() => {
+    setIsSidebarCollapsed(prev => !prev);
+  }, []);
 
   if (authChecking) {
     return (
@@ -246,7 +251,12 @@ function App() {
 
       {isDesktopLayout && (
         <div className="flex shrink-0">
-          <Sidebar activeTab={activeTab} {...sidebarProps} />
+          <Sidebar
+            activeTab={activeTab}
+            collapsed={isSidebarCollapsed}
+            onToggleCollapsed={handleToggleSidebarCollapsed}
+            {...sidebarProps}
+          />
         </div>
       )}
 
