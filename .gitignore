@@ -3,6 +3,7 @@ dist/
 
 .claude/
 .vscode/
+.agents/
 
 # Firebase service account key - DO NOT COMMIT
 backend/serviceAccountKey.json
