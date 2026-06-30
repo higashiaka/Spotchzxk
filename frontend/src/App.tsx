@@ -30,6 +30,7 @@ const GuideView = lazy(() => import('./components/guide/GuideView').then(m => ({
 const AnnouncementArchiveView = lazy(() => import('./components/announcements/AnnouncementArchiveView').then(m => ({ default: m.AnnouncementArchiveView })));
 const FeedbackView = lazy(() => import('./components/feedback/FeedbackView').then(m => ({ default: m.FeedbackView })));
 
+const guestLoginEnabled = import.meta.env.VITE_GUEST_LOGIN_ENABLED === 'true';
 
 const TabFallback = () => (
   <div className="h-full flex items-center justify-center text-dim-token font-mono text-sm">
@@ -160,6 +161,7 @@ function App() {
     onLoginGoogle: handleGoogleLogin,
     onLoginNaver: handleNaverLogin,
     onLoginGuest: handleGuestLogin,
+    guestLoginEnabled,
     onLogout: handleLogout,
     onReset: handleReset,
     onLinkGoogle: handleLinkGoogle,

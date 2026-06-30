@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -23,9 +24,16 @@ public class GuestController {
     private final GuestService guestService;
     private final GuestAbuseProtectionService guestAbuseProtectionService;
 
+    @Value("${app.guest-login.enabled:false}")
+    private boolean guestLoginEnabled;
+
     @PostMapping("/precheck")
     public ResponseEntity<Map<String, Object>> precheck(@Valid @RequestBody GuestPrecheckRequest req,
                                                         HttpServletRequest request) {
+        if (!guestLoginEnabled) {
+            return ResponseEntity.status(403).body(Map.of("error", "guest_login_disabled"));
+        }
+
         var abuseCheck = guestAbuseProtectionService.checkAndRecord(request, req.fingerprintHash());
         if (!abuseCheck.allowed()) {
             return ResponseEntity.status(429)
@@ -45,6 +53,10 @@ public class GuestController {
     public ResponseEntity<Map<String, Object>> register(@AuthenticationPrincipal String uid,
                                                         @RequestBody(required = false) GuestRegisterRequest req,
                                                         HttpServletRequest request) {
+        if (!guestLoginEnabled) {
+            return ResponseEntity.status(403).body(Map.of("error", "guest_login_disabled"));
+        }
+
         if (uid == null || uid.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("error", "unauthorized"));
         }

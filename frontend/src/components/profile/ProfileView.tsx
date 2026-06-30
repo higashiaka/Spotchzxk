@@ -13,7 +13,7 @@ import { LegalFooter } from '../legal/LegalFooter';
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
-  onLoginGoogle, onLoginNaver, onLoginGuest, onLogout, onReset, onLinkGoogle, onLinkNaver, naverLinked, isResetting, remainingResets,
+  onLoginGoogle, onLoginNaver, onLoginGuest, guestLoginEnabled, onLogout, onReset, onLinkGoogle, onLinkNaver, naverLinked, isResetting, remainingResets,
   onSelect: _onSelect, onNavigate,
 }: {
   user: User | null;
@@ -25,6 +25,7 @@ export const ProfileView = ({
   onLoginGoogle: () => void;
   onLoginNaver: () => void;
   onLoginGuest: () => void;
+  guestLoginEnabled: boolean;
   onLogout: () => void;
   onReset: () => void;
   onLinkGoogle: () => void;
@@ -144,11 +145,13 @@ export const ProfileView = ({
             <NaverIcon />
             Naver 로그인
           </button>
-          <button type="button" onClick={onLoginGuest}
-            className="w-full font-bold px-6 py-3 rounded-xl border"
-            style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
-            게스트로 플레이
-          </button>
+          {guestLoginEnabled && (
+            <button type="button" onClick={onLoginGuest}
+              className="w-full font-bold px-6 py-3 rounded-xl border"
+              style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
+              게스트로 플레이
+            </button>
+          )}
         </div>
       </div>
     );

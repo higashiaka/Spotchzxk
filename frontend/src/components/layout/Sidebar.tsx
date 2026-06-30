@@ -18,6 +18,7 @@ export const Sidebar = ({
   onLoginGoogle,
   onLoginNaver,
   onLoginGuest,
+  guestLoginEnabled,
   onLogout,
   onReset,
   onLinkGoogle,
@@ -50,6 +51,8 @@ export const Sidebar = ({
   onLoginNaver: () => void;
   /** Guest login handler */
   onLoginGuest: () => void;
+  /** Whether guest login is currently available */
+  guestLoginEnabled: boolean;
   /** Logout handler */
   onLogout: () => void;
   /** Portfolio reset handler */
@@ -131,6 +134,7 @@ export const Sidebar = ({
           onLoginGoogle={onLoginGoogle}
           onLoginNaver={onLoginNaver}
           onLoginGuest={onLoginGuest}
+          guestLoginEnabled={guestLoginEnabled}
           onLogout={onLogout}
           onReset={onReset}
           onLinkGoogle={onLinkGoogle}
