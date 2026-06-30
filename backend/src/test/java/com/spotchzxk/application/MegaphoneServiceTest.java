@@ -13,7 +13,9 @@ import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -140,6 +142,20 @@ class MegaphoneServiceTest {
         List<MegaphonePost> posts = service.getRecentPosts();
 
         assertThat(posts).containsExactly(currentPost);
+    }
+
+    @Test
+    void getMyUsesTodayCountsWithinKstDay() {
+        LocalDate kstToday = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        LocalDateTime startOfDay = kstToday.atStartOfDay();
+        LocalDateTime endOfDay = startOfDay.plusDays(1);
+        when(megaphonePostRepository.countByUserIdAndCreatedAtBetween("user-1", startOfDay, endOfDay))
+                .thenReturn(3L);
+
+        long usesToday = service.getMyUsesToday("user-1");
+
+        assertThat(usesToday).isEqualTo(3L);
+        verify(megaphonePostRepository).countByUserIdAndCreatedAtBetween("user-1", startOfDay, endOfDay);
     }
 
     private User user(String id, String coinBalance) {

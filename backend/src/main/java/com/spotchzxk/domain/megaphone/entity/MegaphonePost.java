@@ -26,7 +26,7 @@ public class MegaphonePost {
     @Column(nullable = false, length = 100)
     private String streamerName;
 
-    @Column(length = 100)
+    @Column(length = 50)
     private String message;
 
     @Column(nullable = false, length = 200)

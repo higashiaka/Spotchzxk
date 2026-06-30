@@ -21,6 +21,7 @@ public record FeedbackRequest(
         String stockId,
 
         @Size(max = 500)
+        @Pattern(regexp = "^$|https?://[^\\s<>\"']+", message = "pageUrl must be an http(s) URL")
         String pageUrl
 ) {
 }

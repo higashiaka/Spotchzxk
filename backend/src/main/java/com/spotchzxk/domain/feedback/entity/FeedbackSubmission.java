@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "feedback_submissions")
@@ -12,6 +13,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class FeedbackSubmission {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Id
     @Column(length = 36)
@@ -60,13 +63,13 @@ public class FeedbackSubmission {
 
     public void answer(String answer) {
         this.answer = answer;
-        this.answeredAt = LocalDateTime.now();
+        this.answeredAt = LocalDateTime.now(KST);
         this.status = "ANSWERED";
     }
 
     public void markAnswered() {
         this.status = "ANSWERED";
-        this.answeredAt = LocalDateTime.now();
+        this.answeredAt = LocalDateTime.now(KST);
     }
 
     public void attachDiscordMessage(String messageId) {

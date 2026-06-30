@@ -10,6 +10,7 @@ import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.application.PortfolioService;
 import com.spotchzxk.application.TradeEngine;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -86,7 +87,12 @@ public class DonationController {
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.ok(result.get());
+        Map<String, Object> responseBody = result.get();
+        if (responseBody == null) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "후원 처리 중 오류가 발생했습니다."));
+        }
+        return ResponseEntity.ok(responseBody);
     }
 
     private Map<String, Object> donateLocked(String uid, BigDecimal amount, String streamerId) {

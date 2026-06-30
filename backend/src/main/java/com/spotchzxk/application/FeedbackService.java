@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,6 +24,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +32,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class FeedbackService {
+
+    private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final FeedbackSubmissionRepository feedbackRepository;
     private final FeedbackReplyRepository feedbackReplyRepository;
@@ -58,10 +64,10 @@ public class FeedbackService {
                 .content(request.content().trim())
                 .pageUrl(blankToNull(request.pageUrl()))
                 .status("RECEIVED")
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(KST))
                 .build());
 
-        sendDiscordNotification(submission);
+        sendAfterCommit(() -> sendDiscordNotification(submission));
         return submission;
     }
 
@@ -94,7 +100,7 @@ public class FeedbackService {
         feedbackReplyRepository.save(FeedbackReply.builder()
                 .feedbackId(feedback.getId())
                 .content(answer.trim())
-                .createdAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now(KST))
                 .build());
         return toAdminResponse(feedback);
     }
@@ -162,7 +168,7 @@ public class FeedbackService {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                     .build();
-            HttpClient.newHttpClient().sendAsync(request, HttpResponse.BodyHandlers.discarding())
+            HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.discarding())
                     .exceptionally(error -> null);
         } catch (Exception ignored) {
             // Notification failures must never discard a successfully saved submission.
@@ -179,5 +185,18 @@ public class FeedbackService {
 
     private String discordSafe(String value) {
         return safe(value).replace("@", "@\u200B");
+    }
+
+    private void sendAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 }

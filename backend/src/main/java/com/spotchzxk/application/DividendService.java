@@ -72,6 +72,18 @@ public class DividendService {
         BigDecimal ratePerShare = totalPayout
                 .divide(eligibleShares, 12, RoundingMode.FLOOR);
 
+        BigDecimal actualPaid = userShareRepository.sumDividendPayout(
+                fresh.getChannelId(),
+                totalPayout,
+                eligibleShares
+        );
+        if (actualPaid.compareTo(BigDecimal.ZERO) <= 0) {
+            log.debug("Interval dividend skipped for channel {}: totalPayout={}, eligibleShares={}, reason={}",
+                    fresh.getChannelId(), totalPayout, eligibleShares,
+                    DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
+            return DividendPayoutResult.skipped(DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
+        }
+
         int updatedUsers = userShareRepository.distributeDividends(
                 fresh.getChannelId(),
                 totalPayout,
@@ -85,7 +97,7 @@ public class DividendService {
             return DividendPayoutResult.failed(DividendPayoutResult.Reason.NO_USERS_UPDATED);
         }
 
-        fresh.drainFeePool(totalPayout.toBigIntegerExact());
+        fresh.drainFeePool(actualPaid.toBigIntegerExact());
         stockRepository.save(fresh);
 
         List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
@@ -104,7 +116,7 @@ public class DividendService {
                             .ratePerShare(ratePerShare)
                             .amount(dividendQty.multiply(totalPayout)
                                     .divide(eligibleShares, 0, RoundingMode.FLOOR)
-                                    .setScale(2))
+                                    .setScale(2, RoundingMode.FLOOR))
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -115,9 +127,8 @@ public class DividendService {
                 .map(UserDividendLog::getUserId)
                 .collect(Collectors.toCollection(LinkedHashSet::new)));
 
-        BigDecimal actualPaid = totalPayout;
         DividendLog logEntry = DividendLog.builder()
-                .stock(stock)
+                .stock(fresh)
                 .totalDividendPool(actualPaid)
                 .payoutReason("interval")
                 .streamMinutes(null)

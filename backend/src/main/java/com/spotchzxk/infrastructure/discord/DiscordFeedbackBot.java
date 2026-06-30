@@ -19,12 +19,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.EnumSet;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DiscordFeedbackBot extends ListenerAdapter {
+
+    private static final int MAX_REPLY_CONTENT_LENGTH = 3000;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final FeedbackSubmissionRepository feedbackRepository;
     private final FeedbackReplyRepository feedbackReplyRepository;
@@ -97,14 +102,16 @@ public class DiscordFeedbackBot extends ListenerAdapter {
         Boolean saved = transactionTemplate.execute(status ->
                 feedbackRepository.findByDiscordMessageId(referenced.getId())
                         .map(feedback -> {
-                            String content = answer.length() > 3000 ? answer.substring(0, 3000) : answer;
+                            String content = answer.length() > MAX_REPLY_CONTENT_LENGTH
+                                    ? answer.substring(0, MAX_REPLY_CONTENT_LENGTH)
+                                    : answer;
                             feedback.markAnswered();
                             feedbackRepository.save(feedback);
                             feedbackReplyRepository.save(FeedbackReply.builder()
                                     .feedbackId(feedback.getId())
                                     .content(content)
                                     .discordMessageId(event.getMessageId())
-                                    .createdAt(java.time.LocalDateTime.now())
+                                    .createdAt(LocalDateTime.now(KST))
                                     .build());
                             return true;
                         })

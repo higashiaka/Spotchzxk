@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,13 +50,16 @@ public class DividendController {
                 "channelId", log.getChannelId(),
                 "streamerName", log.getStreamerName(),
                 "profileImageUrl", log.getProfileImageUrl() != null ? log.getProfileImageUrl() : "",
-                "quantity", log.getQuantity().abs(),
-                "ratePerShare", log.getRatePerShare().abs(),
-                "amount", log.getAmount().abs(),
+                "quantity", absOrZero(log.getQuantity()),
+                "ratePerShare", absOrZero(log.getRatePerShare()),
+                "amount", absOrZero(log.getAmount()),
                 "createdAt", log.getCreatedAt() != null ? log.getCreatedAt().toString() : FALLBACK_CREATED_AT
         )).collect(Collectors.<Map<String, Object>>toList());
         return ResponseEntity.ok(result);
     }
-}
 
+    private BigDecimal absOrZero(BigDecimal value) {
+        return value != null ? value.abs() : BigDecimal.ZERO;
+    }
+}
 

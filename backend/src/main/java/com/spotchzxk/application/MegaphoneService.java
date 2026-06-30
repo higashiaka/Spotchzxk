@@ -29,6 +29,7 @@ public class MegaphoneService {
     private static final int MAX_MESSAGE_LENGTH = 50;
     private static final BigDecimal MEGAPHONE_PRICE = new BigDecimal("30000000");
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String CHZZK_LIVE_BASE_URL = "https://chzzk.naver.com/live/";
 
     private final MegaphonePostRepository megaphonePostRepository;
     private final UserRepository userRepository;
@@ -52,7 +53,7 @@ public class MegaphoneService {
             throw new IllegalStateException("잔고가 부족합니다. 확성기 사용에는 3천만원이 필요합니다.");
         }
 
-        LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();
+        LocalDateTime startOfDay = startOfTodayKst();
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         long usesToday = megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
         if (usesToday >= DAILY_LIMIT) {
@@ -81,9 +82,9 @@ public class MegaphoneService {
                 .channelId(channelId)
                 .streamerName(stock.getStreamerName())
                 .message(normalizedMessage)
-                .liveUrl("https://chzzk.naver.com/live/" + channelId)
+                .liveUrl(CHZZK_LIVE_BASE_URL + channelId)
                 .liveSessionStartedAt(stock.getLiveStartedAt())
-                .createdAt(LocalDateTime.now(KST))
+                .createdAt(nowKst())
                 .build();
 
         MegaphonePost savedPost = megaphonePostRepository.save(post);
@@ -112,9 +113,17 @@ public class MegaphoneService {
 
     @Transactional(readOnly = true)
     public long getMyUsesToday(String uid) {
-        LocalDateTime startOfDay = LocalDate.now(KST).atStartOfDay();
+        LocalDateTime startOfDay = startOfTodayKst();
         LocalDateTime endOfDay = startOfDay.plusDays(1);
         return megaphonePostRepository.countByUserIdAndCreatedAtBetween(uid, startOfDay, endOfDay);
+    }
+
+    private LocalDateTime startOfTodayKst() {
+        return LocalDate.now(KST).atStartOfDay();
+    }
+
+    private LocalDateTime nowKst() {
+        return LocalDateTime.now(KST);
     }
 
     private String normalizeMessage(String message) {
