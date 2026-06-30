@@ -18,6 +18,28 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_official_open_20260630',
+    title: 'Spotchzxk 정식 오픈',
+    date: '2026년 6월 30일',
+    summary: '치지직 스트리머 주식 거래소 Spotchzxk이 정식 서비스를 시작합니다. 베타 테스트에 참여해주신 모든 분들께 감사드립니다.',
+    sections: [
+      {
+        title: '베타 참여자 보상 지급 완료',
+        rows: [
+          { label: '종목 추가권', value: '10개 지급', tone: 'accent' },
+          { label: '칭호', value: '베타 참여자 칭호 지급', tone: 'accent' },
+        ],
+        note: '보상은 프로필에서 확인할 수 있습니다.',
+      },
+      {
+        title: '예정',
+        rows: [
+          { label: '네이버 로그인', value: '7월 첫째주 중 지원 예정', tone: 'accent' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'notice_feedback_center_20260624',
     title: '문의 및 건의 창구 신설 안내',
     date: '2026년 6월 24일',
