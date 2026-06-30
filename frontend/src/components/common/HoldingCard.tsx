@@ -30,8 +30,9 @@ export const HoldingCard = ({
   // Card box layout
   if (variant === 'detail') {
     return (
-      <div
-        className="rounded-xl border p-4 cursor-pointer surface-card-secondary border-primary-token"
+      <button
+        type="button"
+        className="w-full text-left rounded-xl border p-4 cursor-pointer surface-card-secondary border-primary-token"
         onClick={onClick}
       >
         <div className="flex justify-between items-start">
@@ -48,13 +49,13 @@ export const HoldingCard = ({
             </p>
           </div>
         </div>
-      </div>
+      </button>
     );
   }
 
   // Single-row compact layout
   return (
-    <div className="flex items-center gap-3 cursor-pointer" onClick={onClick}>
+    <button type="button" className="w-full text-left flex items-center gap-3 cursor-pointer" onClick={onClick}>
       {/* Profile image or initial avatar */}
       <div
         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden ${avatarColorClass(streamer.name, !!streamer.profileImageUrl)}`}
@@ -79,6 +80,6 @@ export const HoldingCard = ({
           {fmtPct(pct)}
         </p>
       </div>
-    </div>
+    </button>
   );
 };

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab, LiveTrade } from '../../types';
-import { fmtCompact, fmtKorean, fmtShares, changePct, priceColor, avatarColor, grade, fmtPct } from '../../utils';
+import { fmtCompact, fmtKorean, fmtKoreanBigInt, fmtShares, changePct, priceColor, avatarColor, grade, fmtPct } from '../../utils';
 import { Ticker } from '../Ticker';
 import { useVisibleMegaphonePosts } from '../../hooks/useMegaphone';
 import { useHoldings } from '../../hooks/useHoldings';
@@ -30,7 +30,7 @@ export const HomeView = ({
   /** Authenticated user */
   user: User | null;
   /** Total assets (cash + stock market value) */
-  totalAssets: number;
+  totalAssets: number | bigint;
   /** Order and transaction history list */
   history: any[];
   /** Recently viewed stock IDs in recency order */
@@ -56,6 +56,9 @@ export const HomeView = ({
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
   const displayedOnlineCount = onlineCount ?? 0;
+  const formattedTotalAssets = typeof totalAssets === 'bigint'
+    ? fmtKoreanBigInt(totalAssets)
+    : fmtKorean(totalAssets);
 
   /** Holdings sorted by value descending */
   const { holdings, holdingCount } = useHoldings(portfolio, streamers);
@@ -110,7 +113,7 @@ export const HomeView = ({
             <>
               <button type="button" onClick={() => onNavigate('profile')}
                 className="flex items-baseline gap-2">
-                <span className="text-3xl font-black font-mono text-white">{fmtKorean(totalAssets)}</span>
+                <span className="text-3xl font-black font-mono text-white">{formattedTotalAssets}</span>
                 <span className="text-base" style={{ color: 'var(--text-dim)' }}>›</span>
               </button>
               <p className="text-sm font-bold mt-1 whitespace-nowrap overflow-hidden text-ellipsis" style={{ color: priceColor(holdingsPnLPct) }}>
@@ -145,7 +148,7 @@ export const HomeView = ({
             <>
               <div className="space-y-3 mb-3 max-h-[188px] overflow-y-auto pr-1 hide-scrollbar touch-pan-y">
                 {holdings.map(({ streamer: s, qty, value, pct }) => (
-                  <div key={s.id} className="flex items-center gap-3 cursor-pointer"
+                  <button key={s.id} type="button" className="w-full text-left flex items-center gap-3 cursor-pointer"
                     onClick={() => onSelect(s)}>
                     <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-black overflow-hidden"
                       style={{ backgroundColor: s.profileImageUrl ? 'transparent' : avatarColor(s.name) }}>
@@ -163,7 +166,7 @@ export const HomeView = ({
                         {fmtPct(pct)}
                       </p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
               <button type="button" onClick={() => onNavigate('holdings')}
@@ -186,14 +189,15 @@ export const HomeView = ({
             { label: '포트폴리오수익', value: holdingsPnL >= 0 ? `+${fmtKorean(holdingsPnL)}` : fmtKorean(holdingsPnL), sub: fmtPct(holdingsPnLPct) },
             { label: '동접자', value: `${displayedOnlineCount.toLocaleString()}명`, sub: '실시간' },
           ] as { label: string; value: string; sub: string; action?: () => void }[]).map(row => (
-            <div key={row.label} className={`flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''}`}
+            <button key={row.label} type="button" disabled={!row.action}
+              className={`w-full text-left flex items-center px-4 py-3.5${row.action ? ' cursor-pointer' : ''} disabled:cursor-default`}
               style={{ borderBottom: rowBorder }}
               onClick={row.action}>
               <span className="flex-1 text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
               <span className="text-sm font-bold font-mono text-white mr-1 min-w-0 truncate">{row.value}</span>
               {row.sub && <span className="text-xs shrink-0 whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>{row.sub}</span>}
               <span className="ml-2 text-xs" style={{ color: 'var(--text-dim)' }}>›</span>
-            </div>
+            </button>
           ))}
         </div>
 

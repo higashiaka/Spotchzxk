@@ -247,6 +247,7 @@ function ThemeToggleRow({ theme, onToggle }: { theme: 'dark' | 'light'; onToggle
           border: `2px solid ${isDark ? 'var(--border-primary)' : 'var(--accent)'}`,
         }}
         aria-label="테마 변경"
+        aria-pressed={!isDark}
       >
         <span
           className="absolute top-0.5 transition-all duration-300"

@@ -6,6 +6,7 @@ import { subscribeStomp } from '../lib/stompClient';
 interface StockSplitNotice {
   id: string;
   splitDate: string;
+  actionType?: string;
   thresholdPrice: number;
   splitRatio: number;
   stockCount: number;
@@ -39,8 +40,13 @@ export default function AnnouncementPopup() {
   const stockSplitAnnouncement = useMemo<AnnouncementItem | null>(() => {
     if (!stockSplitNotice) return null;
 
-    const isReverseSplit = stockSplitNotice.splitRatio < 0;
-    const isMixedSplit = stockSplitNotice.splitRatio === 0;
+    const actionType = stockSplitNotice.actionType;
+    const isReverseSplit = actionType
+      ? actionType === 'REVERSE_STOCK_SPLIT'
+      : stockSplitNotice.splitRatio < 0;
+    const isMixedSplit = actionType
+      ? actionType === 'MIXED_STOCK_SPLIT'
+      : stockSplitNotice.splitRatio === 0;
     const ratioLabel = isMixedSplit ? '혼합' : `${Math.abs(stockSplitNotice.splitRatio)}:1`;
     const actionLabel = isMixedSplit ? '가격 정규화' : isReverseSplit ? '액면병합' : '액면분할';
     const thresholdLabel = isMixedSplit
@@ -109,6 +115,8 @@ export default function AnnouncementPopup() {
         className="relative w-full max-w-sm rounded-2xl p-6 flex flex-col gap-4 modal-panel max-h-[85vh]"
       >
         <button
+          type="button"
+          aria-label="닫기"
           className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
           onClick={() => dismiss(false)}
         >
@@ -171,12 +179,14 @@ export default function AnnouncementPopup() {
 
         <div className="flex flex-col gap-2 mt-1">
           <button
+            type="button"
             className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80 accent-button"
             onClick={() => dismiss(false)}
           >
             확인
           </button>
           <button
+            type="button"
             className="w-full py-2.5 rounded-xl text-sm transition-colors text-dim-token border border-[#1E2330]"
             onClick={() => dismiss(true)}
           >

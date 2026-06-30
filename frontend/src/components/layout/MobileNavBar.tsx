@@ -29,6 +29,7 @@ export const MobileNavBar = ({
         return (
           <button key={tab} type="button" onClick={() => onNavigate(tab)}
             className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${active ? 'mobile-nav-active' : 'mobile-nav-inactive'}`}
+            aria-current={active ? 'page' : undefined}
             // Active tab is green, inactive is dimmed
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

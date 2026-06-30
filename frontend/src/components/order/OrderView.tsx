@@ -87,8 +87,8 @@ export const OrderView = ({
         {sorted.map(s => {
           const pct = changePct(s.price);
           return (
-            <div key={s.id} onClick={() => onSelectStreamer(s)}
-              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-[#3D8BFF] surface-card-secondary border-primary-token">
+            <button key={s.id} type="button" onClick={() => onSelectStreamer(s)}
+              className="w-full text-left flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-[#3D8BFF] surface-card-secondary border-primary-token">
               {/* Stock name and volume */}
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-sm truncate">{s.name}</p>
@@ -101,7 +101,7 @@ export const OrderView = ({
                   {fmtPct(pct, 1)}
                 </p>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

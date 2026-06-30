@@ -116,8 +116,8 @@ export const PricesView = ({
         {filtered.map(s => {
           const pct = changePct(s.price, s.basePrice);
           return (
-            <div key={s.id} onClick={() => onSelectStreamer(s)}
-              className="flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
+            <button key={s.id} type="button" onClick={() => onSelectStreamer(s)}
+              className="w-full text-left flex items-center px-4 py-3 rounded-xl border cursor-pointer transition-colors hover:border-blue-500"
               style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
               {/* Green ring border when streamer is live */}
               <div className="shrink-0 mr-3"
@@ -149,7 +149,7 @@ export const PricesView = ({
                   {fmtPct(pct, 1)}
                 </p>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
