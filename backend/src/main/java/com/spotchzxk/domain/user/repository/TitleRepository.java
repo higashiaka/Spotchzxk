@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface TitleRepository extends JpaRepository<Title, Long> {
     List<Title> findByUserIdOrderByGrantedAtDesc(String userId);
+    List<Title> findByIdIn(List<Long> ids);
     boolean existsByIdAndUserId(Long id, String userId);
 }
