@@ -68,6 +68,49 @@ public class StockService {
     }
 
     /**
+     * Admin-only: list a stock without consuming a ticket or requiring a user record.
+     * @return empty if already listed, filled if newly created.
+     */
+    public Optional<Stock> adminAddStock(String channelId) {
+        if (stockRepository.existsById(channelId)) {
+            return Optional.empty();
+        }
+        Stock stock = Stock.builder()
+                .channelId(channelId)
+                .streamerName(channelId)
+                .totalSupply(BigDecimal.ZERO)
+                .currentPrice(BigDecimal.valueOf(1000))
+                .basePrice(BigDecimal.valueOf(1000))
+                .listingPrice(BigDecimal.valueOf(1000))
+                .isLive(false)
+                .listedAt(java.time.LocalDateTime.now())
+                .build();
+
+        AtomicReference<Optional<Stock>> result = new AtomicReference<>(Optional.empty());
+        try {
+            tradeEngine.runWithUserLock("admin", () -> result.set(transactionTemplate.execute(status -> {
+                if (stockRepository.existsById(channelId)) return Optional.empty();
+                if (!chzzkApiClient.populateChannelInfo(stock)) throw new ChannelNotFoundException(channelId);
+                long listingPrice = calcListingPrice(stock.getFollowerCount());
+                stock.finalizeListing(listingPrice, 100_000L);
+                int tier = AmmMigrationService.calcLiquidityTier(stock.getFollowerCount());
+                long shareReserve = AmmMigrationService.calcTierShareReserve(stock.getFollowerCount());
+                BigInteger coinReserve = BigInteger.valueOf(listingPrice).multiply(BigInteger.valueOf(shareReserve));
+                stock.initAmmPool(coinReserve, BigInteger.valueOf(shareReserve), tier);
+                stockRepository.save(stock);
+                return Optional.of(stockRepository.findById(channelId).orElseThrow());
+            })));
+        } catch (DataIntegrityViolationException e) {
+            return Optional.empty();
+        }
+
+        result.get().ifPresent(savedStock ->
+                messagingTemplate.convertAndSend("/topic/streamers",
+                        stockRepository.findAll().stream().map(StockResponse::from).toList()));
+        return result.get();
+    }
+
+    /**
      * @return empty if stock already exists, filled if newly created with Chzzk API name.
      */
     public Optional<Stock> addStockIfNew(String userId, String channelId) {

@@ -35,7 +35,7 @@ public class AdminStockController {
             String id = channelId.trim();
             if (id.isBlank()) continue;
             try {
-                Optional<Stock> result = stockService.addStockIfNew("admin", id);
+                Optional<Stock> result = stockService.adminAddStock(id);
                 if (result.isEmpty()) {
                     skipped.add(id);
                 } else {
