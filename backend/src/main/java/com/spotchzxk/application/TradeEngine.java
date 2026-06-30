@@ -17,6 +17,7 @@ import com.spotchzxk.domain.trading.service.AmmCalculator;
 import com.spotchzxk.domain.trading.service.MarketPrice;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.annotation.PreDestroy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -27,6 +28,7 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +46,7 @@ public class TradeEngine {
     private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int PRICE_SCALE = 6;
     private static final String SUSPENSION_REASON_INVALID_AMM_POOL = MarketPrice.REASON_INVALID_AMM_POOL;
+    private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
@@ -54,6 +57,8 @@ public class TradeEngine {
     private final CandleService candleService;
     private final TradeFailureLogRepository tradeFailureLogRepository;
 
+    // JVM-local caches. Horizontal scaling requires replacing these with a distributed cache
+    // or routing each user's trading traffic to a single instance.
     private final ConcurrentHashMap<String, BigDecimal> balanceCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Map<String, BigDecimal>> sharesCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, BigDecimal> priceCache = new ConcurrentHashMap<>();
@@ -67,6 +72,11 @@ public class TradeEngine {
     @org.springframework.context.annotation.Lazy
     private final RankCacheService rankCacheService;
 
+    @PreDestroy
+    public void shutdownCandleExecutor() {
+        candleExecutor.shutdown();
+    }
+
     public TradeResponse submitTrade(TradeRequest req) {
         String userId = req.getUserId();
         String channelId = req.getStreamerId();
@@ -75,7 +85,7 @@ public class TradeEngine {
         boolean sellAll = req.isSellAll();
 
         if (sellAll && (isBuy || "limit".equals(req.getOrderMode()))) {
-            throw new IllegalStateException("100% 매도는 시장가 매도에서만 사용할 수 있습니다.");
+            throw validationError("100% 매도는 시장가 매도에서만 사용할 수 있습니다.");
         }
 
         ReentrantLock userLock = userLocks.computeIfAbsent(userId, k -> new ReentrantLock());
@@ -97,8 +107,10 @@ public class TradeEngine {
                     return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
                             req.getMaxCoinIn(), req.getMinCoinOut());
                 } catch (RuntimeException e) {
-                    evictUserCache(userId);
-                    evictStockCache(channelId);
+                    if (!(e instanceof TradeValidationException)) {
+                        evictUserCache(userId);
+                        evictStockCache(channelId);
+                    }
                     recordTradeFailure(req, e.getMessage());
                     throw e;
                 }
@@ -141,7 +153,8 @@ public class TradeEngine {
 
         broadcastTrade(channelId, savedTrade.streamerName(), false, wholeQty, amm.newPrice(), executedAt,
                 new BigDecimal(amm.userNetAmount()), savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId,
+                savedTrade.tradingSuspended(), savedTrade.tradingSuspensionReason());
         processPendingLimitOrders(channelId);
         return new TradeResponse("executed", amm.newPrice().toPlainString(), newBalance.toPlainString(),
                 "0", orderId, "market");
@@ -174,7 +187,8 @@ public class TradeEngine {
             saveOrder(userId, channelId, false, wholeQty, fallbackPrice, amm.newPrice(), executedAt,
                     orderId, "market", null, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
-                    stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds, stock.isTradingSuspended());
+                    stock.getDailyVolume(), stock.getDailyTradingValue(), fractionalProceeds,
+                    stock.isTradingSuspended(), stock.getTradingSuspensionReason());
         });
     }
 
@@ -255,17 +269,21 @@ public class TradeEngine {
 
     public TradeResponse cancelLimitOrder(String userId, String orderId) {
         BigDecimal[] newBalance = new BigDecimal[1];
+        String[] streamerId = new String[1];
         runWithUserLock(userId, () -> {
-            newBalance[0] = cancelLimitOrderLocked(userId, orderId);
+            newBalance[0] = cancelLimitOrderLocked(userId, orderId, streamerId);
             evictUserCache(userId);
         });
 
         asyncBroadcast.send("/topic/orders/" + userId,
                 Map.of("orderId", orderId, "status", "cancelled"));
+        if (streamerId[0] != null) {
+            broadcastOrderBookChanged(streamerId[0]);
+        }
         return new TradeResponse("cancelled", "0", newBalance[0].toPlainString(), "0", orderId, "limit");
     }
 
-    private BigDecimal cancelLimitOrderLocked(String userId, String orderId) {
+    private BigDecimal cancelLimitOrderLocked(String userId, String orderId, String[] streamerId) {
         return new TransactionTemplate(txManager).execute(status -> {
             Order order = orderRepository.findByIdForUpdate(orderId)
                     .orElseThrow(() -> new IllegalStateException("존재하지 않는 주문입니다."));
@@ -276,6 +294,7 @@ public class TradeEngine {
                 throw new IllegalStateException("이미 처리되었거나 취소된 주문입니다.");
             }
 
+            streamerId[0] = order.getStreamerId();
             BigDecimal refund = BigDecimal.ZERO;
             if ("buy".equals(order.getType())) {
                 BigInteger remainingQty = order.remainingQuantity().toBigIntegerExact();
@@ -304,10 +323,10 @@ public class TradeEngine {
         BigDecimal userNet = new BigDecimal(amm.userNetAmount());
 
         if (isBuy && maxCoinIn != null && userNet.compareTo(maxCoinIn) > 0) {
-            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 비용 " + userNet + " > 최대 허용 " + maxCoinIn + ")");
+            throw validationError("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 비용 " + userNet + " > 최대 허용 " + maxCoinIn + ")");
         }
         if (!isBuy && minCoinOut != null && userNet.compareTo(minCoinOut) < 0) {
-            throw new IllegalStateException("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 수령 " + userNet + " < 최소 허용 " + minCoinOut + ")");
+            throw validationError("가격 변동이 커서 주문이 취소되었습니다. 다시 시도해 주세요. (실제 수령 " + userNet + " < 최소 허용 " + minCoinOut + ")");
         }
 
         long executedAt = System.currentTimeMillis();
@@ -323,7 +342,8 @@ public class TradeEngine {
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
                 savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId,
+                savedTrade.tradingSuspended(), savedTrade.tradingSuspensionReason());
         if (processPendingAfterExecution) {
             processPendingLimitOrders(channelId);
         }
@@ -335,7 +355,7 @@ public class TradeEngine {
     private TradeResponse submitLimitOrder(String userId, String channelId, boolean isBuy, BigInteger qty,
                                            BigDecimal fallbackPrice, BigDecimal limitPrice, boolean allowPartial) {
         if (limitPrice == null || limitPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("지정가 주문에는 가격을 입력해야 합니다.");
+            throw validationError("지정가 주문에는 가격을 입력해야 합니다.");
         }
 
         BigDecimal currentPrice = loadPrice(channelId, fallbackPrice);
@@ -371,7 +391,7 @@ public class TradeEngine {
                                                      BigDecimal fallbackPrice, BigDecimal limitPrice, boolean allowPartial) {
         AmmCalculator.AmmResult amm = calcAmmTradeForLimit(channelId, isBuy, qty, limitPrice);
         if (amm == null) {
-            if (!allowPartial) throw new IllegalStateException("현재 시장가가 지정가보다 많이 벗어났습니다.");
+            if (!allowPartial) throw validationError("현재 시장가가 지정가보다 많이 벗어났습니다.");
             BigInteger[] pool = loadAmmPool(channelId);
             BigInteger partialQty = findMaxPartialQty(pool[0], pool[1], isBuy, qty, limitPrice);
             if (partialQty.signum() <= 0) {
@@ -394,7 +414,8 @@ public class TradeEngine {
         BigDecimal newBalance = updateCaches(userId, channelId, isBuy, qty, amm, savedTrade.poolForCache(), currentBalance, shares, heldQty);
         broadcastTrade(channelId, savedTrade.streamerName(), isBuy, qty, amm.newPrice(), executedAt, userNet,
                 savedTrade.poolForCache()[0], savedTrade.poolForCache()[1],
-                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId, savedTrade.tradingSuspended());
+                savedTrade.dailyVolume(), savedTrade.dailyTradingValue(), orderId,
+                savedTrade.tradingSuspended(), savedTrade.tradingSuspensionReason());
         processPendingLimitOrders(channelId);
 
         return new TradeResponse("executed", amm.newPrice().toPlainString(), newBalance.toPlainString(), "0", orderId, "limit");
@@ -415,6 +436,7 @@ public class TradeEngine {
         if (isBuy) {
             balanceCache.put(userId, newBalance);
         }
+        broadcastOrderBookChanged(channelId);
 
         return new TradeResponse("pending", "0", newBalance.toPlainString(), "0", orderId, "limit");
     }
@@ -500,7 +522,7 @@ public class TradeEngine {
         Stock stock = stockRepository.findById(channelId)
                 .orElseThrow(() -> new IllegalStateException("종목 정보를 찾을 수 없습니다."));
         if (stock.isTradingSuspended()) {
-            throw new IllegalStateException("현재 거래가 정지된 종목입니다.");
+            throw validationError("현재 거래가 정지된 종목입니다.");
         }
         if (stock.getCurrentPrice() == null || stock.getCurrentPrice().compareTo(BigDecimal.ZERO) <= 0
                 || stock.getCoinReserve() == null || stock.getShareReserve() == null
@@ -514,21 +536,21 @@ public class TradeEngine {
         if (!isBuy) {
             BigDecimal pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
             if (heldQty.subtract(pendingSellQty).compareTo(new BigDecimal(qty)) < 0) {
-                throw new IllegalStateException("보유 수량이 부족합니다.");
+                throw validationError("보유 수량이 부족합니다.");
             }
             return;
         }
 
         if (currentBalance.compareTo(cost) < 0) {
-            throw new IllegalStateException("잔고가 부족합니다.");
+            throw validationError("잔고가 부족합니다.");
         }
         boolean isNewListing = stock.getListedAt() != null
-                && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now()) < AntiWhalePolicy.NEW_LISTING_HOURS;
+                && ChronoUnit.HOURS.between(stock.getListedAt(), LocalDateTime.now(KST)) < AntiWhalePolicy.NEW_LISTING_HOURS;
         if (isNewListing) {
             BigDecimal pendingBuyQty = orderRepository.sumPendingBuyQuantity(userId, channelId);
             if (heldQty.add(pendingBuyQty).add(new BigDecimal(qty))
                     .compareTo(BigDecimal.valueOf(AntiWhalePolicy.NEW_LISTING_CAP)) > 0) {
-                throw new IllegalStateException("신규 상장 초기에는 최대 200주까지 보유 가능합니다.");
+                throw validationError("신규 상장 초기에는 최대 200주까지 보유 가능합니다.");
             }
         }
 
@@ -543,7 +565,7 @@ public class TradeEngine {
 
         BigDecimal pendingSellQty = orderRepository.sumPendingSellQuantity(userId, channelId);
         if (heldQty.subtract(pendingSellQty).compareTo(new BigDecimal(qty)) < 0) {
-            throw new IllegalStateException("보유 수량이 부족합니다.");
+            throw validationError("보유 수량이 부족합니다.");
         }
     }
 
@@ -565,7 +587,8 @@ public class TradeEngine {
             saveOrder(userId, channelId, isBuy, qty, fallbackPrice, amm.newPrice(), executedAt,
                     orderId, orderMode, limitPrice, "completed");
             return new TradePersistenceResult(stock.getStreamerName(), poolForCache,
-                    stock.getDailyVolume(), stock.getDailyTradingValue(), stock.isTradingSuspended());
+                    stock.getDailyVolume(), stock.getDailyTradingValue(),
+                    stock.isTradingSuspended(), stock.getTradingSuspensionReason());
         });
     }
 
@@ -758,6 +781,7 @@ public class TradeEngine {
         BigDecimal[] dailyVolumeHolder = new BigDecimal[1];
         BigDecimal[] dailyTradingValueHolder = new BigDecimal[1];
         boolean[] tradingSuspendedHolder = new boolean[1];
+        String[] tradingSuspensionReasonHolder = new String[1];
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             Order freshOrder = orderRepository.findByIdForUpdate(order.getId()).orElse(null);
             if (freshOrder == null || !"pending".equals(freshOrder.getStatus())) return;
@@ -828,6 +852,7 @@ public class TradeEngine {
             dailyVolumeHolder[0] = stock.getDailyVolume();
             dailyTradingValueHolder[0] = stock.getDailyTradingValue();
             tradingSuspendedHolder[0] = stock.isTradingSuspended();
+            tradingSuspensionReasonHolder[0] = stock.getTradingSuspensionReason();
             if (fillQty.compareTo(remainingQty) >= 0) {
                 freshOrder.complete(amm.newPrice(), executedAt);
             } else {
@@ -853,7 +878,8 @@ public class TradeEngine {
         BigInteger broadcastQty = order.getQuantity().toBigIntegerExact(); // use original; exact fill qty not available outside tx
         broadcastTrade(order.getStreamerId(), streamerName, isBuy, broadcastQty, amm.newPrice(), executedAt,
                 new BigDecimal(amm.userNetAmount()), poolForCache[0], poolForCache[1],
-                dailyVolumeHolder[0], dailyTradingValueHolder[0], order.getId(), tradingSuspendedHolder[0]);
+                dailyVolumeHolder[0], dailyTradingValueHolder[0], order.getId(),
+                tradingSuspendedHolder[0], tradingSuspensionReasonHolder[0]);
         asyncBroadcast.send("/topic/orders/" + order.getUserId(),
                 Map.of("orderId", order.getId(), "status", "completed"));
     }
@@ -876,15 +902,22 @@ public class TradeEngine {
 
     private record TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
                                           BigDecimal dailyVolume, BigDecimal dailyTradingValue,
-                                          BigDecimal fractionalProceeds, boolean tradingSuspended) {
+                                          BigDecimal fractionalProceeds, boolean tradingSuspended,
+                                          String tradingSuspensionReason) {
         private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
                                        BigDecimal dailyVolume, BigDecimal dailyTradingValue) {
-            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, false);
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, false, null);
         }
         private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
                                        BigDecimal dailyVolume, BigDecimal dailyTradingValue,
                                        boolean tradingSuspended) {
-            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, tradingSuspended);
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO, tradingSuspended, null);
+        }
+        private TradePersistenceResult(String streamerName, BigInteger[] poolForCache,
+                                       BigDecimal dailyVolume, BigDecimal dailyTradingValue,
+                                       boolean tradingSuspended, String tradingSuspensionReason) {
+            this(streamerName, poolForCache, dailyVolume, dailyTradingValue, BigDecimal.ZERO,
+                    tradingSuspended, tradingSuspensionReason);
         }
     }
 
@@ -893,26 +926,42 @@ public class TradeEngine {
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
                                 BigInteger coinReserve, BigInteger shareReserve,
                                 BigDecimal dailyVolume, BigDecimal dailyTradingValue, String orderId,
-                                boolean tradingSuspended) {
+                                boolean tradingSuspended, String tradingSuspensionReason) {
         BigDecimal displayPrice = MarketPrice.spotPrice(coinReserve, shareReserve, executedPrice);
         CompletableFuture.runAsync(() -> candleService.onTrade(channelId, displayPrice, executedAt), candleExecutor);
         asyncBroadcast.send("/topic/prices/" + channelId,
                 Map.of("streamerId", channelId, "price", displayPrice.toPlainString()));
-        asyncBroadcast.send("/topic/trades", Map.ofEntries(
-                Map.entry("id", orderId),
-                Map.entry("streamerId", channelId),
-                Map.entry("streamerName", streamerName != null ? streamerName : channelId),
-                Map.entry("type", isBuy ? "buy" : "sell"),
-                Map.entry("quantity", qty.toString()),
-                Map.entry("price", displayPrice.toPlainString()),
-                Map.entry("tradingValue", toLongCap(cost)),
-                Map.entry("dailyVolume", dailyVolume != null ? dailyVolume.toPlainString() : qty.toString()),
-                Map.entry("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString()),
-                Map.entry("coinReserve", coinReserve.toString()),
-                Map.entry("shareReserve", shareReserve.toString()),
-                Map.entry("timestamp", executedAt),
-                Map.entry("tradingSuspended", tradingSuspended)
-        ));
+        broadcastOrderBookChanged(channelId);
+        Map<String, Object> tradePayload = new LinkedHashMap<>();
+        tradePayload.put("id", orderId);
+        tradePayload.put("streamerId", channelId);
+        tradePayload.put("streamerName", streamerName != null ? streamerName : channelId);
+        tradePayload.put("type", isBuy ? "buy" : "sell");
+        tradePayload.put("quantity", qty.toString());
+        tradePayload.put("price", displayPrice.toPlainString());
+        tradePayload.put("tradingValue", toLongCap(cost));
+        tradePayload.put("dailyVolume", dailyVolume != null ? dailyVolume.toPlainString() : qty.toString());
+        tradePayload.put("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString());
+        tradePayload.put("coinReserve", coinReserve.toString());
+        tradePayload.put("shareReserve", shareReserve.toString());
+        tradePayload.put("timestamp", executedAt);
+        tradePayload.put("tradingSuspended", tradingSuspended);
+        tradePayload.put("tradingSuspensionReason", tradingSuspensionReason);
+        asyncBroadcast.send("/topic/trades", tradePayload);
+    }
+
+    private void broadcastOrderBookChanged(String channelId) {
+        asyncBroadcast.send("/topic/order-book/" + channelId, Map.of("streamerId", channelId));
+    }
+
+    private TradeValidationException validationError(String message) {
+        return new TradeValidationException(message);
+    }
+
+    private static final class TradeValidationException extends IllegalStateException {
+        private TradeValidationException(String message) {
+            super(message);
+        }
     }
 
     private void loadPortfolioIfAbsent(String userId) {
@@ -955,8 +1004,9 @@ public class TradeEngine {
 
     @Scheduled(fixedDelay = 300_000)
     public void cleanupIdleLocks() {
-        userLocks.entrySet().removeIf(e -> !e.getValue().isLocked() && e.getValue().getQueueLength() == 0);
-        stockLocks.entrySet().removeIf(e -> !e.getValue().isLocked() && e.getValue().getQueueLength() == 0);
+        // ReentrantLock removal has a TOCTOU race: a thread can obtain the old lock while
+        // another thread removes it, allowing a later request to create a second lock.
+        // Keep lock identities stable for correctness.
     }
 }
 

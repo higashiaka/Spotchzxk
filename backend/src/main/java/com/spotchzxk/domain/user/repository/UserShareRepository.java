@@ -59,6 +59,21 @@ public interface UserShareRepository extends JpaRepository<UserShare, Long> {
     @Query(value = "SELECT COALESCE(SUM(s.pre_stream_quantity), 0) FROM user_shares s JOIN users u ON u.id = s.user_id WHERE s.channel_id = :channelId AND s.pre_stream_quantity > 0 AND s.user_id != '__house__' AND u.is_bot = 0", nativeQuery = true)
     BigDecimal sumPreStreamQuantityByChannel(@Param("channelId") String channelId);
 
+    @Query(value = """
+            SELECT COALESCE(SUM(FLOOR(s.pre_stream_quantity * :totalPayout / :eligibleShares)), 0)
+            FROM user_shares s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.channel_id = :activeChannelId
+              AND s.pre_stream_quantity > 0
+              AND s.user_id != '__house__'
+              AND u.is_bot = 0
+            """, nativeQuery = true)
+    BigDecimal sumDividendPayout(
+            @Param("activeChannelId") String activeChannelId,
+            @Param("totalPayout") BigDecimal totalPayout,
+            @Param("eligibleShares") BigDecimal eligibleShares
+    );
+
     @Query(value = "SELECT COALESCE(SUM(quantity), 0) FROM user_shares WHERE channel_id = :channelId AND user_id != '__house__'", nativeQuery = true)
     BigDecimal sumQuantityByStock(@Param("channelId") String channelId);
 

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,8 +22,6 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") String id);
-
-    List<Order> findTop200ByStreamerIdOrderByCreatedAtDesc(String streamerId);
 
     // Sort by trade time (executedAt) when filled, fallback to created_at for pending limit orders
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND status = :status ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 200", nativeQuery = true)
@@ -39,11 +38,11 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             """, nativeQuery = true)
     List<Order> findTop200ExecutedByStreamerIdOrderByTradedAtDesc(@Param("streamerId") String streamerId);
     // Fallback rationale: COALESCE(executed_at, created_at) gives a consistent timestamp column for both states
-    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) >= :fromMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
-    List<Order> findByStreamerIdTradedAtGreaterThanEqual(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs);
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) >= :fromEpochMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
+    List<Order> findByStreamerIdTradedAtGreaterThanEqual(@Param("streamerId") String streamerId, @Param("fromEpochMs") long fromEpochMs);
 
-    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) BETWEEN :fromMs AND :toMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
-    List<Order> findByStreamerIdAndTradedAtBetween(@Param("streamerId") String streamerId, @Param("fromMs") long fromMs, @Param("toMs") long toMs);
+    @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) BETWEEN :fromEpochMs AND :toEpochMs ORDER BY COALESCE(executed_at, created_at) ASC", nativeQuery = true)
+    List<Order> findByStreamerIdAndTradedAtBetween(@Param("streamerId") String streamerId, @Param("fromEpochMs") long fromEpochMs, @Param("toEpochMs") long toEpochMs);
 
     @Query(value = "SELECT * FROM orders WHERE streamer_id = :streamerId AND COALESCE(executed_at, created_at) < :beforeMs AND executed_price IS NOT NULL ORDER BY COALESCE(executed_at, created_at) DESC LIMIT 1", nativeQuery = true)
     Order findTopByStreamerIdTradedBeforeWithPrice(@Param("streamerId") String streamerId, @Param("beforeMs") long beforeMs);
@@ -52,16 +51,23 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Order> findByStreamerIdAndStatusOrderByCreatedAtAsc(String streamerId, String status);
     List<Order> findByUserIdAndStatusOrderByCreatedAtDesc(String userId, String status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.streamerId = :streamerId AND o.status = 'pending' ORDER BY o.createdAt ASC")
+    List<Order> findPendingByStreamerIdForUpdate(@Param("streamerId") String streamerId);
+
     @Modifying
+    @Transactional
     @Query(value = "UPDATE orders SET user_id = :newUserId WHERE user_id = :oldUserId", nativeQuery = true)
     void updateUserId(@Param("oldUserId") String oldUserId, @Param("newUserId") String newUserId);
 
     @Modifying
+    @Transactional
     @Query(value = "DELETE FROM orders WHERE user_id = :userId", nativeQuery = true)
     void deleteByUserId(@Param("userId") String userId);
 
     // Bulk cancel a user's PENDING orders (used when resetting portfolio)
     @Modifying
+    @Transactional
     @Query(value = "UPDATE orders SET status = 'cancelled' WHERE user_id = :userId AND status = 'pending'", nativeQuery = true)
     int cancelPendingOrdersByUserId(@Param("userId") String userId);
 
@@ -104,6 +110,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     List<Object[]> findBidLevels(@Param("streamerId") String streamerId, @Param("limit") int limit);
 
     @Modifying(clearAutomatically = true)
+    @Transactional
     @Query(value = """
             DELETE FROM orders
             WHERE streamer_id = :streamerId
@@ -112,6 +119,7 @@ public interface OrderRepository extends JpaRepository<Order, String> {
     int deleteAllPendingOrders(@Param("streamerId") String streamerId);
 
     @Modifying
+    @Transactional
     @Query(value = """
             UPDATE orders
             SET quantity = quantity * :ratio,

@@ -77,6 +77,9 @@ public final class AmmCalculator {
     }
 
     public static BigDecimal avgPrice(BigInteger coinAmount, BigInteger qty) {
+        if (coinAmount == null || qty == null || qty.signum() <= 0) {
+            throw new IllegalStateException("주문 수량은 1주 이상이어야 합니다.");
+        }
         return new BigDecimal(coinAmount).divide(new BigDecimal(qty), PRICE_SCALE, RoundingMode.HALF_UP);
     }
 

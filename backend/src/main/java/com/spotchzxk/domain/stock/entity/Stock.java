@@ -267,10 +267,10 @@ public class Stock {
         this.currentPrice = this.currentPrice.multiply(ratioDecimal);
         this.basePrice = this.basePrice.multiply(ratioDecimal);
         this.listingPrice = this.listingPrice.multiply(ratioDecimal);
-        this.totalSupply = this.totalSupply.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
-        this.dailyVolume = this.dailyVolume.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
-        this.issuedShares = this.issuedShares.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
-        this.preStreamFloat = this.preStreamFloat.divide(ratioDecimal, 2, RoundingMode.HALF_UP);
+        this.totalSupply = this.totalSupply.divide(ratioDecimal, 0, RoundingMode.FLOOR);
+        this.dailyVolume = this.dailyVolume.divide(ratioDecimal, 0, RoundingMode.FLOOR);
+        this.issuedShares = this.issuedShares.divide(ratioDecimal, 0, RoundingMode.FLOOR);
+        this.preStreamFloat = this.preStreamFloat.divide(ratioDecimal, 0, RoundingMode.FLOOR);
         this.shareReserve = nonNull(this.shareReserve)
                 .divide(BigInteger.valueOf(ratio))
                 .max(BigInteger.ONE);

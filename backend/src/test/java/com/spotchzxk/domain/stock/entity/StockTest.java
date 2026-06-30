@@ -30,10 +30,10 @@ class StockTest {
         assertThat(stock.getCurrentPrice()).isEqualByComparingTo("500");
         assertThat(stock.getBasePrice()).isEqualByComparingTo("600");
         assertThat(stock.getListingPrice()).isEqualByComparingTo("10000");
-        assertThat(stock.getTotalSupply()).isEqualByComparingTo("10000.00");
-        assertThat(stock.getDailyVolume()).isEqualByComparingTo("12.30");
-        assertThat(stock.getIssuedShares()).isEqualByComparingTo("45.60");
-        assertThat(stock.getPreStreamFloat()).isEqualByComparingTo("78.90");
+        assertThat(stock.getTotalSupply()).isEqualByComparingTo("10000");
+        assertThat(stock.getDailyVolume()).isEqualByComparingTo("12");
+        assertThat(stock.getIssuedShares()).isEqualByComparingTo("45");
+        assertThat(stock.getPreStreamFloat()).isEqualByComparingTo("78");
         assertThat(stock.getShareReserve()).isEqualTo(BigInteger.valueOf(100));
     }
 
@@ -54,6 +54,24 @@ class StockTest {
 
         assertThat(stock.getShareReserve()).isEqualTo(BigInteger.TEN);
         assertThat(stock.getCurrentPrice()).isEqualByComparingTo("10.000000");
+    }
+
+    @Test
+    void applyReverseStockSplitKeepsShareReserveAtLeastOne() {
+        Stock stock = Stock.builder()
+                .channelId("stock-1")
+                .streamerName("streamer")
+                .currentPrice(BigDecimal.valueOf(100))
+                .basePrice(BigDecimal.valueOf(100))
+                .listingPrice(BigDecimal.valueOf(100))
+                .coinReserve(BigInteger.valueOf(1000))
+                .shareReserve(BigInteger.ZERO)
+                .build();
+
+        stock.applyReverseStockSplit(10);
+
+        assertThat(stock.getShareReserve()).isEqualTo(BigInteger.ONE);
+        assertThat(stock.getCurrentPrice()).isEqualByComparingTo("1000.000000");
     }
 
     @Test

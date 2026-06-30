@@ -100,6 +100,13 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void avgPriceRejectsZeroQuantity() {
+        assertThatThrownBy(() -> AmmCalculator.avgPrice(BigInteger.TEN, BigInteger.ZERO))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("1주 이상");
+    }
+
+    @Test
     void calculateAmmTradeSuspendsStockWhenPoolIsInvalid() {
         StockRepository stockRepository = mock(StockRepository.class);
         TradeEngine engine = new TradeEngine(

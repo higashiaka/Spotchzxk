@@ -1,5 +1,6 @@
 package com.spotchzxk.application;
 
+import com.spotchzxk.domain.order.entity.Order;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.presentation.dto.StockResponse;
@@ -9,6 +10,7 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitEventRepository;
 import com.spotchzxk.domain.stock.repository.StockSplitNoticeRepository;
 import com.spotchzxk.domain.trading.policy.AntiWhalePolicy;
+import com.spotchzxk.domain.trading.service.AmmCalculator;
 import com.spotchzxk.domain.trading.service.MarketPrice;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.entity.UserShare;
@@ -30,8 +32,11 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -143,7 +148,7 @@ public class StockSplitService {
 
         for (StockAction action : actions) {
             applyAction(action);
-            orderRepository.deleteAllPendingOrders(action.stock().getChannelId());
+            cancelPendingOrdersForCorporateAction(action.stock().getChannelId());
         }
 
         List<Stock> targets = actions.stream().map(StockAction::stock).toList();
@@ -249,7 +254,7 @@ public class StockSplitService {
         for (UserShare share : shares) {
             BigDecimal oldQty = share.getQuantity();
             BigDecimal newQty = oldQty.divideToIntegralValue(ratioDecimal)
-                    .setScale(2, RoundingMode.FLOOR);
+                    .setScale(0, RoundingMode.FLOOR);
 
             // 잘려나간 단수주 코인으로 환불
             BigDecimal fractional = oldQty.subtract(newQty.multiply(ratioDecimal));
@@ -264,7 +269,7 @@ public class StockSplitService {
                 toDelete.add(share);
             } else {
                 BigDecimal oldPre = share.getPreStreamQuantity() != null ? share.getPreStreamQuantity() : BigDecimal.ZERO;
-                BigDecimal newPre = oldPre.divideToIntegralValue(ratioDecimal).setScale(2, RoundingMode.FLOOR);
+                BigDecimal newPre = oldPre.divideToIntegralValue(ratioDecimal).setScale(0, RoundingMode.FLOOR);
                 BigDecimal newAvgPrice = share.getAvgPrice() != null
                         ? share.getAvgPrice().multiply(ratioDecimal)
                         : null;
@@ -278,6 +283,45 @@ public class StockSplitService {
         if (!updatedUsers.isEmpty()) {
             userRepository.saveAll(updatedUsers);
         }
+    }
+
+    private void cancelPendingOrdersForCorporateAction(String channelId) {
+        List<Order> pendingOrders = orderRepository.findPendingByStreamerIdForUpdate(channelId);
+        if (pendingOrders.isEmpty()) {
+            return;
+        }
+
+        Set<String> affectedUserIds = new LinkedHashSet<>();
+        for (Order order : pendingOrders) {
+            if ("buy".equals(order.getType())) {
+                BigDecimal refund = limitReservationAmount(order.getLimitPrice(), order.remainingQuantity());
+                if (refund.compareTo(BigDecimal.ZERO) > 0
+                        && userRepository.addToBalance(order.getUserId(), refund) != 1) {
+                    throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
+                }
+            }
+            order.cancel();
+            affectedUserIds.add(order.getUserId());
+        }
+        orderRepository.saveAll(pendingOrders);
+
+        registerAfterCommit(() -> affectedUserIds.forEach(userId -> {
+            tradeEngine.evictUserCache(userId);
+            messagingTemplate.convertAndSend("/topic/orders/" + userId,
+                    Map.of("status", "cancelled", "reason", "stock-split"));
+        }));
+        log.info("Cancelled {} pending orders for stock split/reverse split: channelId={}",
+                pendingOrders.size(), channelId);
+    }
+
+    private BigDecimal limitReservationAmount(BigDecimal limitPrice, BigDecimal quantity) {
+        if (limitPrice == null || quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal gross = limitPrice.multiply(quantity).setScale(0, RoundingMode.CEILING);
+        BigInteger grossAmount = gross.toBigIntegerExact();
+        BigInteger[] fee = AmmCalculator.fee(grossAmount);
+        return new BigDecimal(grossAmount.add(fee[0]).add(fee[1]));
     }
 
     private StockSplitNotice createNotice(LocalDate today, int splitHour, List<StockAction> actions) {
@@ -323,9 +367,9 @@ public class StockSplitService {
                 .filter(stock -> isEligibleForNormalization(stock, eligibleListedAt))
                 .filter(stock -> MarketPrice.spotPrice(stock).compareTo(BigDecimal.ZERO) > 0)
                 .filter(stock -> MarketPrice.spotPrice(stock).compareTo(MarketPrice.MIN_TRADABLE_PRICE) < 0)
-                .peek(stock -> stock.suspendTrading(MarketPrice.REASON_PRICE_BELOW_ONE))
                 .toList();
         if (!targets.isEmpty()) {
+            targets.forEach(stock -> stock.suspendTrading(MarketPrice.REASON_PRICE_BELOW_ONE));
             stockRepository.saveAll(targets);
             log.warn("Suspended {} stocks with unsafe price or AMM pool: {}",
                     targets.size(),
