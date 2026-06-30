@@ -23,6 +23,9 @@ public class Title {
     @Column(name = "stock_id", length = 50)
     private String stockId;
 
+    @Column(name = "stock_name_snapshot", length = 100)
+    private String stockNameSnapshot;
+
     @Column(name = "title_type", nullable = false, length = 50)
     private String titleType;
 

@@ -27,9 +27,7 @@ public class TitleResponseMapper {
     private String label(Title title) {
         String type = title.getTitleType();
         if (title.getStockId() != null && (type.equals("CHEER_VVIP") || type.equals("CHEER_VIP"))) {
-            String streamerName = stockRepository.findById(title.getStockId())
-                    .map(s -> s.getStreamerName())
-                    .orElse("알 수 없는 스트리머");
+            String streamerName = stockDisplayName(title);
             return streamerName + "의 " + (type.equals("CHEER_VVIP") ? "VVIP" : "VIP");
         }
         return switch (type) {
@@ -79,6 +77,17 @@ public class TitleResponseMapper {
             case "BETA_FAN_TOP"      -> "베타 시즌 종목별 대표 팬 칭호";
             default -> "정식 전환 및 시즌 보상 칭호";
         };
+    }
+
+    private String stockDisplayName(Title title) {
+        String snapshot = title.getStockNameSnapshot();
+        if (snapshot != null && !snapshot.isBlank()) {
+            return snapshot;
+        }
+        return stockRepository.findById(title.getStockId())
+                .map(s -> s.getStreamerName())
+                .filter(name -> name != null && !name.isBlank())
+                .orElse("알 수 없는 스트리머");
     }
 
     private String tone(String type) {
