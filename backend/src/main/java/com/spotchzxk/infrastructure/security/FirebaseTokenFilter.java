@@ -69,7 +69,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 Object firebaseObj = decoded.getClaims().get("firebase");
                 if (firebaseObj instanceof Map<?, ?> firebaseClaims) {
                     boolean isGoogle = hasProvider(firebaseClaims, GOOGLE_PROVIDER_ID);
-                    boolean isNaver = hasProvider(firebaseClaims, NAVER_PROVIDER_ID);
+                    boolean isNaver = hasProvider(firebaseClaims, NAVER_PROVIDER_ID) || uid.startsWith("naver:");
                     isRegisteredSocialProvider = isGoogle || isNaver;
                     if (isGoogle) {
                         authorities.add(new SimpleGrantedAuthority("ROLE_GOOGLE"));

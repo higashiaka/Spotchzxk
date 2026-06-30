@@ -77,6 +77,10 @@ app:
     discord-webhook-url: ${DISCORD_FEEDBACK_WEBHOOK_URL:}
     discord-bot-token: ${DISCORD_FEEDBACK_BOT_TOKEN:}
     discord-channel-id: ${DISCORD_FEEDBACK_CHANNEL_ID:}
+  naver:
+    client-id: ${NAVER_CLIENT_ID:}
+    client-secret: ${NAVER_CLIENT_SECRET:}
+    redirect-uri: ${NAVER_REDIRECT_URI:https://spotchzxk.xyz/naver-callback}
 
 bot:
   activity:

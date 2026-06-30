@@ -49,6 +49,7 @@ public class SecurityConfig {
                 .requestMatchers("/health", "/sitemap.xml", "/ws/**", "/api/auth/me", "/error", "/og/**").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stocks", "/api/stocks/*", "/api/stocks/*/candles", "/api/stocks/*/order-book", "/api/stocks/*/fans", "/api/orders/recent", "/api/orders/history", "/api/online-count", "/api/rankings", "/api/shop/megaphone/posts", "/api/announcements/stock-splits/latest").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/guest/precheck").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/naver/token").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-google").hasRole("GOOGLE")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/auth/link-social").hasAnyRole("GOOGLE", "NAVER")
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/stocks").hasAnyRole("GOOGLE", "NAVER")

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   signInWithPopup, signOut, onAuthStateChanged,
   User, signInAnonymously,
-  linkWithPopup, signInWithCredential,
+  linkWithPopup, signInWithCredential, signInWithCustomToken,
   AuthProvider,
 } from 'firebase/auth';
 import { auth, googleProvider, naverProvider } from '../firebase';
@@ -200,10 +200,52 @@ export function useAuth() {
     [signInWithSocialProvider]
   );
 
-  const handleNaverLogin = useCallback(
-    () => signInWithSocialProvider(naverProvider, 'Naver'),
-    [signInWithSocialProvider]
-  );
+  const handleNaverLogin = useCallback(async () => {
+    const state = Math.random().toString(36).slice(2);
+    const clientId = import.meta.env.VITE_NAVER_CLIENT_ID as string;
+    const redirectUri = encodeURIComponent(`${window.location.origin}/naver-callback`);
+    const naverAuthUrl =
+      `https://nid.naver.com/oauth2.0/authorize?response_type=code` +
+      `&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}`;
+
+    const popup = window.open(naverAuthUrl, 'naverLogin', 'width=500,height=600,left=200,top=100');
+
+    return new Promise<void>((resolve) => {
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== 'NAVER_AUTH_CODE') return;
+        window.removeEventListener('message', handleMessage);
+        clearInterval(closedCheck);
+        try {
+          const res = await apiFetch('/api/auth/naver/token', {
+            method: 'POST',
+            body: JSON.stringify({ code: event.data.code, state: event.data.state }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            alert('네이버 로그인 실패: ' + (body.message ?? '알 수 없는 오류'));
+            resolve();
+            return;
+          }
+          const { customToken } = await res.json();
+          await signInWithCustomToken(auth, customToken);
+        } catch {
+          alert('네이버 로그인 중 오류가 발생했습니다.');
+        }
+        resolve();
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      const closedCheck = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(closedCheck);
+          window.removeEventListener('message', handleMessage);
+          resolve();
+        }
+      }, 500);
+    });
+  }, []);
 
   const handleGuestLogin = useCallback(async () => {
     try {
