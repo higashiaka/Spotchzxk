@@ -102,7 +102,6 @@ export const ChartView = ({
       return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
     };
 
-    void tick;
     switch (category) {
       case 'volume':
         return volumeAsc
@@ -157,7 +156,6 @@ export const ChartView = ({
   /** Calculates milliseconds remaining until next dividend.
    *  Returns -1 if not live or no start time */
   const dividendRemainingMs = (s: Stock): number => {
-    void tick; // Reference tick to force re-render every second
     return dividendRemainingMsFor(s);
   };
 
@@ -227,10 +225,11 @@ export const ChartView = ({
           list.map((s, i) => {
             const pct = changePct(s.price, s.basePrice);
             return (
-              <div
+              <button
                 key={s.id}
+                type="button"
                 onClick={() => onSelect(s)}
-                className="flex items-center px-4 py-3 md:px-8 md:py-5 cursor-pointer"
+                className="w-full text-left flex items-center px-4 py-3 md:px-8 md:py-5 cursor-pointer"
                 style={{ borderBottom: '1px solid var(--border-card)' }}
               >
                 {/* Rank number (brighter for top 3) */}
@@ -283,7 +282,7 @@ export const ChartView = ({
                     </p>
                   </div>
                 )}
-              </div>
+              </button>
             );
           })
         )}

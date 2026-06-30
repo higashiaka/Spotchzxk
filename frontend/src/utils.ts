@@ -50,8 +50,17 @@ export const fmtKoreanBigInt = (value: bigint): string => {
   if (abs >= 10n ** 24n) return divFmt(10n ** 24n, '자원');
   if (abs >= 10n ** 20n) return divFmt(10n ** 20n, '해원');
   if (abs >= 10n ** 16n) return divFmt(10n ** 16n, '경원');
-  // Below 경, precision is safe with Number
-  return fmtKorean(Number(value));
+  if (abs >= 10n ** 12n) return divFmt(10n ** 12n, '조원');
+  if (abs >= 10n ** 8n) return divFmt(10n ** 8n, '억원');
+  if (abs >= 10n ** 7n) {
+    const divisor = 10n ** 7n;
+    const whole = abs / divisor;
+    const frac = (abs % divisor) * 100n / divisor;
+    const decimal = frac === 0n ? `${whole}` : `${whole}.${String(frac).padStart(2, '0').replace(/0+$/, '')}`;
+    return `${sign}${decimal}천만원`;
+  }
+  if (abs >= 10n ** 4n) return divFmt(10n ** 4n, '만원');
+  return `${value.toLocaleString('ko-KR')}원`;
 };
 
 /** Abbreviates large numbers with K/M/B/T/Q/Qi/Sx/Sp/Oc/No suffix (e.g. 1,200 → 1.2K) */
@@ -76,11 +85,12 @@ export const fmtShares = (value: number | string | bigint): string => {
 
   if (typeof value === 'bigint') {
     const abs = value < 0n ? -value : value;
+    const sign = value < 0n ? '-' : '';
     const fmt1 = (divisor: bigint, unit: string): string => {
       const q = abs * 10n / divisor;
       const int = q / 10n;
       const frac = q % 10n;
-      return trim(frac === 0n ? `${int}` : `${int}.${frac}`) + unit;
+      return sign + trim(frac === 0n ? `${int}` : `${int}.${frac}`) + unit;
     };
     if (abs >= 1_000_000_000_000_000_000_000_000_000_000_000_000n) return fmt1(1_000_000_000_000_000_000_000_000_000_000_000_000n, '간주');
     if (abs >= 100_000_000_000_000_000_000_000_000_000_000n)       return fmt1(100_000_000_000_000_000_000_000_000_000_000n, '구주');
@@ -91,7 +101,7 @@ export const fmtShares = (value: number | string | bigint): string => {
     if (abs >= 1_000_000_000_000n)                                 return fmt1(1_000_000_000_000n, '조주');
     if (abs >= 100_000_000n)                                       return fmt1(100_000_000n, '억주');
     if (abs >= 10_000n)                                            return fmt1(10_000n, '만주');
-    return `${value.toLocaleString()}주`;
+    return `${value.toLocaleString('ko-KR')}주`;
   }
 
   const rounded = Math.round(toFiniteNumber(value));

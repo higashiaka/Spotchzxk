@@ -3,14 +3,16 @@ import {
   signInWithPopup, signOut, onAuthStateChanged,
   User, signInAnonymously,
   linkWithPopup, signInWithCredential,
+  AuthProvider,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { auth, googleProvider, naverProvider } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
 import { useQueryClient } from '@tanstack/react-query';
 
 const HAS_LINKED_ACCOUNT_KEY = 'has_linked_account';
 const GUEST_SOFT_LOGGED_OUT_KEY = 'guest_soft_logged_out';
+const PENDING_GUEST_MERGE_KEY = 'pendingGuestMerge';
 
 export type GuestLimitNotice = { retryAtMs: number };
 export type SuspensionNotice = {
@@ -18,11 +20,16 @@ export type SuspensionNotice = {
   suspendedUntil: string;
 };
 
+type FirebaseAuthError = Error & {
+  code?: string;
+  credential?: Parameters<typeof signInWithCredential>[1];
+};
+
 export const guestLimitLabel = (retryAtMs: number, nowMs: number) => {
   const remainingSeconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}분 ${seconds.toString().padStart(2, '0')}초`;
+  return `${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
 };
 
 export function useAuth() {
@@ -31,7 +38,9 @@ export function useAuth() {
   const [guestLimitNotice, setGuestLimitNotice] = useState<GuestLimitNotice | null>(null);
   const [guestLimitNow, setGuestLimitNow] = useState(Date.now());
   const [suspensionNotice, setSuspensionNotice] = useState<SuspensionNotice | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const queryClient = useQueryClient();
+  const userUid = user?.uid;
 
   const refreshSuspensionStatus = useCallback(async () => {
     if (!auth.currentUser || localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true') {
@@ -42,6 +51,8 @@ export function useAuth() {
       const res = await apiFetch('/api/auth/me');
       if (!res.ok) return;
       const body = await res.json().catch(() => ({}));
+      const authorities = Array.isArray(body.authorities) ? body.authorities : [];
+      setIsAdmin(authorities.includes('ROLE_ADMIN'));
       if (body.suspended) {
         setSuspensionNotice({
           reason: String(body.suspensionReason ?? 'Policy violation'),
@@ -52,6 +63,47 @@ export function useAuth() {
       }
     } catch (err) {
       console.error('Failed to refresh suspension status', err);
+      setIsAdmin(false);
+    }
+  }, []);
+
+  const upgradeGuest = useCallback(async (providerLabel: string) => {
+    try {
+      const res = await apiFetch('/api/auth/upgrade-guest', { method: 'POST' });
+      if (!res.ok) console.error(`Failed to upgrade guest after ${providerLabel} linking`, res.status);
+    } catch (upgradeErr) {
+      console.error(`Failed to upgrade guest after ${providerLabel} linking`, upgradeErr);
+    }
+  }, []);
+
+  const handleSocialCredentialInUse = useCallback(async (err: FirebaseAuthError, guestUid: string, providerLabel: string) => {
+    if (!err.credential) {
+      alert(`${providerLabel} account is already linked to another account. Please log in with that account.`);
+      return;
+    }
+    localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
+    localStorage.setItem(PENDING_GUEST_MERGE_KEY, guestUid);
+    try {
+      await signInWithCredential(auth, err.credential);
+    } catch (signInErr) {
+      localStorage.removeItem(PENDING_GUEST_MERGE_KEY);
+      console.error(signInErr);
+      alert(`${providerLabel} account linking failed. Please try again.`);
+    }
+  }, []);
+
+  const signInWithSocialProvider = useCallback(async (provider: AuthProvider, providerLabel: string) => {
+    try {
+      if (auth.currentUser?.isAnonymous && localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true') {
+        await signOut(auth);
+      }
+      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
+      await signInWithPopup(auth, provider);
+    } catch (err: unknown) {
+      const authErr = err as FirebaseAuthError;
+      if (authErr.code === 'auth/popup-closed-by-user') return;
+      console.error(authErr);
+      alert(`${providerLabel} login failed. Please try again.`);
     }
   }, []);
 
@@ -77,27 +129,31 @@ export function useAuth() {
         await refreshSuspensionStatus();
       } else {
         setSuspensionNotice(null);
+        setIsAdmin(false);
       }
       setAuthChecking(false);
 
-      const pendingGuestUid = localStorage.getItem('pendingGuestMerge');
-      if (pendingGuestUid && u && u.providerData.some(p => p.providerId === 'google.com')) {
-        localStorage.removeItem('pendingGuestMerge');
+      const pendingGuestUid = localStorage.getItem(PENDING_GUEST_MERGE_KEY);
+      const hasSocialProvider = u?.providerData.some(p =>
+        p.providerId === 'google.com' || p.providerId === 'oidc.naver'
+      );
+      if (pendingGuestUid && u && hasSocialProvider) {
+        localStorage.removeItem(PENDING_GUEST_MERGE_KEY);
         try {
-          const res = await apiFetch('/api/auth/link-google', {
+          const res = await apiFetch('/api/auth/link-social', {
             method: 'POST',
             body: JSON.stringify({ guestUid: pendingGuestUid }),
           });
           if (res.ok || res.status === 404 || res.status === 409) {
             localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
             if (res.status === 409) {
-              alert('이미 사용 중인 Google 계정이라 게스트 자산을 자동 병합하지 않았습니다.');
+              alert('This social account already exists, so guest assets were not merged automatically.');
             }
           } else {
-            localStorage.setItem('pendingGuestMerge', pendingGuestUid);
+            localStorage.setItem(PENDING_GUEST_MERGE_KEY, pendingGuestUid);
           }
         } catch {
-          localStorage.setItem('pendingGuestMerge', pendingGuestUid);
+          localStorage.setItem(PENDING_GUEST_MERGE_KEY, pendingGuestUid);
         }
       }
     });
@@ -120,8 +176,8 @@ export function useAuth() {
   }, [user?.uid, user?.photoURL, user?.isAnonymous]);
 
   useEffect(() => {
-    if (!user) return;
-    const subscription = subscribeStomp(`/topic/user-suspension/${user.uid}`, (message) => {
+    if (!userUid) return;
+    const subscription = subscribeStomp(`/topic/user-suspension/${userUid}`, (message) => {
       try {
         const body = JSON.parse(message.body);
         if (body.suspended) {
@@ -137,20 +193,17 @@ export function useAuth() {
       }
     });
     return () => subscription.unsubscribe();
-  }, [user]);
+  }, [userUid]);
 
-  const handleGoogleLogin = useCallback(async () => {
-    try {
-      if (auth.currentUser?.isAnonymous && localStorage.getItem(GUEST_SOFT_LOGGED_OUT_KEY) === 'true') {
-        await signOut(auth);
-      }
-      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      console.error(err);
-      alert('Google 로그인에 실패했습니다.');
-    }
-  }, []);
+  const handleGoogleLogin = useCallback(
+    () => signInWithSocialProvider(googleProvider, 'Google'),
+    [signInWithSocialProvider]
+  );
+
+  const handleNaverLogin = useCallback(
+    () => signInWithSocialProvider(naverProvider, 'Naver'),
+    [signInWithSocialProvider]
+  );
 
   const handleGuestLogin = useCallback(async () => {
     try {
@@ -158,7 +211,7 @@ export function useAuth() {
       let fingerprintHash: string | undefined;
 
       if (localStorage.getItem(HAS_LINKED_ACCOUNT_KEY) === 'true') {
-        alert('이미 Google 연동을 완료한 계정이 있습니다. Google 로그인으로 이용해 주세요.');
+        alert('This browser already used a linked account. Please continue with social login.');
         await handleGoogleLogin();
         return;
       }
@@ -203,7 +256,7 @@ export function useAuth() {
       if (!res.ok) throw new Error('Guest registration failed');
     } catch (err) {
       console.error(err);
-      alert('게스트 로그인 오류: Firebase Console에서 익명 로그인을 활성화하세요.');
+      alert('Guest login failed. Please check Firebase anonymous login settings.');
     }
   }, [handleGoogleLogin]);
 
@@ -220,44 +273,52 @@ export function useAuth() {
       queryClient.removeQueries({ queryKey: ['history'] });
       return;
     }
-      localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
-      setSuspensionNotice(null);
-      await signOut(auth);
+    localStorage.removeItem(GUEST_SOFT_LOGGED_OUT_KEY);
+    setSuspensionNotice(null);
+    await signOut(auth);
   }, [queryClient]);
 
   const handleLinkGoogle = useCallback(async () => {
     if (!user) return;
+    const wasAnonymous = user.isAnonymous;
     try {
       await linkWithPopup(user, googleProvider);
       await user.getIdToken(true);
       localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
-      try {
-        const res = await apiFetch('/api/auth/upgrade-guest', { method: 'POST' });
-        if (!res.ok) console.error('Failed to upgrade guest after Google linking', res.status);
-      } catch (upgradeErr) {
-        console.error('Failed to upgrade guest after Google linking', upgradeErr);
-      }
-    } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') return;
-
-      if (err.code === 'auth/credential-already-in-use') {
-        const guestUid = user.uid;
-        localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
-        localStorage.setItem('pendingGuestMerge', guestUid);
-        try {
-          await signInWithCredential(auth, err.credential);
-        } catch (signInErr) {
-          localStorage.removeItem('pendingGuestMerge');
-          console.error(signInErr);
-          alert('계정 연동 중 오류가 발생했습니다. 다시 시도해 주세요.');
-        }
+      if (wasAnonymous) await upgradeGuest('Google');
+    } catch (err: unknown) {
+      const authErr = err as FirebaseAuthError;
+      if (authErr.code === 'auth/popup-closed-by-user') return;
+      if (authErr.code === 'auth/credential-already-in-use') {
+        await handleSocialCredentialInUse(authErr, user.uid, 'Google');
         return;
       }
-
-      console.error(err);
-      alert('Google 연동에 실패했습니다: ' + (err.message ?? ''));
+      console.error(authErr);
+      alert('Google account linking failed: ' + (authErr.message ?? ''));
     }
-  }, [user]);
+  }, [handleSocialCredentialInUse, upgradeGuest, user]);
+
+  const handleLinkNaver = useCallback(async () => {
+    if (!user) return;
+    const wasAnonymous = user.isAnonymous;
+    try {
+      await linkWithPopup(user, naverProvider);
+      await user.getIdToken(true);
+      await user.reload();
+      setUser(auth.currentUser);
+      localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
+      if (wasAnonymous) await upgradeGuest('Naver');
+    } catch (err: unknown) {
+      const authErr = err as FirebaseAuthError;
+      if (authErr.code === 'auth/popup-closed-by-user') return;
+      if (authErr.code === 'auth/credential-already-in-use') {
+        await handleSocialCredentialInUse(authErr, user.uid, 'Naver');
+        return;
+      }
+      console.error(authErr);
+      alert('Naver account linking failed: ' + (authErr.message ?? ''));
+    }
+  }, [handleSocialCredentialInUse, upgradeGuest, user]);
 
   return {
     user,
@@ -265,10 +326,13 @@ export function useAuth() {
     guestLimitNotice,
     guestLimitNow,
     suspensionNotice,
+    isAdmin,
     handleGoogleLogin,
+    handleNaverLogin,
     handleGuestLogin,
     handleGuestLimitGoogleLogin,
     handleLogout,
     handleLinkGoogle,
+    handleLinkNaver,
   };
 }

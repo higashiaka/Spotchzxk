@@ -6,19 +6,28 @@ import './index.css';
 import App from './App';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const rootElement = document.getElementById('root');
-if (rootElement) {
-  createRoot(rootElement).render(
-    <StrictMode>
-      <BrowserRouter>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <App />
-          </ThemeProvider>
-        </QueryClientProvider>
-      </BrowserRouter>
-    </StrictMode>,
-  );
+if (!rootElement) {
+  throw new Error('Root element #root was not found');
 }
+
+createRoot(rootElement).render(
+  <StrictMode>
+    <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </BrowserRouter>
+  </StrictMode>,
+);

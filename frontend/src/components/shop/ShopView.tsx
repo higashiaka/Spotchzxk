@@ -98,7 +98,7 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
 
   return (
     <div
-      className="absolute inset-0 md:fixed md:inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.7)' }}
       onClick={onClose}
     >
@@ -210,8 +210,10 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
 
   /** Whether balance covers the megaphone price */
   const canAfford = balance >= MEGAPHONE_PRICE;
+  const usedToday = Math.min(Math.max(usesToday, 0), DAILY_LIMIT);
+  const remainingUses = DAILY_LIMIT - usedToday;
   /** Whether daily use count is below the limit */
-  const hasUses = usesToday < DAILY_LIMIT;
+  const hasUses = usedToday < DAILY_LIMIT;
   /** Whether the user is logged in and not anonymous */
   const isLoggedIn = !!user && !user.isAnonymous;
   const nicknameTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
@@ -312,7 +314,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
             </div>
             <p className="text-xs md:text-sm mb-3 md:mb-5" style={{ color: 'var(--text-dim)' }}>
               현재 상장된 라이브 스트리머의 치지직 링크를 전체에 공지합니다.
-              오늘 {usesToday}/{DAILY_LIMIT}회 사용
+              오늘 {usedToday}/{DAILY_LIMIT}회 사용
             </p>
 
             <div className="flex items-center justify-between">
@@ -346,10 +348,10 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
         <div className="flex gap-2 mt-4 md:mt-6 pt-4 md:pt-5" style={{ borderTop: '1px solid var(--border-card)' }}>
           {Array.from({ length: DAILY_LIMIT }).map((_, i) => (
             <div key={i} className="flex-1 h-1.5 rounded-full"
-              style={{ background: i < (DAILY_LIMIT - usesToday) ? 'var(--accent)' : 'var(--bg-card)' }} />
+              style={{ background: i < usedToday ? 'var(--accent)' : 'var(--bg-card)' }} />
           ))}
           <span className="text-xs ml-1 shrink-0" style={{ color: 'var(--text-dim)' }}>
-            {DAILY_LIMIT - usesToday}회 남음
+            {remainingUses}회 남음
           </span>
         </div>
       </div>
@@ -364,7 +366,7 @@ function InventoryModal({ portfolio, onClose }: { portfolio: any; onClose: () =>
 
   return (
     <div
-      className="absolute inset-0 md:fixed md:inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
     >
       <div

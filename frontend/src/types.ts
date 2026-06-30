@@ -28,4 +28,6 @@ export interface LiveTrade {
   timestamp: number;
   /** Whether trading was suspended as a result of this trade (e.g. price below 1 won) */
   tradingSuspended?: boolean;
+  /** Reason for current trading suspension, null when trading is active */
+  tradingSuspensionReason?: 'API_UNAVAILABLE' | 'PRICE_BELOW_ONE' | 'INVALID_AMM_POOL' | string | null;
 }

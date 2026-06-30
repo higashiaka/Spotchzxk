@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE } from '../lib/api';
+import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
 
 /** Data structure for a single dividend payment record */
@@ -28,6 +28,25 @@ function isDividendEntry(value: any): value is DividendEntry {
     && typeof value.createdAt === 'string';
 }
 
+function dividendKey(entry: DividendEntry): string {
+  return [
+    entry.channelId,
+    entry.createdAt,
+    entry.totalDividendPool,
+    entry.streamMinutes,
+  ].join(':');
+}
+
+function mergeDividendEntries(...groups: DividendEntry[][]): DividendEntry[] {
+  const byKey = new Map<string, DividendEntry>();
+  groups.flat().forEach(entry => {
+    if (isDividendEntry(entry)) byKey.set(dividendKey(entry), entry);
+  });
+  return Array.from(byKey.values())
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 30);
+}
+
 /** Initially loads recent dividend history via REST,
  *  then receives new dividend events in real-time via STOMP /topic/dividends
  *  (maintains at most 30 entries in memory) */
@@ -36,9 +55,12 @@ export function useDividends() {
 
   // Initial history load
   useEffect(() => {
-    fetch(`${API_BASE}/api/dividends/recent`)
+    apiFetch('/api/dividends/recent')
       .then(r => r.json())
-      .then(setDividends)
+      .then(entries => {
+        if (!Array.isArray(entries)) return;
+        setDividends(prev => mergeDividendEntries(prev, entries));
+      })
       .catch(() => {});
   }, []);
 
@@ -48,7 +70,7 @@ export function useDividends() {
       try {
         const entry = JSON.parse(message.body);
         if (!isDividendEntry(entry)) return;
-        setDividends(prev => [entry, ...prev].slice(0, 30));
+        setDividends(prev => mergeDividendEntries([entry], prev));
       } catch (e) {
         console.error('Failed to parse dividend message', e);
       }

@@ -1,5 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
+import { subscribeStomp } from '../lib/stompClient';
 
 export interface OrderBookLevel {
   price: string;
@@ -14,6 +16,16 @@ export interface OrderBook {
 }
 
 export const useOrderBook = (streamerId: string | undefined) => {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!streamerId) return;
+    const sub = subscribeStomp(`/topic/order-book/${streamerId}`, () => {
+      queryClient.invalidateQueries({ queryKey: ['order-book', streamerId] });
+    });
+    return () => sub.unsubscribe();
+  }, [streamerId, queryClient]);
+
   return useQuery<OrderBook>({
     queryKey: ['order-book', streamerId],
     queryFn: async () => {
@@ -25,6 +37,5 @@ export const useOrderBook = (streamerId: string | undefined) => {
       return res.json();
     },
     enabled: !!streamerId,
-    refetchInterval: 2000,
   });
 };

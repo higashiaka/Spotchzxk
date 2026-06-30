@@ -22,17 +22,20 @@ const normalizeBaseUrl = (raw: string | undefined): string => {
 export const API_BASE = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 /** STOMP WebSocket endpoint URL */
-const defaultWsUrl = `${window.location.protocol}//${window.location.host}/ws`;
+const defaultWsUrl = isBrowser ? `${window.location.protocol}//${window.location.host}/ws` : '/ws';
 const configuredWsUrl = import.meta.env.VITE_WS_URL;
 export const WS_URL = normalizeBaseUrl(configuredWsUrl) || defaultWsUrl;
 
 /** Fetch wrapper that automatically injects the Firebase ID token into the Authorization header */
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getAuth().currentUser?.getIdToken();
+  const originalHeaders = new Headers(options.headers);
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
+    ...Object.fromEntries(originalHeaders.entries()),
   };
+  if (options.body && !(options.body instanceof FormData) && !originalHeaders.has('Content-Type')) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return fetch(`${API_BASE}${path}`, { ...options, headers });
 }

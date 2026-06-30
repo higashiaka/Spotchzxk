@@ -38,6 +38,13 @@ const decimalToScaledBigInt = (value: number | string, scale: bigint = PRICE_SCA
   return BigInt(integerPart || '0') * scale + BigInt(fraction || '0');
 };
 
+const decimalToIntegerBigInt = (value: number | string): bigint => {
+  const raw = String(value);
+  const normalized = raw.includes('e') || raw.includes('E') ? Number(value).toFixed(0) : raw;
+  const integerPart = normalized.replace(/[^\d.]/g, '').split('.')[0];
+  return BigInt(integerPart || '0');
+};
+
 const parseQuantity = (value: string): bigint => {
   const digits = value.replace(/[^\d]/g, '');
   return digits ? BigInt(digits) : 0n;
@@ -156,7 +163,7 @@ export const OrderForm = ({
   const { currentPrice } = useStockPrice(streamer.id, streamer.price);
   const tradeMutation = useTrade(user?.uid || 'spectator');
   const { data: portfolio, isLoading: portfolioLoading } = usePortfolio(user?.uid);
-  const { holdings } = useHoldings(portfolio, [streamer], { includeDefaults: true });
+  const { holdings } = useHoldings(portfolio, [streamer]);
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('market');
   const [limitPriceStr, setLimitPriceStr] = useState('');
   const [sellAll, setSellAll] = useState(false);
@@ -164,7 +171,7 @@ export const OrderForm = ({
   const qtyBig = parseQuantity(qtyStr);
   const qty = bigintToSafeNumber(qtyBig);
   const balance: number = Number(portfolio?.balance ?? 0);
-  const balanceBigInt = decimalToScaledBigInt(portfolio?.balance ?? '0', 1n);
+  const balanceBigInt = decimalToIntegerBigInt(portfolio?.balance ?? '0');
   const heldBig = parseQuantity(String(portfolio?.shares?.[streamer.id] ?? 0).replace(/\..*$/, ''));
   const held = holdings.find(holding => holding.streamer.id === streamer.id)?.qty ?? 0;
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);

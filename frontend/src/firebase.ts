@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 
 /** Firebase project configuration injected from environment variables */
 const firebaseConfig = {
@@ -12,6 +11,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+Object.entries(firebaseConfig).forEach(([key, value]) => {
+  if (!value) {
+    throw new Error(`Missing Firebase environment variable: ${key}`);
+  }
+});
+
 const app = initializeApp(firebaseConfig);
 
 /** Firebase Auth instance */
@@ -20,5 +25,8 @@ export const auth = getAuth(app);
 /** Google social login provider */
 export const googleProvider = new GoogleAuthProvider();
 
-/** Firestore database instance */
-export const db = getFirestore(app);
+/** Naver social login provider configured as a Firebase custom OIDC provider */
+export const naverProvider = new OAuthProvider('oidc.naver');
+naverProvider.addScope('openid');
+naverProvider.addScope('profile');
+naverProvider.addScope('email');

@@ -16,6 +16,7 @@ interface UserRankingEntry {
   dividendTotal?: number;
   donationTotal?: number;
   titleLabel?: string;
+  titleTone?: 'gold' | 'blue' | 'green' | 'red' | 'gray';
   stockName?: string;
 }
 
@@ -168,7 +169,7 @@ export function UserRankingView() {
               </div>
               <div className="hidden md:block w-36 text-left shrink-0">
                 {entry.titleLabel && (
-                  <span className="text-xs font-bold px-2 py-1 rounded-md border" style={betaTitleToneStyle('gold')}>
+                  <span className="text-xs font-bold px-2 py-1 rounded-md border" style={betaTitleToneStyle(entry.titleTone ?? 'gray')}>
                     {entry.titleLabel}
                   </span>
                 )}

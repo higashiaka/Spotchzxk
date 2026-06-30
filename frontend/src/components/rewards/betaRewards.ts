@@ -1,7 +1,7 @@
 export type BetaTitleTone = 'gold' | 'blue' | 'green' | 'red' | 'gray';
 
 export interface UserTitle {
-  id: string | number;
+  id: number;
   label: string;
   description?: string;
   tone?: BetaTitleTone;
@@ -70,7 +70,7 @@ export const betaTitleToneStyle = (tone: BetaTitleTone = 'gray') => {
 };
 
 export const defaultBetaTitle: UserTitle = {
-  id: 'beta-founder',
+  id: 0,
   label: '베타 개척자',
   description: '정식 전환 시 베타 참여 스냅샷 기준으로 지급 예정',
   tone: 'gold',

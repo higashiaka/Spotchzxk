@@ -32,10 +32,12 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
   const [error, setError] = useState('');
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [openId, setOpenId] = useState('');
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
+    setHistoryLoaded(false);
     try {
       const response = await apiFetch('/api/feedback');
       if (!response.ok) throw new Error();
@@ -44,6 +46,7 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
       setError('문의 내역을 불러오지 못했습니다.');
     } finally {
       setHistoryLoading(false);
+      setHistoryLoaded(true);
     }
   }, []);
 
@@ -130,7 +133,7 @@ export function FeedbackView({ onBack, stocks }: { onBack: () => void; stocks: S
       ) : (
         <div className="max-w-2xl space-y-3">
           {historyLoading && <p className="text-sm text-center py-8" style={{ color: 'var(--text-dim)' }}>문의 내역을 불러오는 중…</p>}
-          {!historyLoading && items.length === 0 && <p className="text-sm text-center py-8" style={{ color: 'var(--text-dim)' }}>접수한 문의가 없습니다.</p>}
+          {!historyLoading && historyLoaded && items.length === 0 && <p className="text-sm text-center py-8" style={{ color: 'var(--text-dim)' }}>접수한 문의가 없습니다.</p>}
           {items.map(item => {
             const open = openId === item.id;
             const replies = item.replies?.length

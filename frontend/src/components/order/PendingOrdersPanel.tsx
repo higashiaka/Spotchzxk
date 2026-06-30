@@ -8,7 +8,7 @@ export const PendingOrdersPanel = ({
   userId: string | undefined;
   streamerId: string;
 }) => {
-  const { pendingOrders, cancelOrder, isCancelling } = usePendingOrders(userId);
+  const { pendingOrders, cancelOrder, cancellingOrderId, isCancelling } = usePendingOrders(userId);
   const orders = pendingOrders.filter(order => order.streamerId === streamerId);
 
   return (
@@ -31,7 +31,7 @@ export const PendingOrdersPanel = ({
                 </span>
                 <button
                   type="button"
-                  disabled={isCancelling}
+                  disabled={isCancelling && cancellingOrderId === order.id}
                   onClick={() => cancelOrder(order.id)}
                   className="rounded px-2 py-1 text-[10px] font-bold bg-[#B71C1C] text-white disabled:opacity-50"
                 >

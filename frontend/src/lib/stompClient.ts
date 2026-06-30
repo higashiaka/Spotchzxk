@@ -8,6 +8,16 @@ let client: Client | null = null;
 /** List of callbacks invoked on STOMP connect; used to restore subscriptions after reconnect */
 const connectListeners: (() => void)[] = [];
 
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    connectListeners.length = 0;
+    if (client) {
+      client.deactivate();
+      client = null;
+    }
+  });
+}
+
 /** Creates a new STOMP client on first call, or returns the existing singleton */
 export function getStompClient(): Client {
   if (!client) {
@@ -15,6 +25,9 @@ export function getStompClient(): Client {
       webSocketFactory: () => new SockJS(WS_URL),
       reconnectDelay: 3000,
     });
+    client.onStompError = frame => {
+      console.error('STOMP broker error:', frame.headers.message, frame.body);
+    };
     client.onConnect = () => {
       connectListeners.forEach(listener => {
         try {

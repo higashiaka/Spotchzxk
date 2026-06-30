@@ -66,7 +66,7 @@ export const useMegaphoneUsesToday = (uid: string | undefined) =>
     queryKey: ['megaphone-uses-today', uid],
     queryFn: async () => {
       const res = await apiFetch('/api/shop/megaphone/my-uses-today');
-      if (!res.ok) return 0;
+      if (!res.ok) throw new Error('확성기 사용 횟수 조회 실패');
       const data = await res.json();
       return data.count as number;
     },
@@ -74,7 +74,7 @@ export const useMegaphoneUsesToday = (uid: string | undefined) =>
   });
 
 /** Megaphone submit mutation hook.
- *  On success, invalidates post list, usage count, and portfolio caches */
+ *  On success, immediately inserts the returned post and refreshes usage count and portfolio caches. */
 export const useMegaphoneSubmit = (uid: string | undefined) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -92,7 +92,6 @@ export const useMegaphoneSubmit = (uid: string | undefined) => {
     },
     onSuccess: post => {
       queryClient.setQueryData<MegaphonePost[]>(MEGAPHONE_POSTS_QUERY_KEY, posts => mergeMegaphonePost(posts, post));
-      queryClient.invalidateQueries({ queryKey: MEGAPHONE_POSTS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['megaphone-uses-today', uid] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
     },

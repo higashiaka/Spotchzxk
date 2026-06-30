@@ -60,7 +60,7 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
   const location = useLocation();
   const navType = useNavigationType();
 
-  const initialParsed = useMemo(() => parsePathname(location.pathname), []);
+  const initialParsed = useRef(parsePathname(location.pathname)).current;
 
   const [activeTab, setActiveTab] = useState<AppTab>(initialParsed.tab);
   const [selectedStreamer, setSelectedStreamer] = useState<Stock | null>(() =>
@@ -71,12 +71,17 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
   const [mobileRouteMotion, setMobileRouteMotion] = useState<'from-left' | 'from-right' | null>(null);
 
   const hasPushedRef = useRef(false);
+  const selectedStreamerId = selectedStreamer?.id ?? null;
 
   // Resolve pending stock once streamer list loads
   useEffect(() => {
     if (!initialParsed.stockId || streamers.length === 0) return;
     const found = streamers.find(s => s.id === initialParsed.stockId);
-    if (found) setSelectedStreamer(found);
+    if (!found) return;
+    setSelectedStreamer(current => {
+      if (!current || current.id !== initialParsed.stockId) return current;
+      return current.price === 0 ? found : current;
+    });
   }, [streamers, initialParsed.stockId]);
 
   // Fallback: fetch individual stock if not in list
@@ -91,12 +96,16 @@ export function useAppNavigation(streamers: Stock[], isDesktopLayout: boolean) {
     return () => { active = false; };
   }, [initialParsed.stockId, streamers]);
 
-  // Keep selectedStreamer fresh as prices update
+  // Resolve placeholder selection, but avoid replacing navigation state on every trade tick.
   useEffect(() => {
-    if (!selectedStreamer) return;
-    const fresh = streamers.find(s => s.id === selectedStreamer.id);
-    if (fresh && fresh !== selectedStreamer) setSelectedStreamer(fresh);
-  }, [streamers, selectedStreamer]);
+    if (!selectedStreamerId) return;
+    const fresh = streamers.find(s => s.id === selectedStreamerId);
+    if (!fresh) return;
+    setSelectedStreamer(current => {
+      if (!current || current.id !== selectedStreamerId) return current;
+      return current.price === 0 ? fresh : current;
+    });
+  }, [streamers, selectedStreamerId]);
 
   // Sync state when browser back/forward changes location
   useEffect(() => {

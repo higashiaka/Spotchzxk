@@ -69,6 +69,7 @@ export const InteractiveChart = ({
   const [isHovering, setIsHovering] = useState(false);
   /** Ref holding the latest candles array for use inside the crosshair callback */
   const candlesRef = useRef(candles);
+  const candlesByTimeRef = useRef<Map<UTCTimestamp, Candle>>(new Map());
   /** Previous candles array used to determine if an update is incremental */
   const prevCandlesRef = useRef<Candle[]>([]);
   const onLoadMoreRef = useRef(onLoadMore);
@@ -80,7 +81,10 @@ export const InteractiveChart = ({
   const themeRef = useRef(theme);
   useEffect(() => { themeRef.current = theme; }, [theme]);
 
-  useEffect(() => { candlesRef.current = candles; }, [candles]);
+  useEffect(() => {
+    candlesRef.current = candles;
+    candlesByTimeRef.current = new Map(candles.map(c => [c.time, c]));
+  }, [candles]);
   useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
   useEffect(() => { isLoadingMoreRef.current = isLoadingMore; }, [isLoadingMore]);
@@ -153,7 +157,7 @@ export const InteractiveChart = ({
         return;
       }
       setIsHovering(true);
-      const found = cs.find(c => c.time === (param.time as UTCTimestamp));
+      const found = candlesByTimeRef.current.get(param.time as UTCTimestamp);
       setActive(found ?? cs[cs.length - 1] ?? null);
     });
 

@@ -33,8 +33,8 @@ export const HoldingsView = ({
   /** Currently selected sort key */
   const [sortKey, setSortKey] = useState<SortKey>('recent');
 
-  /** Full holding list including DEFAULT_STOCKS, default order by market value desc */
-  const { holdings, holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
+  /** Full holding list, default order by market value desc */
+  const { holdings, holdingCount } = useHoldings(portfolio, streamers);
 
   /** Latest executed trade timestamp by stock */
   const latestTradeTimeByStock = useMemo(() => {

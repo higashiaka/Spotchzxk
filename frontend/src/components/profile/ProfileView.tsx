@@ -12,20 +12,22 @@ import { betaRewardTiers, betaTitleToneStyle, UserTitle } from '../rewards/betaR
 
 export const ProfileView = ({
   user, portfolio, history, streamers, totalAssets, isAdmin: _isAdmin,
-  onLoginGoogle, onLoginGuest, onLogout, onReset, onLinkGoogle, isResetting, remainingResets,
+  onLoginGoogle, onLoginNaver, onLoginGuest, onLogout, onReset, onLinkGoogle, onLinkNaver, isResetting, remainingResets,
   onSelect: _onSelect, onNavigate,
 }: {
   user: User | null;
   portfolio: any;
   history: any[];
   streamers: Stock[];
-  totalAssets: number;
+  totalAssets: number | bigint;
   isAdmin: boolean;
   onLoginGoogle: () => void;
+  onLoginNaver: () => void;
   onLoginGuest: () => void;
   onLogout: () => void;
   onReset: () => void;
   onLinkGoogle: () => void;
+  onLinkNaver: () => void;
   isResetting: boolean;
   remainingResets: number;
   onSelect: (s: Stock) => void;
@@ -35,9 +37,12 @@ export const ProfileView = ({
   const userGrade = !user?.isAnonymous && portfolio?.leagueRank != null
     ? grade(portfolio.leagueRank, portfolio.leagueTotal)
     : null;
-  const holdingsValue = totalAssets - Number(portfolio?.balance ?? 0);
   const orderCount = history?.length ?? 0;
-  const { holdingCount } = useHoldings(portfolio, streamers, { includeDefaults: true });
+  const { holdings, holdingCount } = useHoldings(portfolio, streamers);
+  const holdingsValue = holdings.reduce((sum, holding) => sum + holding.value, 0);
+  const formattedTotalAssets = typeof totalAssets === 'bigint'
+    ? fmtKoreanBigInt(totalAssets)
+    : fmtKorean(totalAssets);
 
   const nicknameChangeTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
   const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
@@ -57,6 +62,8 @@ export const ProfileView = ({
   const [addMsg, setAddMsg] = useState('');
 
   const handleAddStock = async () => {
+    const uid = user?.uid;
+    if (!uid) return;
     if (!addUrl.trim()) return;
 
     let channelId = addUrl.trim();
@@ -102,7 +109,7 @@ export const ProfileView = ({
         setAddStatus('ok');
         setAddMsg(`'${json.name}' 종목이 추가되었습니다.`);
         setAddUrl('');
-        queryClient.invalidateQueries({ queryKey: ['portfolio', user!.uid] });
+        queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
       }
     } catch {
       setAddStatus('error');
@@ -129,6 +136,12 @@ export const ProfileView = ({
             <GoogleIcon />
             Google 로그인
           </button>
+          <button type="button" onClick={onLoginNaver}
+            className="w-full font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2"
+            style={{ background: '#03C75A', color: '#fff' }}>
+            <NaverIcon />
+            Naver 로그인
+          </button>
           <button type="button" onClick={onLoginGuest}
             className="w-full font-bold px-6 py-3 rounded-xl border"
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)', color: 'var(--text-secondary)' }}>
@@ -140,6 +153,8 @@ export const ProfileView = ({
   }
 
   const isGoogleLinked = user.providerData.some(p => p.providerId === 'google.com');
+  const isNaverLinked = user.providerData.some(p => p.providerId === 'oidc.naver');
+  const isSocialLinked = isGoogleLinked || isNaverLinked;
 
   return (
     <div className="h-full overflow-y-auto p-4 pb-24 hide-scrollbar touch-pan-y">
@@ -165,7 +180,7 @@ export const ProfileView = ({
                 {!isEditingName && (
                   <button type="button" onClick={startEdit}
                     className="shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
-                    title={`이름 변경권 ${nicknameChangeTickets}개 보유`}>
+                    aria-label="닉네임 변경">
                     <svg className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
                         d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -236,6 +251,23 @@ export const ProfileView = ({
         </div>
       )}
 
+      {/* Naver account linking banner */}
+      {!user.isAnonymous && !isNaverLinked && (
+        <div className="rounded-2xl border p-4 mb-4 flex items-center gap-3"
+          style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
+          <NaverIcon className="w-5 h-5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-bold">Naver 계정 연동</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Google 또는 Naver로 같은 포트폴리오를 사용하세요</p>
+          </div>
+          <button type="button" onClick={onLinkNaver}
+            className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
+            style={{ background: '#03C75A26', color: '#24D86F' }}>
+            연동하기
+          </button>
+        </div>
+      )}
+
       {/* Holdings shortcut */}
       <button type="button" onClick={() => onNavigate('holdings')}
         className="w-full rounded-2xl border p-4 mb-4 flex items-center gap-4 transition-colors hover:opacity-80 active:opacity-60"
@@ -262,7 +294,7 @@ export const ProfileView = ({
       <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
-          { label: '총 스트리머 자산', value: fmtKorean(totalAssets) },
+          { label: '총 스트리머 자산', value: formattedTotalAssets },
           { label: '캐시', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
           { label: '주식 평가액', value: fmtKorean(holdingsValue) },
           { label: '누적 매매 횟수', value: `${orderCount}회` },
@@ -359,7 +391,7 @@ export const ProfileView = ({
       )}
 
       {/* Stock addition */}
-      {isGoogleLinked ? (
+      {isSocialLinked ? (
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
           <p className="text-xs mb-3" style={{ color: 'var(--text-dim)' }}>
@@ -390,7 +422,7 @@ export const ProfileView = ({
       ) : (
         <div className="rounded-xl border p-4 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
           <h3 className="text-sm font-bold mb-2" style={{ color: 'var(--text-secondary)' }}>종목 추가</h3>
-          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>종목 추가는 Google 로그인 후 이용할 수 있습니다.</p>
+          <p className="text-xs" style={{ color: 'var(--text-dim)' }}>종목 추가는 Google 또는 Naver 계정 연동 후 이용할 수 있습니다.</p>
         </div>
       )}
 
@@ -399,7 +431,7 @@ export const ProfileView = ({
         className="w-full rounded-xl border px-4 py-3 mb-3 flex justify-between items-center transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <div className="flex flex-col items-start gap-0.5">
-          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (100만으로 세팅)</span>
+          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (1,000만으로 세팅)</span>
           <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : 'var(--text-dim)' }}>
             오늘 남은 횟수: {remainingResets}회
           </span>
@@ -454,4 +486,14 @@ const GoogleIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
   </svg>
+);
+
+const NaverIcon = ({ className = 'w-5 h-5' }: { className?: string }) => (
+  <span
+    className={`${className} inline-flex items-center justify-center rounded-sm text-white font-black leading-none`}
+    style={{ background: '#03C75A', fontSize: '0.72rem' }}
+    aria-hidden="true"
+  >
+    N
+  </span>
 );

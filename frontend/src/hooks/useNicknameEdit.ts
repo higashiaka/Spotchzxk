@@ -36,8 +36,10 @@ export function useNicknameEdit(user: User | null, currentName: string, nickname
         method: 'POST',
         body: JSON.stringify({ displayName: trimmed }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || '닉네임 변경 실패');
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || '닉네임 변경 실패');
+      }
       setNameOverride(trimmed);
       setIsEditingName(false);
       queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });

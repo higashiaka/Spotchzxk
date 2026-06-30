@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, lazy, Suspense, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useStocks } from './hooks/useStocks';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useTransactionHistory } from './hooks/useTransactionHistory';
@@ -9,8 +8,8 @@ import { useLiveTrades } from './hooks/useLiveTrades';
 import { useOnlineCount } from './hooks/useOnlineCount';
 import { useAppNavigation } from './hooks/useAppNavigation';
 import { useSwipeGesture, SWIPE_TABS } from './hooks/useSwipeGesture';
-import { subscribeStomp } from './lib/stompClient';
 import { AppTab } from './types';
+import { parseBigBalance } from './utils';
 
 import { Sidebar } from './components/layout/Sidebar';
 import { DesktopTabBar } from './components/layout/DesktopTabBar';
@@ -51,14 +50,12 @@ function App() {
   const {
     user, authChecking,
     guestLimitNotice, guestLimitNow,
-    suspensionNotice,
-    handleGoogleLogin, handleGuestLogin, handleGuestLimitGoogleLogin,
-    handleLogout, handleLinkGoogle,
+    suspensionNotice, isAdmin,
+    handleGoogleLogin, handleNaverLogin, handleGuestLogin, handleGuestLimitGoogleLogin,
+    handleLogout, handleLinkGoogle, handleLinkNaver,
   } = useAuth();
 
   const { stocks: streamers, stocksLoading } = useStocks();
-  const queryClient = useQueryClient();
-
   const nav = useAppNavigation(streamers, isDesktopLayout);
   const {
     activeTab, selectedStreamer, initialOrderType, recentlyViewedIds, mobileRouteMotion,
@@ -105,32 +102,28 @@ function App() {
   const { data: history } = useTransactionHistory(user?.uid);
   const resetMutation = useResetPortfolio(user?.uid);
 
-  useEffect(() => {
-    if (!user || user.isAnonymous) return;
-    const sub = subscribeStomp(`/topic/user-dividends/${user.uid}`, () => {
-      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
-    });
-    return () => sub.unsubscribe();
-  }, [user, queryClient]);
-
   const totalAssets = useMemo(() => {
     if (!portfolio) return 0;
     const held = Object.entries(portfolio.shares as Record<string, string>).reduce((sum, [id, qty]) => {
       const s = streamers.find(st => st.id === id);
       return sum + (s?.price ?? 0) * Number(qty);
     }, 0);
-    return Number(portfolio.balance) + held;
+    const balance = parseBigBalance(portfolio.balance);
+    if (balance > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return balance + BigInt(Math.round(held));
+    }
+    return Number(balance) + held;
   }, [portfolio, streamers]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     const shares = portfolio?.shares as Record<string, string> | undefined;
     if (Object.values(shares ?? {}).some(qty => Number(qty) > 0)) {
       alert('보유 종목을 모두 매도한 후 투자 자금을 초기화할 수 있습니다.');
       return;
     }
-    if (!window.confirm('투자 자금을 100만원으로 초기화하시겠습니까?')) return;
+    if (!window.confirm('투자 자금을 1,000만원으로 초기화하시겠습니까?')) return;
     resetMutation.mutate();
-  };
+  }, [portfolio, resetMutation]);
 
   const swipe = useSwipeGesture({
     activeTab,
@@ -163,11 +156,14 @@ function App() {
     totalAssets,
     isResetting: resetMutation.isPending,
     remainingResets: portfolio?.remainingResets ?? 3,
+    isAdmin,
     onLoginGoogle: handleGoogleLogin,
+    onLoginNaver: handleNaverLogin,
     onLoginGuest: handleGuestLogin,
     onLogout: handleLogout,
     onReset: handleReset,
     onLinkGoogle: handleLinkGoogle,
+    onLinkNaver: handleLinkNaver,
     onSelect: handleSelectStreamer,
     onNavigate: handleNavigate,
   };

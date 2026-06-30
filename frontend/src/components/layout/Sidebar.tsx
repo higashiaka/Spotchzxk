@@ -14,11 +14,14 @@ export const Sidebar = ({
   totalAssets,
   isResetting,
   remainingResets,
+  isAdmin,
   onLoginGoogle,
+  onLoginNaver,
   onLoginGuest,
   onLogout,
   onReset,
   onLinkGoogle,
+  onLinkNaver,
   onSelect,
   onNavigate,
 }: {
@@ -33,13 +36,17 @@ export const Sidebar = ({
   /** Full list of stocks */
   streamers: Stock[];
   /** Total assets (cash + stock market value) */
-  totalAssets: number;
+  totalAssets: number | bigint;
   /** Whether portfolio reset is in progress */
   isResetting: boolean;
   /** Remaining portfolio reset count for today */
   remainingResets: number;
+  /** Whether the current user has admin authority */
+  isAdmin: boolean;
   /** Google login handler */
   onLoginGoogle: () => void;
+  /** Naver login handler */
+  onLoginNaver: () => void;
   /** Guest login handler */
   onLoginGuest: () => void;
   /** Logout handler */
@@ -48,6 +55,8 @@ export const Sidebar = ({
   onReset: () => void;
   /** Google account link handler */
   onLinkGoogle: () => void;
+  /** Naver account link handler */
+  onLinkNaver: () => void;
   /** Stock selection handler */
   onSelect: (s: Stock) => void;
   /** Tab navigation handler */
@@ -115,12 +124,14 @@ export const Sidebar = ({
           history={history}
           streamers={streamers}
           totalAssets={totalAssets}
-          isAdmin={false}
+          isAdmin={isAdmin}
           onLoginGoogle={onLoginGoogle}
+          onLoginNaver={onLoginNaver}
           onLoginGuest={onLoginGuest}
           onLogout={onLogout}
           onReset={onReset}
           onLinkGoogle={onLinkGoogle}
+          onLinkNaver={onLinkNaver}
           isResetting={isResetting}
           remainingResets={remainingResets}
           onSelect={onSelect}

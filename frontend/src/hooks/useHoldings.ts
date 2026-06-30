@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { DEFAULT_STOCKS, Stock } from './useStocks';
+import { Stock } from './useStocks';
 
 /** Aggregated data for a single holding position */
 export interface HoldingItem {
@@ -21,20 +21,19 @@ export interface HoldingItem {
  *  @param portfolio - Portfolio object with balance, shares, avgPrices
  *  @param streamers - Current stock list used for price lookup
  *  @param options.limit - Max number of holdings to return
- *  @param options.includeDefaults - Whether to include DEFAULT_STOCKS in source */
+ */
 export const useHoldings = (
   portfolio: any,
   streamers: Stock[],
-  options: { limit?: number; includeDefaults?: boolean } = {},
+  options: { limit?: number } = {},
 ) => {
-  const { limit, includeDefaults = false } = options;
+  const { limit } = options;
 
   /** Holding items sorted by market value descending */
   const holdings = useMemo(() => {
     if (!portfolio?.shares) return [];
 
-    const source = includeDefaults ? [...streamers, ...DEFAULT_STOCKS] : streamers;
-    const byId = new Map(source.map(stock => [stock.id, stock]));
+    const byId = new Map(streamers.map(stock => [stock.id, stock]));
 
     const items = Object.entries(portfolio.shares as Record<string, string>)
       .map(([id, rawQty]) => [id, Number(rawQty)] as const)
@@ -51,7 +50,7 @@ export const useHoldings = (
       .sort((a, b) => b!.value - a!.value) as HoldingItem[];
 
     return typeof limit === 'number' ? items.slice(0, limit) : items;
-  }, [includeDefaults, limit, portfolio, streamers]);
+  }, [limit, portfolio, streamers]);
 
   /** Total count of stocks held with quantity > 0 */
   const holdingCount = useMemo(

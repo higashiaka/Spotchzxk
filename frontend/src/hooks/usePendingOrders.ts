@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/api';
 import { subscribeStomp } from '../lib/stompClient';
@@ -8,10 +8,12 @@ import { OrderHistory, sortOrdersNewestFirst } from './useTransactionHistory';
  *  Combines 3s polling with STOMP real-time notifications for instant updates on execution/cancel */
 export const usePendingOrders = (userId: string | undefined) => {
   const queryClient = useQueryClient();
+  const pendingOrdersQueryKey = useMemo(() => ['pendingOrders', userId] as const, [userId]);
+  const historyQueryKey = useMemo(() => ['history', userId] as const, [userId]);
 
   /** Fetches all orders; pending orders are derived by filtering this result */
   const { data: allOrders, isLoading, refetch } = useQuery<OrderHistory[]>({
-    queryKey: ['history', userId],
+    queryKey: pendingOrdersQueryKey,
     queryFn: async (): Promise<OrderHistory[]> => {
       if (!userId) return [];
       const res = await apiFetch('/api/orders');
@@ -27,11 +29,12 @@ export const usePendingOrders = (userId: string | undefined) => {
   useEffect(() => {
     if (!userId) return;
     const sub = subscribeStomp(`/topic/orders/${userId}`, () => {
-      queryClient.invalidateQueries({ queryKey: ['history', userId] });
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+      queryClient.invalidateQueries({ queryKey: pendingOrdersQueryKey });
       queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
     });
     return () => sub.unsubscribe();
-  }, [userId, queryClient]);
+  }, [userId, queryClient, historyQueryKey, pendingOrdersQueryKey]);
 
   /** Orders filtered to only include pending (unexecuted) status */
   const pendingOrders = allOrders ? allOrders.filter(o => o.status === 'pending') : [];
@@ -49,11 +52,12 @@ export const usePendingOrders = (userId: string | undefined) => {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['history', userId] });
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+      queryClient.invalidateQueries({ queryKey: pendingOrdersQueryKey });
       queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
     },
-    onError: (err: any) => {
-      alert(`주문 취소 오류: ${err.message}`);
+    onError: (err: unknown) => {
+      alert(`주문 취소 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
     }
   });
 
@@ -64,6 +68,8 @@ export const usePendingOrders = (userId: string | undefined) => {
     isLoading,
     /** Cancel function; takes orderId as argument */
     cancelOrder: cancelMutation.mutate,
+    /** The order currently being cancelled */
+    cancellingOrderId: cancelMutation.variables,
     /** Whether a cancel request is in progress */
     isCancelling: cancelMutation.isPending,
     /** Manual refetch function */

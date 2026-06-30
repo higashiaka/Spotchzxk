@@ -38,6 +38,9 @@ export interface TradeDetails {
  *  after a short delay (3.5s) following the server response */
 export const useTrade = (userId: string) => {
   const queryClient = useQueryClient();
+  const historyQueryKey = ['history', userId] as const;
+  const pendingOrdersQueryKey = ['pendingOrders', userId] as const;
+  const portfolioQueryKey = ['portfolio', userId] as const;
 
   return useMutation({
     /** Sends the order to the server and returns the response */
@@ -56,11 +59,12 @@ export const useTrade = (userId: string) => {
 
     /** Optimistically updates the portfolio cache before the server responds */
     onMutate: async (newTrade: TradeDetails) => {
-      await queryClient.cancelQueries({ queryKey: ['portfolio', userId] });
-      await queryClient.cancelQueries({ queryKey: ['history', userId] });
-      const previousPortfolio = queryClient.getQueryData<Portfolio>(['portfolio', userId]);
+      await queryClient.cancelQueries({ queryKey: portfolioQueryKey });
+      await queryClient.cancelQueries({ queryKey: historyQueryKey });
+      await queryClient.cancelQueries({ queryKey: pendingOrdersQueryKey });
+      const previousPortfolio = queryClient.getQueryData<Portfolio>(portfolioQueryKey);
 
-      queryClient.setQueryData<Partial<Portfolio>>(['portfolio', userId], (old) => {
+      queryClient.setQueryData<Partial<Portfolio>>(portfolioQueryKey, (old) => {
         const state = old || { balance: '10000000', shares: {} };
         const newShares: Record<string, string> = { ...state.shares };
         const currentShares = parseIntegerAmount(newShares[newTrade.streamerId] ?? '0');
@@ -93,25 +97,27 @@ export const useTrade = (userId: string) => {
     /** Applies the server's actual balance immediately after a successful trade */
     onSuccess: (data) => {
       if (data?.newBalance !== undefined) {
-        queryClient.setQueryData<Portfolio>(['portfolio', userId], (old) =>
+        queryClient.setQueryData<Portfolio>(portfolioQueryKey, (old) =>
           old ? { ...old, balance: String(data.newBalance) } : old
         );
       }
-      queryClient.invalidateQueries({ queryKey: ['history', userId] });
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+      queryClient.invalidateQueries({ queryKey: pendingOrdersQueryKey });
     },
 
     /** Rolls back the optimistic update and alerts the user on error */
     onError: (err: Error, _newTrade: TradeDetails, context?: { previousPortfolio?: Portfolio }) => {
       if (context?.previousPortfolio) {
-        queryClient.setQueryData<Portfolio>(['portfolio', userId], context.previousPortfolio);
+        queryClient.setQueryData<Portfolio>(portfolioQueryKey, context.previousPortfolio);
       }
       alert(err.message);
     },
 
     /** Re-validates immediately so displayed holdings match the committed server state. */
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
-      queryClient.invalidateQueries({ queryKey: ['history', userId] });
+      queryClient.invalidateQueries({ queryKey: portfolioQueryKey });
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+      queryClient.invalidateQueries({ queryKey: pendingOrdersQueryKey });
     },
   });
 };

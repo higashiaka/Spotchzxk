@@ -28,14 +28,22 @@ const toAmmPrice = (coinReserve: unknown, shareReserve: unknown): number | null 
   return Number.isFinite(price) && price > 0 ? price : null;
 };
 
-export function mapRawToStock(r: any, previous?: Stock): Stock {
+const stockIdOf = (r: any, previous?: Stock): string | null => {
+  const id = r.channelId || r.id || previous?.id;
+  return typeof id === 'string' && id.trim() ? id : null;
+};
+
+export function mapRawToStock(r: any, previous?: Stock): Stock | null {
+  const id = stockIdOf(r, previous);
+  if (!id) return null;
+
   const fallbackPrice = previous?.price && previous.price > 0 ? previous.price : 1000;
   const coinReserve = String(r.coinReserve ?? previous?.coinReserve ?? '0');
   const shareReserve = String(r.shareReserve ?? previous?.shareReserve ?? '0');
   const ammPrice = toAmmPrice(coinReserve, shareReserve);
 
   return {
-    id: r.channelId || r.id || previous?.id,
+    id,
     name: r.streamerName || r.name || previous?.name,
     price: ammPrice ?? toPositivePrice(r.currentPrice ?? r.price, fallbackPrice),
     totalVolume: toFiniteNumber(r.dailyVolume ?? r.totalVolume, previous?.totalVolume ?? 0),
@@ -79,7 +87,9 @@ export const useStocks = () => {
           if (rawStocks && rawStocks.length > 0) {
             setStocks(prev => {
               const prevById = new Map(prev.map(stock => [stock.id, stock]));
-              return rawStocks.map(raw => mapRawToStock(raw, prevById.get(raw.channelId || raw.id)));
+              return rawStocks
+                .map(raw => mapRawToStock(raw, prevById.get(stockIdOf(raw) ?? '')))
+                .filter((stock): stock is Stock => stock !== null);
             });
           }
           setStocksLoading(false);
@@ -101,7 +111,9 @@ export const useStocks = () => {
 
       setStocks(prev => {
         const prevMap = new Map(prev.map(s => [s.id, s]));
-        const dbStocks = rawStocks.map(raw => mapRawToStock(raw, prevMap.get(raw.channelId || raw.id)));
+        const dbStocks = rawStocks
+          .map(raw => mapRawToStock(raw, prevMap.get(stockIdOf(raw) ?? '')))
+          .filter((stock): stock is Stock => stock !== null);
         const dbMap = new Map(dbStocks.map(s => [s.id, s]));
         const merged = prev.map(s => {
           const db = dbMap.get(s.id);
@@ -141,6 +153,7 @@ export const useStocks = () => {
           const dailyTradingValue = trade.dailyTradingValue !== undefined
             ? Number(trade.dailyTradingValue)
             : stock.dailyTradingValue + Number(trade.tradingValue ?? 0);
+          const hasSuspensionReason = Object.prototype.hasOwnProperty.call(trade, 'tradingSuspensionReason');
           return {
             ...stock,
             price: ammPrice ?? toPositivePrice(trade.price, stock.price),
@@ -149,6 +162,9 @@ export const useStocks = () => {
             coinReserve,
             shareReserve,
             tradingSuspended: trade.tradingSuspended ?? stock.tradingSuspended,
+            tradingSuspensionReason: hasSuspensionReason
+              ? trade.tradingSuspensionReason ?? null
+              : stock.tradingSuspensionReason,
           };
         }));
       } catch (e) {

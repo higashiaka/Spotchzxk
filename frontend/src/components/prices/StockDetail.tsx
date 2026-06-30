@@ -103,7 +103,7 @@ export const StockDetail = ({
   const queryClient = useQueryClient();
   const { currentPrice, direction } = useStockPrice(streamer.id, streamer.price);
   const { data: portfolio } = usePortfolio(user?.uid);
-  const [interval, setInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
+  const [interval, setCandleInterval] = useState<'1m' | '5m' | '1h' | '1d' | '1w'>('5m');
   const [chartType, setChartType] = useState<'candle' | 'line'>('candle');
   const [rawCandles, setRawCandles] = useState<ApiCandle[]>([]);
   const [hasMoreCandles, setHasMoreCandles] = useState(true);
@@ -247,7 +247,7 @@ export const StockDetail = ({
         setStockTrades(trades);
       })
       .catch(() => setStockTradesError(true));
-  }, [streamer.id, streamer.name]);
+  }, [streamer.id]);
 
   useEffect(() => {
     const unsub = registerOnConnect(() => {
@@ -286,7 +286,7 @@ export const StockDetail = ({
   const balance = Number(portfolio?.balance ?? 0);
   const parsedDonation = parseInt(donationAmount.replace(/,/g, '') || '0', 10);
   const canDonate = Boolean(user) && parsedDonation >= 1_000 && parsedDonation <= balance && !donationPending;
-  const shareUrl = `http://spotchzxk.xyz/stocks/${encodeURIComponent(streamer.id)}`;
+  const shareUrl = `${window.location.origin}/stocks/${encodeURIComponent(streamer.id)}`;
   const chzzkUrl = `https://chzzk.naver.com/${streamer.isLive ? 'live/' : ''}${streamer.id}`;
 
   const handleShareStock = async () => {
@@ -542,7 +542,7 @@ export const StockDetail = ({
           <div className="flex flex-wrap justify-between items-center gap-2 pb-2" style={{ borderBottom: '1px solid var(--border-card)' }}>
             <div className="flex gap-1 p-0.5 rounded-lg border" style={{ background: 'var(--bg-sidebar)', borderColor: 'var(--border-primary)' }}>
               {(['1m', '5m', '1h', '1d', '1w'] as const).map(i => (
-                <button key={i} type="button" onClick={() => setInterval(i)}
+                <button key={i} type="button" onClick={() => setCandleInterval(i)}
                   className="px-2.5 md:px-3 py-1 md:py-1.5 rounded text-[10px] md:text-xs font-extrabold transition-all"
                   style={{
                     background: interval === i ? 'var(--bg-card)' : 'transparent',
