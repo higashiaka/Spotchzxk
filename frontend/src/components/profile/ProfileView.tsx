@@ -308,6 +308,8 @@ export const ProfileView = ({
         ))}
       </div>
 
+      {false && (
+      <>
       {/* Beta reward titles */}
       <div className="rounded-xl border p-5 mb-4" style={{ background: 'var(--bg-card-secondary)', borderColor: 'var(--border-primary)' }}>
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -351,6 +353,9 @@ export const ProfileView = ({
           </div>
         )}
       </div>
+
+      </>
+      )}
 
       {/* Dividend history */}
       {!user.isAnonymous && (
