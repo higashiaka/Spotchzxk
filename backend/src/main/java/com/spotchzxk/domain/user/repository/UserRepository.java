@@ -39,8 +39,8 @@ public interface UserRepository extends JpaRepository<User, String> {
         )
         SELECT COUNT(*)
         FROM user_assets ranked
-        JOIN user_assets current_user ON current_user.id = :uid
-        WHERE ranked.total_assets > current_user.total_assets
+        JOIN user_assets cu ON cu.id = :uid
+        WHERE ranked.total_assets > cu.total_assets
         """, nativeQuery = true)
     long countUsersWithHigherTotalAssets(@Param("uid") String uid);
 
