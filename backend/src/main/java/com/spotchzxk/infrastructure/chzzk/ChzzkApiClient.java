@@ -124,13 +124,31 @@ public class ChzzkApiClient {
                 log.debug("Chzzk API content null for channel {} - channel inactive", channelId);
                 return "INACTIVE";
             }
-            String status = content.path("status").asText("");
-            return status.isEmpty() ? "CLOSE" : status.toUpperCase();
+            return interpretLiveStatus(content);
         } catch (Exception e) {
             // Timeout or network error — unrelated to channel status, do not count toward suspension
             log.debug("Failed to fetch live status for channel {}: {}", channelId, e.getMessage());
             return "TIMEOUT";
         }
+    }
+
+    String interpretLiveStatus(JsonNode content) {
+        String status = content.path("status").asText("");
+        if (!status.isBlank()) {
+            return status.toUpperCase();
+        }
+
+        if (hasText(content, "liveId")
+                || hasText(content, "liveTitle")
+                || hasText(content, "livePlaybackJson")) {
+            return "OPEN";
+        }
+        return "CLOSE";
+    }
+
+    private boolean hasText(JsonNode node, String fieldName) {
+        JsonNode value = node.path(fieldName);
+        return value.isTextual() && !value.asText().isBlank();
     }
 
     private boolean isBlank(String value) {

@@ -71,6 +71,14 @@ class TradeEnginePricingTest {
     }
 
     @Test
+    void feeAllGoesToDividendPool() {
+        BigInteger[] fee = AmmCalculator.fee(BigInteger.valueOf(750));
+
+        assertThat(fee[0]).isEqualTo(BigInteger.valueOf(12));
+        assertThat(fee[1]).isEqualTo(BigInteger.ZERO);
+    }
+
+    @Test
     void ammSpotPrice_preservesFractionalWonBelowOneWon() {
         BigDecimal price = AmmCalculator.price(BigInteger.ONE, BigInteger.valueOf(10_000));
 

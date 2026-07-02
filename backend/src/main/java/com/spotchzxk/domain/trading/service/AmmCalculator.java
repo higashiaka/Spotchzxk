@@ -44,8 +44,7 @@ public final class AmmCalculator {
 
     public static BigInteger[] fee(BigInteger ammAmount) {
         BigInteger total = ceilDiv(ammAmount.multiply(FEE_RATE_NUMERATOR), FEE_RATE_DENOMINATOR);
-        BigInteger poolShare = total.multiply(BigInteger.TWO).divide(BigInteger.valueOf(3));
-        return new BigInteger[]{poolShare, total.subtract(poolShare)};
+        return new BigInteger[]{total, BigInteger.ZERO};
     }
 
     public static BigInteger[] newPoolAfterBuy(BigInteger coinReserve, BigInteger shareReserve, long qty, BigInteger ammCost) {

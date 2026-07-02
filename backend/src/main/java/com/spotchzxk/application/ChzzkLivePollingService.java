@@ -92,7 +92,7 @@ public class ChzzkLivePollingService {
                 .map(stock -> CompletableFuture.runAsync(() -> {
                     try {
                         String status = chzzkApiClient.fetchChannelStatus(stock.getChannelId());
-                        if ("AUTH_FAILED".equals(status) || "TIMEOUT".equals(status)) {
+                        if (status == null || "AUTH_FAILED".equals(status) || "TIMEOUT".equals(status)) {
                             // System-wide cookie expiry or network timeout — unrelated to channel state
                             return;
                         }

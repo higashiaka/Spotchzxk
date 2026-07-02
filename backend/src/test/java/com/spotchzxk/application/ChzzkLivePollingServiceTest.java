@@ -133,6 +133,21 @@ class ChzzkLivePollingServiceTest {
         verify(messagingTemplate).convertAndSend("/topic/streamers", List.of(StockResponse.from(apiSuspended)));
     }
 
+    @Test
+    void pollLiveStatusIgnoresNullStatusWithoutEndingLiveStock() {
+        Stock liveStock = stock("temporarily-unavailable-channel", true, LocalDateTime.now().minusMinutes(10));
+        when(stockRepository.findAll()).thenReturn(List.of(liveStock));
+        when(chzzkApiClient.fetchChannelStatus("temporarily-unavailable-channel")).thenReturn(null);
+
+        service.pollLiveStatus();
+
+        org.assertj.core.api.Assertions.assertThat(liveStock.isLive()).isTrue();
+        verify(stockRepository, never()).save(liveStock);
+        verify(messagingTemplate, never()).convertAndSend(
+                org.mockito.Mockito.eq("/topic/streamers"),
+                any(Object.class));
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private void executeTransactions() {
         doAnswer(invocation -> {
