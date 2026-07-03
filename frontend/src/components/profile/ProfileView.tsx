@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { User } from 'firebase/auth';
 import { Stock } from '../../hooks/useStocks';
 import { AppTab } from '../../types';
@@ -221,8 +221,8 @@ export const ProfileView = ({
               onChange={e => setNameInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
               maxLength={8}
-              placeholder="닉네임 입력 (최대 8자)"
-              aria-label="닉네임 변경"
+              placeholder="?됰꽕???낅젰 (理쒕? 8??"
+              aria-label="닉네임 변경
               className="block w-full text-white font-bold bg-transparent border-b outline-none pb-1"
               style={{ borderColor: 'var(--accent)' }}
               disabled={nameUpdating}
@@ -230,7 +230,7 @@ export const ProfileView = ({
             <div className="flex gap-2 mt-2">
               <button type="button" onClick={saveEdit} disabled={nameUpdating}
                 className="text-xs font-bold px-3 py-1 rounded"
-                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>확인</button>
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>?뺤씤</button>
               <button type="button" onClick={cancelEdit} disabled={nameUpdating}
                 className="text-xs px-3 py-1 rounded"
                 style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
@@ -251,7 +251,7 @@ export const ProfileView = ({
           <button type="button" onClick={onLinkGoogle}
             className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
             style={{ background: '#4285F426', color: '#7BAAF7' }}>
-            연동하기
+            ?곕룞?섍린
           </button>
         </div>
       )}
@@ -262,13 +262,13 @@ export const ProfileView = ({
           style={{ background: 'var(--bg-card)', borderColor: 'var(--border-secondary)' }}>
           <NaverIcon className="w-5 h-5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-bold">Naver 계정 연동</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Google 또는 Naver로 같은 포트폴리오를 사용하세요</p>
+            <p className="text-white text-xs font-bold">동일 포트폴리오 계좌 연동</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>네이버 계정을 추가 연동하고 자본 1,000만원 받기</p>
           </div>
           <button type="button" onClick={onLinkNaver}
             className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
             style={{ background: '#03C75A26', color: '#24D86F' }}>
-            연동하기
+            추가 자본 받기
           </button>
         </div>
       )}
@@ -287,7 +287,7 @@ export const ProfileView = ({
         <div className="flex-1 text-left">
           <p className="text-white text-sm font-bold">나의 스트리머 보유 주식</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {holdingCount > 0 ? `${holdingCount}개 종목 보유 중` : '보유 종목 없음'}
+            {holdingCount > 0 ? `${holdingCount}개 종목 보유 중 : '보유 종목 없음'}
           </p>
         </div>
         <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -300,9 +300,9 @@ export const ProfileView = ({
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
           { label: '총 스트리머 자산', value: formattedTotalAssets },
-          { label: '캐시', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
-          { label: '주식 평가액', value: fmtKorean(holdingsValue) },
-          { label: '누적 매매 횟수', value: `${orderCount}회` },
+          { label: '罹먯떆', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
+          { label: '주식 평가액, value: fmtKorean(holdingsValue) },
+          { label: '?꾩쟻 留ㅻℓ ?잛닔', value: `${orderCount}?? },
         ].map(row => (
           <div key={row.label} className="flex justify-between items-center mb-3 last:mb-0">
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
@@ -347,7 +347,7 @@ export const ProfileView = ({
                   <p className="text-xs font-bold text-white truncate">{tier.description}</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                     {selectedTitleId === tier.id
-                      ? '대표 칭호로 표시 중'
+                      ? '대표 칭호로 표시 중
                       : user.isAnonymous ? 'Google 계정 기준 보상 대상' : tier.status === 'pending' ? '스냅샷 후 자동 지급 예정' : '베타 최종 랭킹 기준 선정'}
                   </p>
                 </div>
@@ -387,7 +387,7 @@ export const ProfileView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(Number(d.quantity))} · {dateStr}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(Number(d.quantity))} 쨌 {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: 'var(--accent)' }}>
                       +{fmtKorean(Math.abs(Number(d.amount)))}
@@ -443,11 +443,11 @@ export const ProfileView = ({
         <div className="flex flex-col items-start gap-0.5">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (1,000만으로 세팅)</span>
           <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : 'var(--text-dim)' }}>
-            오늘 남은 횟수: {remainingResets}회
+            ?ㅻ뒛 ?⑥? ?잛닔: {remainingResets}??
           </span>
         </div>
         <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? 'var(--text-dim)' : '#FF5252' }}>
-          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
+          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›}
         </span>
       </button>
 
@@ -456,14 +456,14 @@ export const ProfileView = ({
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>지난 공지 보기</span>
-        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>??/span>
       </button>
 
       <button type="button" onClick={() => onNavigate('feedback')}
         className="w-full rounded-xl border px-4 py-3 mt-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
-        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>문의 및 건의</span>
-        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>→</span>
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>의견 및 건의</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>??/span>
       </button>
 
       <div className="md:hidden">
@@ -482,10 +482,10 @@ function TitleRow({ title, selected }: { title: UserTitle; selected: boolean }) 
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-white truncate">{title.description || '획득한 칭호입니다.'}</p>
         {selected ? (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--accent)' }}>대표 칭호로 표시 중</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--accent)' }}>대표 칭호로 표시 중/p>
         ) : title.awardedAt && (
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-            {new Date(title.awardedAt).toLocaleDateString('ko-KR')} 획득
+            {new Date(title.awardedAt).toLocaleDateString('ko-KR')} ?띾뱷
           </p>
         )}
       </div>
