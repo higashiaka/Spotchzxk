@@ -18,6 +18,48 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_initial_balance_policy_20260703',
+    title: '초기 자본 정책 변경 안내',
+    date: '2026년 7월 3일',
+    summary: '로그인 방식에 따라 지급되는 초기 자본 금액이 변경됩니다. 네이버 계정 연동 시 추가 자본이 지급되며, 기존 구글 계정 유저에게도 차액이 일괄 지급됩니다.',
+    sections: [
+      {
+        title: '초기 자본 변경',
+        table: {
+          headers: ['로그인 방식', '초기 자본'],
+          rows: [
+            ['구글 로그인', '2,000만원'],
+            ['네이버 로그인', '3,000만원'],
+          ],
+        },
+        note: '신규 가입 계정부터 적용됩니다.',
+      },
+      {
+        title: '네이버 계정 연동 보너스',
+        rows: [
+          { label: '지급 조건', value: '구글 계정에 네이버 계정 최초 연동 시', tone: 'accent' },
+          { label: '지급 금액', value: '+1,000만원', tone: 'accent' },
+        ],
+        note: '네이버 단독 계정이거나 이미 연동된 계정에는 지급되지 않습니다.',
+      },
+      {
+        title: '기존 구글 계정 유저 일괄 지급',
+        rows: [
+          { label: '지급 대상', value: '네이버 미연동 기존 구글 로그인 계정 전체', tone: 'accent' },
+          { label: '지급 금액', value: '+1,000만원 (신규 정책 차액)', tone: 'accent' },
+        ],
+        note: '게스트 계정은 지급 대상에서 제외됩니다.',
+      },
+      {
+        title: '자금 초기화 기준',
+        rows: [
+          { label: '구글 계정', value: '2,000만원으로 초기화', tone: 'accent' },
+          { label: '네이버 연동 계정', value: '3,000만원으로 초기화', tone: 'accent' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'notice_official_open_20260630',
     title: 'Spotchzxk 정식 오픈',
     date: '2026년 6월 30일',
