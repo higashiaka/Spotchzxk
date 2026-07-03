@@ -221,8 +221,8 @@ export const ProfileView = ({
               onChange={e => setNameInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
               maxLength={8}
-              placeholder="?됰꽕???낅젰 (理쒕? 8??"
-              aria-label="닉네임 변경
+              placeholder="닉네임 입력 (최대 8자)"
+              aria-label="닉네임 변경"
               className="block w-full text-white font-bold bg-transparent border-b outline-none pb-1"
               style={{ borderColor: 'var(--accent)' }}
               disabled={nameUpdating}
@@ -230,7 +230,7 @@ export const ProfileView = ({
             <div className="flex gap-2 mt-2">
               <button type="button" onClick={saveEdit} disabled={nameUpdating}
                 className="text-xs font-bold px-3 py-1 rounded"
-                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>?뺤씤</button>
+                style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>확인</button>
               <button type="button" onClick={cancelEdit} disabled={nameUpdating}
                 className="text-xs px-3 py-1 rounded"
                 style={{ background: '#FF525222', color: '#FF5252' }}>취소</button>
