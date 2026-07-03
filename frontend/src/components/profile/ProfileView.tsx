@@ -300,7 +300,7 @@ export const ProfileView = ({
         <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--text-secondary)' }}>스트리머 투자 요약</h3>
         {[
           { label: '총 스트리머 자산', value: formattedTotalAssets },
-          { label: '罹먯떆', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
+          { label: '캐시', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
           { label: '주식 평가액', value: fmtKorean(holdingsValue) },
           { label: '누적 매매 횟수', value: `${orderCount}회` },
         ].map(row => (
@@ -347,7 +347,7 @@ export const ProfileView = ({
                   <p className="text-xs font-bold text-white truncate">{tier.description}</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                     {selectedTitleId === tier.id
-                      ? '대표 칭호로 표시 중
+                      ? '대표 칭호로 표시 중'
                       : user.isAnonymous ? 'Google 계정 기준 보상 대상' : tier.status === 'pending' ? '스냅샷 후 자동 지급 예정' : '베타 최종 랭킹 기준 선정'}
                   </p>
                 </div>
@@ -447,7 +447,7 @@ export const ProfileView = ({
           </span>
         </div>
         <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? 'var(--text-dim)' : '#FF5252' }}>
-          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›}
+          {isResetting ? '초기화 중...' : remainingResets <= 0 ? '오늘 완료' : '초기화 ›'}
         </span>
       </button>
 
@@ -456,14 +456,14 @@ export const ProfileView = ({
         className="w-full rounded-xl border px-4 py-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>지난 공지 보기</span>
-        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>??/span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
       </button>
 
       <button type="button" onClick={() => onNavigate('feedback')}
         className="w-full rounded-xl border px-4 py-3 mt-3 flex justify-between items-center transition-colors hover:opacity-80 active:opacity-60"
         style={{ background: 'var(--bg-card)', borderColor: 'var(--border-primary)' }}>
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>의견 및 건의</span>
-        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>??/span>
+        <span className="text-sm font-bold" style={{ color: 'var(--text-dim)' }}>›</span>
       </button>
 
       <div className="md:hidden">
@@ -482,10 +482,10 @@ function TitleRow({ title, selected }: { title: UserTitle; selected: boolean }) 
       <div className="flex-1 min-w-0">
         <p className="text-xs font-bold text-white truncate">{title.description || '획득한 칭호입니다.'}</p>
         {selected ? (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--accent)' }}>대표 칭호로 표시 중/p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--accent)' }}>대표 칭호로 표시 중</p>
         ) : title.awardedAt && (
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-            {new Date(title.awardedAt).toLocaleDateString('ko-KR')} ?띾뱷
+            {new Date(title.awardedAt).toLocaleDateString('ko-KR')} 획득
           </p>
         )}
       </div>
