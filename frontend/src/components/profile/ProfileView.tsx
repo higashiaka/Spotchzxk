@@ -287,7 +287,7 @@ export const ProfileView = ({
         <div className="flex-1 text-left">
           <p className="text-white text-sm font-bold">나의 스트리머 보유 주식</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {holdingCount > 0 ? `${holdingCount}개 종목 보유 중 : '보유 종목 없음'}
+            {holdingCount > 0 ? `${holdingCount}개 종목 보유 중` : '보유 종목 없음'}
           </p>
         </div>
         <svg className="w-4 h-4 shrink-0" style={{ color: 'var(--text-dim)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -301,8 +301,8 @@ export const ProfileView = ({
         {[
           { label: '총 스트리머 자산', value: formattedTotalAssets },
           { label: '罹먯떆', value: fmtKoreanBigInt(parseBigBalance(portfolio?.balance)) },
-          { label: '주식 평가액, value: fmtKorean(holdingsValue) },
-          { label: '?꾩쟻 留ㅻℓ ?잛닔', value: `${orderCount}?? },
+          { label: '주식 평가액', value: fmtKorean(holdingsValue) },
+          { label: '누적 매매 횟수', value: `${orderCount}회` },
         ].map(row => (
           <div key={row.label} className="flex justify-between items-center mb-3 last:mb-0">
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
