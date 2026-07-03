@@ -87,6 +87,10 @@ public class User {
         this.naverUid = naverUid;
     }
 
+    public void addBalance(BigDecimal amount) {
+        this.coinBalance = this.coinBalance.add(amount);
+    }
+
     public void updateBalance(BigDecimal newBalance) {
         this.coinBalance = newBalance;
     }

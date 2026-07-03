@@ -29,8 +29,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioService {
 
-    // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to accommodate megaphone and stock-add costs
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
     private static final int MAX_DAILY_RESETS = 3;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private final UserRepository userRepository;
@@ -46,7 +44,7 @@ public class PortfolioService {
     @Transactional
     public User getOrCreate(String userId) {
         return userRepository.findById(userId).orElseGet(() -> {
-            User p = User.builder().id(userId).coinBalance(INITIAL_BALANCE).build();
+            User p = User.builder().id(userId).coinBalance(InitialBalancePolicy.initialBalanceFor(userId)).build();
             return userRepository.save(p);
         });
     }
@@ -136,7 +134,7 @@ public class PortfolioService {
         }
 
         p.incrementResetCount();
-        p.resetFinancials(INITIAL_BALANCE);
+        p.resetFinancials(InitialBalancePolicy.resetBalanceFor(p));
         userRepository.save(p);
 
         userShareRepository.deleteAll(shares);

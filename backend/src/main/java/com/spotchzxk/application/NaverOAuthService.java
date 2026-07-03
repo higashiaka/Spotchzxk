@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
@@ -27,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 public class NaverOAuthService {
 
     private final UserRepository userRepository;
+    private final TradeEngine tradeEngine;
 
     @Value("${app.naver.client-id}")
     private String clientId;
@@ -73,7 +76,14 @@ public class NaverOAuthService {
             }
         });
 
-        userRepository.findById(currentUid).ifPresent(user -> user.linkNaver(naverUid));
+        userRepository.findById(currentUid).ifPresent(user -> {
+            boolean grantLinkBonus = user.getNaverUid() == null && !currentUid.startsWith("naver:");
+            user.linkNaver(naverUid);
+            if (grantLinkBonus) {
+                user.addBalance(InitialBalancePolicy.NAVER_LINK_BONUS);
+            }
+            registerAfterCommit(() -> tradeEngine.evictUserCache(currentUid));
+        });
     }
 
     private String fetchAccessToken(String code, String state) {
@@ -126,5 +136,18 @@ public class NaverOAuthService {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private void registerAfterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 }

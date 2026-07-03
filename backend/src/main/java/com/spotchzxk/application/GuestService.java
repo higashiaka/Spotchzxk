@@ -6,15 +6,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class GuestService {
-
-    // Issue #4: raised initial balance to 10,000,000 (was 1,000,000) to accommodate megaphone and stock-add costs
-    private static final BigDecimal INITIAL_BALANCE = BigDecimal.valueOf(10_000_000);
 
     private final UserRepository userRepository;
 
@@ -35,7 +31,7 @@ public class GuestService {
         }
         User user = existing != null
                 ? existing
-                : User.builder().id(uid).coinBalance(INITIAL_BALANCE).build();
+                : User.builder().id(uid).coinBalance(InitialBalancePolicy.GOOGLE_INITIAL_BALANCE).build();
         user.markAsGuest();
         userRepository.save(user);
         return Map.of("canonicalUid", uid);
