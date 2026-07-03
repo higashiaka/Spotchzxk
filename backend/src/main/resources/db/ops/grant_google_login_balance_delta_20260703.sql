@@ -1,5 +1,5 @@
 -- One-time grant for existing Google/Firebase registered users.
--- New policy: Google login starts at 20,000,000; Naver-linked users receive 30,000,000 total.
+-- New policy: Google login starts at 20,000,000; Naver-linked Google users receive 50,000,000 total; Naver-only users receive 30,000,000.
 -- This grants the 10,000,000 delta to existing registered Google users that are not already Naver-linked.
 
 START TRANSACTION;

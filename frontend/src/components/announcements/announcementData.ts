@@ -38,7 +38,7 @@ export const announcements: AnnouncementItem[] = [
         title: '네이버 계정 연동 보너스',
         rows: [
           { label: '지급 조건', value: '구글 계정에 네이버 계정 최초 연동 시', tone: 'accent' },
-          { label: '지급 금액', value: '+1,000만원', tone: 'accent' },
+          { label: '지급 금액', value: '+3,000만원', tone: 'accent' },
         ],
         note: '네이버 단독 계정이거나 이미 연동된 계정에는 지급되지 않습니다.',
       },
@@ -54,7 +54,8 @@ export const announcements: AnnouncementItem[] = [
         title: '자금 초기화 기준',
         rows: [
           { label: '구글 계정', value: '2,000만원으로 초기화', tone: 'accent' },
-          { label: '네이버 연동 계정', value: '3,000만원으로 초기화', tone: 'accent' },
+          { label: '네이버 연동 구글 계정', value: '5,000만원으로 초기화', tone: 'accent' },
+          { label: '네이버 단독 계정', value: '3,000만원으로 초기화', tone: 'accent' },
         ],
       },
     ],

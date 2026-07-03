@@ -80,7 +80,7 @@ public class NaverOAuthService {
             boolean grantLinkBonus = user.getNaverUid() == null && !currentUid.startsWith("naver:");
             user.linkNaver(naverUid);
             if (grantLinkBonus) {
-                user.addBalance(InitialBalancePolicy.NAVER_LINK_BONUS);
+                user.addBalance(InitialBalancePolicy.NAVER_INITIAL_BALANCE);
             }
             registerAfterCommit(() -> tradeEngine.evictUserCache(currentUid));
         });

@@ -8,7 +8,6 @@ public final class InitialBalancePolicy {
 
     public static final BigDecimal GOOGLE_INITIAL_BALANCE = BigDecimal.valueOf(20_000_000);
     public static final BigDecimal NAVER_INITIAL_BALANCE = BigDecimal.valueOf(30_000_000);
-    public static final BigDecimal NAVER_LINK_BONUS = BigDecimal.valueOf(10_000_000);
 
     private InitialBalancePolicy() {
     }
@@ -18,7 +17,12 @@ public final class InitialBalancePolicy {
     }
 
     public static BigDecimal resetBalanceFor(User user) {
-        return user.getNaverUid() != null ? NAVER_INITIAL_BALANCE : initialBalanceFor(user.getId());
+        if (user.getNaverUid() != null) {
+            return isNaverOnlyUid(user.getId())
+                    ? NAVER_INITIAL_BALANCE
+                    : GOOGLE_INITIAL_BALANCE.add(NAVER_INITIAL_BALANCE);
+        }
+        return initialBalanceFor(user.getId());
     }
 
     private static boolean isNaverOnlyUid(String userId) {
