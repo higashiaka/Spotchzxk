@@ -101,7 +101,7 @@ public class StockController {
         channelId = channelId.replaceAll("[?#].*", "").trim();
 
         if (channelId.isBlank() || !channelId.matches("[a-zA-Z0-9_\\-]+")) {
-            return ResponseEntity.badRequest().body(Map.of("error", "?좏슚?섏? ?딆? 梨꾨꼸 URL ?먮뒗 ID?낅땲??"));
+            return ResponseEntity.badRequest().body(Map.of("error", "유효하지 않은 채널 URL 또는 ID입니다."));
         }
 
         if (channelId.length() < 8) {

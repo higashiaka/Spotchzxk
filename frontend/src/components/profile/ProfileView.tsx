@@ -251,7 +251,7 @@ export const ProfileView = ({
           <button type="button" onClick={onLinkGoogle}
             className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg"
             style={{ background: '#4285F426', color: '#7BAAF7' }}>
-            ?곕룞?섍린
+            연동하기
           </button>
         </div>
       )}
@@ -387,7 +387,7 @@ export const ProfileView = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{d.streamerName}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(Number(d.quantity))} 쨌 {dateStr}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{fmtShares(Number(d.quantity))} · {dateStr}</p>
                     </div>
                     <p className="text-sm font-bold font-mono shrink-0" style={{ color: 'var(--accent)' }}>
                       +{fmtKorean(Math.abs(Number(d.amount)))}
@@ -443,7 +443,7 @@ export const ProfileView = ({
         <div className="flex flex-col items-start gap-0.5">
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>투자 자금 초기화하기 (1,000만으로 세팅)</span>
           <span className="text-xs" style={{ color: remainingResets <= 0 ? '#FF5252' : 'var(--text-dim)' }}>
-            ?ㅻ뒛 ?⑥? ?잛닔: {remainingResets}??
+            오늘 남은 횟수: {remainingResets}회
           </span>
         </div>
         <span className="text-sm font-bold" style={{ color: isResetting || remainingResets <= 0 ? 'var(--text-dim)' : '#FF5252' }}>

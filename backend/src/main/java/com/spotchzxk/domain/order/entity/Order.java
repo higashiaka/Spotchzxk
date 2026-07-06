@@ -70,7 +70,7 @@ public class Order {
         this.executedAt = executedAt;
     }
 
-    /** ?ㅼ젣 嫄곕옒 諛쒖깮 ?쒓컖. 利됱떆 泥닿껐? createdAt, 吏?뺢? ?섏쨷 泥닿껐? executedAt. */
+    /** 실제 거래 발생 시각. 즉시 체결은 createdAt, 지정가 체결은 executedAt. */
     public long tradeAt() {
         return executedAt != null ? executedAt : createdAt;
     }

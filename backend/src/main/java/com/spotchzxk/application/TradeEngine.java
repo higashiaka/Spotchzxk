@@ -947,7 +947,7 @@ public class TradeEngine {
         }
     }
 
-    // Issue #18: candleService.onTrade瑜?鍮꾨룞湲??몄텧??stockLock 蹂댁쑀 ?곹깭?먯꽌??紐⑤땲????以묒꺽 ?쒓굅
+    // Issue #18: candleService.onTrade를 비동기 호출로 stockLock 보유 상태에서의 모니터 중첩 락 제거
     private void broadcastTrade(String channelId, String streamerName, boolean isBuy, BigInteger qty,
                                 BigDecimal executedPrice, long executedAt, BigDecimal cost,
                                 BigInteger coinReserve, BigInteger shareReserve,

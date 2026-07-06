@@ -43,17 +43,17 @@ class TradeEnginePricingTest {
         assertThat(result.avgPrice()).isGreaterThan(BigDecimal.valueOf(10_000));
         // post-trade spot price > avg fill price (price impact)
         assertThat(result.newPrice()).isGreaterThan(result.avgPrice());
-        // ?좎? 吏遺덉븸 > AMM 肄붿씤 (?섏닔猷??ы븿)
+        // 실제 지불액 > AMM 코인 (수수료 포함)
         assertThat(result.userNetAmount()).isGreaterThan(result.ammAmount());
     }
 
     @Test
     void pumpThenDump_notProfitableDueToFeeAndSlippage() {
-        // 700二?留ㅼ닔
+        // 700주 매수
         AmmCalculator.AmmResult buy = AmmCalculator.calcBuy(COIN_RESERVE_BIG, SHARE_RESERVE_BIG, 700);
         BigInteger[] poolAfterBuy = buy.newPool();
 
-        // 700二?留ㅻ룄
+        // 700주 매도
         AmmCalculator.AmmResult sell = AmmCalculator.calcSell(poolAfterBuy[0], poolAfterBuy[1], 700);
 
         // sell proceeds < buy cost due to fee + slippage

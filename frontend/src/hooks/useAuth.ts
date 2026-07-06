@@ -234,7 +234,7 @@ export function useAuth() {
           });
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert('?ㅼ씠踰?濡쒓렇???ㅽ뙣: ' + (body.message ?? '?????녿뒗 ?ㅻ쪟'));
+            alert('네이버 로그인 실패: ' + (body.message ?? '알 수 없는 오류'));
             resolve();
             return;
           }
@@ -242,7 +242,7 @@ export function useAuth() {
           await signInWithCustomToken(auth, customToken);
           localStorage.setItem(HAS_LINKED_ACCOUNT_KEY, 'true');
         } catch {
-          alert('?ㅼ씠踰?濡쒓렇??以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+          alert('네이버 로그인 중 오류가 발생했습니다.');
         }
         resolve();
       };
@@ -382,7 +382,7 @@ export function useAuth() {
           });
           if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            alert('?ㅼ씠踰??곕룞 ?ㅽ뙣: ' + (body.message ?? '?????녿뒗 ?ㅻ쪟'));
+            alert('네이버 연동 실패: ' + (body.message ?? '알 수 없는 오류'));
             resolve();
             return;
           }
@@ -391,7 +391,7 @@ export function useAuth() {
           if (wasAnonymous) await upgradeGuest('Naver');
           alert('네이버 계정이 연동되었습니다. 추가 자본 1,000만원이 지급되었습니다.');
         } catch {
-          alert('?ㅼ씠踰??곕룞 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.');
+          alert('네이버 연동 중 오류가 발생했습니다.');
         }
         resolve();
       };

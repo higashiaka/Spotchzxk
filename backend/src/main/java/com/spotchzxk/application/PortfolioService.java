@@ -139,7 +139,7 @@ public class PortfolioService {
 
         userShareRepository.deleteAll(shares);
         evictAfterCommit(userId);
-        // Issue #24: ?꾨즺??二쇰Ц 湲곕줉? ??젣?섏? ?딆쓬 ??嫄곕옒 ?덉뒪?좊━ 蹂댁〈
+        // Issue #24: 완료된 주문 기록은 삭제하지 않음 → 거래 이력 보존
     }
 
     private void evictAfterCommit(String userId) {
