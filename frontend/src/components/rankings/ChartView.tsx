@@ -170,9 +170,9 @@ export const ChartView = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  /** Expected dividend per share string (current price × 0.7%) */
+  /** Expected dividend per share string from the backend dividend calculation */
   const expectedPerShare = (s: Stock): string => {
-    const val = s.price * 0.007;
+    const val = s.nextDividendPerShare ?? 0;
     return val >= 1 ? `+${Math.floor(val)}원` : `+${val.toFixed(4)}원`;
   };
 

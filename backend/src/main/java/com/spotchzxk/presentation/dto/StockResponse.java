@@ -34,9 +34,17 @@ public record StockResponse(
         long liquidityTier,
         boolean tradingSuspended,
         String tradingSuspensionReason,
-        LocalDateTime listedAt
+        LocalDateTime listedAt,
+
+        @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal nextDividendPerShare
 ) {
+    private static final BigDecimal FEE_POOL_PAYOUT_RATIO = new BigDecimal("0.35");
+
     public static StockResponse from(Stock s) {
+        return from(s, BigDecimal.ZERO);
+    }
+
+    public static StockResponse from(Stock s, BigDecimal eligibleShares) {
         return new StockResponse(
                 s.getChannelId(),
                 s.getStreamerName(),
@@ -57,7 +65,21 @@ public record StockResponse(
                 s.getLiquidityTier(),
                 s.isTradingSuspended(),
                 MarketPrice.suspensionReason(s),
-                s.getListedAt()
+                s.getListedAt(),
+                nextDividendPerShare(s, eligibleShares)
         );
+    }
+
+    private static BigDecimal nextDividendPerShare(Stock s, BigDecimal eligibleShares) {
+        if (eligibleShares == null || eligibleShares.signum() <= 0 || s.getFeePool() == null || s.getFeePool().signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal totalPayout = new BigDecimal(s.getFeePool())
+                .multiply(FEE_POOL_PAYOUT_RATIO)
+                .setScale(0, java.math.RoundingMode.FLOOR);
+        if (totalPayout.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return totalPayout.divide(eligibleShares, 12, java.math.RoundingMode.FLOOR);
     }
 }

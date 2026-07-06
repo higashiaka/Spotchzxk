@@ -28,6 +28,8 @@ export interface Stock {
   liveStartedAt?: string;
   /** Accumulated dividend count in the current live session */
   dividendAccumulationCount?: number;
+  /** Expected next dividend amount per eligible share */
+  nextDividendPerShare?: number;
   /** Float supply before live started */
   preStreamFloat?: number;
   /** AMM coin reserve used for client-side market order estimates */

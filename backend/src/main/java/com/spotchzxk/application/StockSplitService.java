@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
@@ -182,8 +183,14 @@ public class StockSplitService {
                 ))
                 .toList();
         registerAfterCommit(() -> {
+            Map<String, BigDecimal> eligibleSharesByChannel = new HashMap<>();
+            for (UserShareRepository.ChannelQuantitySum row : userShareRepository.sumPreStreamQuantityGroupedByChannel()) {
+                eligibleSharesByChannel.put(row.getChannelId(), row.getTotal());
+            }
             messagingTemplate.convertAndSend("/topic/streamers",
-                    stockRepository.findAll().stream().map(StockResponse::from).toList());
+                    stockRepository.findAll().stream()
+                            .map(s -> StockResponse.from(s, eligibleSharesByChannel.get(s.getChannelId())))
+                            .toList());
             for (Map<String, Object> priceUpdate : priceUpdates) {
                 String channelId = (String) priceUpdate.get("channelId");
                 messagingTemplate.convertAndSend("/topic/prices/" + channelId,

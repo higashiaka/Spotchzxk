@@ -2,6 +2,7 @@ package com.spotchzxk.application;
 
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
+import com.spotchzxk.domain.user.repository.UserShareRepository;
 import com.spotchzxk.presentation.dto.StockResponse;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class DailyResetService {
 
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
+    private final UserShareRepository userShareRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
@@ -89,8 +91,14 @@ public class DailyResetService {
 
         String resetAt = LocalDateTime.now(KST).toString();
         sendAfterCommit(() -> {
+            Map<String, java.math.BigDecimal> eligibleSharesByChannel = new java.util.HashMap<>();
+            for (UserShareRepository.ChannelQuantitySum row : userShareRepository.sumPreStreamQuantityGroupedByChannel()) {
+                eligibleSharesByChannel.put(row.getChannelId(), row.getTotal());
+            }
             messagingTemplate.convertAndSend("/topic/streamers",
-                    stockRepository.findAll().stream().map(StockResponse::from).toList());
+                    stockRepository.findAll().stream()
+                            .map(s -> StockResponse.from(s, eligibleSharesByChannel.get(s.getChannelId())))
+                            .toList());
             messagingTemplate.convertAndSend("/topic/rankings-reset", Map.of(
                 "resetAt", resetAt,
                 "resetUsers", resetUsers

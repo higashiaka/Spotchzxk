@@ -60,6 +60,10 @@ export function mapRawToStock(r: any, previous?: Stock): Stock | null {
       r.dividendAccumulationCount,
       previous?.dividendAccumulationCount ?? 0,
     ),
+    nextDividendPerShare: toFiniteNumber(
+      r.nextDividendPerShare,
+      previous?.nextDividendPerShare ?? 0,
+    ),
     preStreamFloat: toFiniteNumber(r.preStreamFloat, previous?.preStreamFloat ?? 0),
     coinReserve,
     shareReserve,

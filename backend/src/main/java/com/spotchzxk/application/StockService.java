@@ -10,6 +10,7 @@ import com.spotchzxk.shared.exception.InsufficientFollowerCountException;
 import com.spotchzxk.domain.order.repository.OrderRepository;
 import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
+import com.spotchzxk.domain.user.repository.UserShareRepository;
 import com.spotchzxk.infrastructure.chzzk.ChzzkApiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -20,7 +21,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -33,17 +36,25 @@ public class StockService {
     private final StockRepository stockRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final UserShareRepository userShareRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChzzkApiClient chzzkApiClient;
     private final TradeEngine tradeEngine;
     private final TransactionTemplate transactionTemplate;
 
     public List<StockResponse> getAllStocks() {
-        return stockRepository.findAll().stream().map(StockResponse::from).toList();
+        Map<String, BigDecimal> eligibleSharesByChannel = new HashMap<>();
+        for (UserShareRepository.ChannelQuantitySum row : userShareRepository.sumPreStreamQuantityGroupedByChannel()) {
+            eligibleSharesByChannel.put(row.getChannelId(), row.getTotal());
+        }
+        return stockRepository.findAll().stream()
+                .map(s -> StockResponse.from(s, eligibleSharesByChannel.get(s.getChannelId())))
+                .toList();
     }
 
     public Optional<StockResponse> getStock(String channelId) {
-        return stockRepository.findById(channelId).map(StockResponse::from);
+        return stockRepository.findById(channelId)
+                .map(s -> StockResponse.from(s, userShareRepository.sumPreStreamQuantityByChannel(channelId)));
     }
 
     public OrderBookDto getOrderBook(String channelId, int depth) {

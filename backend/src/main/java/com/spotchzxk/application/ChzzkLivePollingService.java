@@ -111,7 +111,8 @@ public class ChzzkLivePollingService {
                                 } else {
                                     liveStockCache.remove(s.getChannelId());
                                 }
-                                messagingTemplate.convertAndSend("/topic/streamers", List.of(StockResponse.from(s)));
+                                messagingTemplate.convertAndSend("/topic/streamers", List.of(
+                                        StockResponse.from(s, userShareRepository.sumPreStreamQuantityByChannel(s.getChannelId()))));
                             });
                         }
                     } catch (Exception e) {
@@ -169,7 +170,8 @@ public class ChzzkLivePollingService {
                 if (paidStock != null) {
                     liveStockCache.put(paidStock.getChannelId(), paidStock);
                     paidCount++;
-                    messagingTemplate.convertAndSend("/topic/streamers", List.of(StockResponse.from(paidStock)));
+                    messagingTemplate.convertAndSend("/topic/streamers", List.of(
+                            StockResponse.from(paidStock, userShareRepository.sumPreStreamQuantityByChannel(paidStock.getChannelId()))));
                 }
             } catch (Exception e) {
                 log.error("Failed to pay interval dividend for channel {}: {}",
@@ -271,7 +273,7 @@ public class ChzzkLivePollingService {
                         if (!s.isTradingSuspended()) {
                             s.suspendTrading(SUSPENSION_REASON_API_UNAVAILABLE);
                             stockRepository.save(s);
-                            StockResponse payload = StockResponse.from(s);
+                            StockResponse payload = StockResponse.from(s, userShareRepository.sumPreStreamQuantityByChannel(s.getChannelId()));
                             sendAfterCommit(() -> messagingTemplate.convertAndSend("/topic/streamers", List.of(payload)));
                             log.warn("Trading suspended for channel {} after {} consecutive API failures.", channelId, failures);
                         }
@@ -290,7 +292,7 @@ public class ChzzkLivePollingService {
                                 && SUSPENSION_REASON_API_UNAVAILABLE.equals(s.getTradingSuspensionReason())) {
                             s.resumeTrading();
                             stockRepository.save(s);
-                            StockResponse payload = StockResponse.from(s);
+                            StockResponse payload = StockResponse.from(s, userShareRepository.sumPreStreamQuantityByChannel(s.getChannelId()));
                             sendAfterCommit(() -> messagingTemplate.convertAndSend("/topic/streamers", List.of(payload)));
                             log.debug("Trading resumed for channel {} (API recovered).", channelId);
                         }
