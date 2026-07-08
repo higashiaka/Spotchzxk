@@ -1,7 +1,20 @@
-ALTER TABLE users
-    ADD COLUMN megaphone_tickets BIGINT NOT NULL DEFAULT 0;
+SET @add_megaphone_tickets = (
+    SELECT IF(
+        COUNT(*) = 0,
+        'ALTER TABLE users ADD COLUMN megaphone_tickets BIGINT NOT NULL DEFAULT 0',
+        'SELECT 1'
+    )
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'users'
+      AND column_name = 'megaphone_tickets'
+);
 
-CREATE TABLE daily_attendance_rewards (
+PREPARE add_megaphone_tickets_stmt FROM @add_megaphone_tickets;
+EXECUTE add_megaphone_tickets_stmt;
+DEALLOCATE PREPARE add_megaphone_tickets_stmt;
+
+CREATE TABLE IF NOT EXISTS daily_attendance_rewards (
     id BIGINT NOT NULL AUTO_INCREMENT,
     user_id VARCHAR(128) NOT NULL,
     attendance_date DATE NOT NULL,
@@ -18,4 +31,4 @@ CREATE TABLE daily_attendance_rewards (
     CONSTRAINT fk_daily_attendance_user
         FOREIGN KEY (user_id) REFERENCES users(id)
         ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
