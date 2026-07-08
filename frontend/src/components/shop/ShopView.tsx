@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from 'firebase/auth';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stock } from '../../hooks/useStocks';
 import { apiFetch } from '../../lib/api';
 import {
@@ -16,6 +16,26 @@ const NICKNAME_TICKET_PRICE = 1_000_000;
 const STOCK_ADD_TICKET_PRICE = 10_000_000;
 /** Max megaphone uses per day */
 const DAILY_LIMIT = 5;
+
+type AttendanceReward = {
+  rewardType: 'cash' | 'item';
+  rewardAmount: string | number;
+  itemType: string;
+  itemName: string;
+  itemQuantity: number;
+};
+
+type AttendanceStatus = AttendanceReward & {
+  claimed: boolean;
+  claimedToday: boolean;
+  streakDay: number;
+  balance: string | number;
+  nicknameChangeTickets: number;
+  stockAddTickets: number;
+  megaphoneTickets: number;
+  nextMilestoneDay: number;
+  nextMilestoneReward: AttendanceReward;
+};
 
 /** Formats a number with Korean locale comma separators */
 function formatPrice(n: number) {
@@ -71,6 +91,93 @@ function ShopItemCard({
         >
           {pending ? '구매 중...' : '구매'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function rewardLabel(reward: Pick<AttendanceReward, 'rewardType' | 'rewardAmount' | 'itemName' | 'itemQuantity'>) {
+  if (reward.rewardType === 'item') {
+    return `${reward.itemName} x${reward.itemQuantity}`;
+  }
+  return `${formatPrice(Number(reward.rewardAmount ?? 0))} cash`;
+}
+
+function useAttendance(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['attendance', userId],
+    queryFn: async (): Promise<AttendanceStatus> => {
+      const res = await apiFetch('/api/shop/attendance');
+      if (!res.ok) throw new Error('Failed to load daily reward.');
+      return res.json();
+    },
+    enabled: !!userId,
+  });
+}
+
+function AttendanceRewardCard({ user }: { user: User | null }) {
+  const queryClient = useQueryClient();
+  const { data } = useAttendance(user?.uid);
+  const mutation = useMutation({
+    mutationFn: async (): Promise<AttendanceStatus> => {
+      const res = await apiFetch('/api/shop/attendance/claim', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to claim daily reward.');
+      return json;
+    },
+    onSuccess: (json) => {
+      if (!user?.uid) return;
+      queryClient.setQueryData(['attendance', user.uid], json);
+      queryClient.setQueryData(['portfolio', user.uid], (old: any) => (
+        old ? {
+          ...old,
+          balance: String(json.balance),
+          nicknameChangeTickets: json.nicknameChangeTickets,
+          stockAddTickets: json.stockAddTickets,
+          megaphoneTickets: json.megaphoneTickets,
+        } : old
+      ));
+      queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
+    },
+    onError: (err) => alert(err instanceof Error ? err.message : 'Failed to claim daily reward.'),
+  });
+
+  const isLoggedIn = !!user && !user.isAnonymous;
+  const todayReward = data ? rewardLabel(data) : 'Sign in to preview';
+  const milestone = data?.nextMilestoneReward ? rewardLabel(data.nextMilestoneReward) : '';
+
+  return (
+    <div className="rounded-xl p-5 md:p-6 mb-4 md:mb-6" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <p className="text-base md:text-xl font-black" style={{ color: 'var(--text-secondary)' }}>Daily Streak Reward</p>
+          <p className="text-xs md:text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
+            Day {data?.streakDay ?? 0} streak · Today: {todayReward}
+          </p>
+          {milestone && (
+            <p className="text-xs mt-2" style={{ color: 'var(--accent)' }}>
+              Next milestone: Day {data?.nextMilestoneDay} · {milestone}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={!isLoggedIn || data?.claimedToday || mutation.isPending}
+          onClick={() => mutation.mutate()}
+          className="px-4 py-2.5 md:px-5 md:py-3 rounded-lg text-sm font-bold transition-opacity disabled:opacity-50"
+          style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
+        >
+          {!isLoggedIn ? 'Sign in' : data?.claimedToday ? 'Claimed today' : mutation.isPending ? 'Claiming...' : 'Claim reward'}
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 mt-4">
+        {Array.from({ length: 14 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-1.5 rounded-full"
+            style={{ background: i < (data?.streakDay ?? 0) % 14 ? 'var(--accent)' : 'var(--bg-card)' }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -211,15 +318,16 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
   const [purchasePending, setPurchasePending] = useState<string | null>(null);
 
   /** Whether balance covers the megaphone price */
-  const canAfford = balance >= MEGAPHONE_PRICE;
+  const nicknameTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
+  const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
+  const megaphoneTickets = Number(portfolio?.megaphoneTickets ?? 0);
+  const canAfford = balance >= MEGAPHONE_PRICE || megaphoneTickets > 0;
   const usedToday = Math.min(Math.max(usesToday, 0), DAILY_LIMIT);
   const remainingUses = DAILY_LIMIT - usedToday;
   /** Whether daily use count is below the limit */
   const hasUses = usedToday < DAILY_LIMIT;
   /** Whether the user is logged in and not anonymous */
   const isLoggedIn = !!user && !user.isAnonymous;
-  const nicknameTickets = Number(portfolio?.nicknameChangeTickets ?? 0);
-  const stockAddTickets = Number(portfolio?.stockAddTickets ?? 0);
 
   /** Submits the megaphone post from modal and closes it on success */
   const handleSubmit = (channelId: string, message: string) => {
@@ -277,6 +385,8 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
         </button>
       </div>
 
+      <AttendanceRewardCard user={user} />
+
       <div className="grid gap-3 md:gap-5 mb-4 md:mb-6 sm:grid-cols-2">
         <ShopItemCard
           title="닉네임 변경권"
@@ -316,7 +426,7 @@ export const ShopView = ({ streamers, user, balance, portfolio }: Props) => {
             </div>
             <p className="text-xs md:text-sm mb-3 md:mb-5" style={{ color: 'var(--text-dim)' }}>
               현재 상장된 라이브 스트리머의 치지직 링크를 전체에 공지합니다.
-              오늘 {usedToday}/{DAILY_LIMIT}회 사용
+              오늘 {usedToday}/{DAILY_LIMIT}회 사용 · Tickets: {megaphoneTickets}
             </p>
 
             <div className="flex items-center justify-between">

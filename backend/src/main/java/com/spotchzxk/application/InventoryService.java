@@ -34,6 +34,9 @@ public class InventoryService {
         if (user.getStockAddTickets() > 0) {
             items.add(item("stock-add-ticket", "종목 추가 티켓", user.getStockAddTickets()));
         }
+        if (user.getMegaphoneTickets() > 0) {
+            items.add(item("megaphone-ticket", "Megaphone Ticket", user.getMegaphoneTickets()));
+        }
         items.addAll(userItemRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
                 .filter(i -> i.getQuantity() > 0)
                 .map(i -> item(i.getItemType(), i.getItemName(), i.getQuantity()))

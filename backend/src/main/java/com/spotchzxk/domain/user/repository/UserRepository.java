@@ -65,6 +65,14 @@ public interface UserRepository extends JpaRepository<User, String> {
     int addStockAddTicket(@Param("userId") String userId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.megaphoneTickets = u.megaphoneTickets + 1 WHERE u.id = :userId")
+    int addMegaphoneTicket(@Param("userId") String userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE User u SET u.megaphoneTickets = u.megaphoneTickets - 1 WHERE u.id = :userId AND u.megaphoneTickets > 0")
+    int useMegaphoneTicket(@Param("userId") String userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.stockAddTickets = u.stockAddTickets - 1 WHERE u.id = :userId AND u.stockAddTickets > 0")
     int useStockAddTicket(@Param("userId") String userId);
 

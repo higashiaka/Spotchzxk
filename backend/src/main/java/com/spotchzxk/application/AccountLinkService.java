@@ -2,6 +2,7 @@ package com.spotchzxk.application;
 
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.order.repository.OrderRepository;
+import com.spotchzxk.domain.user.repository.DailyAttendanceRewardRepository;
 import com.spotchzxk.domain.user.repository.UserRepository;
 import com.spotchzxk.domain.user.repository.UserShareRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class AccountLinkService {
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
     private final OrderRepository orderRepository;
+    private final DailyAttendanceRewardRepository dailyAttendanceRewardRepository;
     private final TradeEngine tradeEngine;
 
     /**
@@ -56,6 +58,7 @@ public class AccountLinkService {
                 .rankingNicknamePublic(guestUser.isRankingNicknamePublic())
                 .nicknameChangeTickets(guestUser.getNicknameChangeTickets())
                 .stockAddTickets(guestUser.getStockAddTickets())
+                .megaphoneTickets(guestUser.getMegaphoneTickets())
                 .isGuest(false)
                 .resetCount(guestUser.getResetCount())
                 .lastResetDate(guestUser.getLastResetDate())
@@ -75,6 +78,7 @@ public class AccountLinkService {
         // Bulk-migrate all records that have a FK pointing to the guest over to the Google account
         userShareRepository.updateUserId(guestUid, registeredUid);
         orderRepository.updateUserId(guestUid, registeredUid);
+        dailyAttendanceRewardRepository.updateUserId(guestUid, registeredUid);
 
         // Issue #14: migrate user_shares and orders to googleUid first, then delete guest User (no CASCADE)
         userRepository.deleteById(guestUid);

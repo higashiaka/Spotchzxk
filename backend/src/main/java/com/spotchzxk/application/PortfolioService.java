@@ -73,6 +73,7 @@ public class PortfolioService {
         response.put("rankingNicknamePublic", p.isRankingNicknamePublic());
         response.put("nicknameChangeTickets", p.getNicknameChangeTickets());
         response.put("stockAddTickets", p.getStockAddTickets());
+        response.put("megaphoneTickets", p.getMegaphoneTickets());
         response.put("items", inventoryItems(p));
         response.put("titles", titleRepository.findByUserIdOrderByGrantedAtDesc(userId).stream()
                 .map(titleResponseMapper::toResponse)
@@ -92,6 +93,9 @@ public class PortfolioService {
         }
         if (user.getStockAddTickets() > 0) {
             items.add(itemResponse("stock-add-ticket", "종목 추가 티켓", user.getStockAddTickets()));
+        }
+        if (user.getMegaphoneTickets() > 0) {
+            items.add(itemResponse("megaphone-ticket", "Megaphone Ticket", user.getMegaphoneTickets()));
         }
         items.addAll(userItemRepository.findByUserIdOrderByUpdatedAtDesc(user.getId()).stream()
                 .filter(item -> item.getQuantity() > 0)
@@ -169,5 +173,4 @@ public class PortfolioService {
         return (int) Math.max(0, remaining);
     }
 }
-
 

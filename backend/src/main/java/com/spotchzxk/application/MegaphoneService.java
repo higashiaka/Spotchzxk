@@ -49,7 +49,8 @@ public class MegaphoneService {
         User user = userRepository.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다."));
 
-        if (user.getCoinBalance().compareTo(MEGAPHONE_PRICE) < 0) {
+        boolean useTicket = user.getMegaphoneTickets() > 0;
+        if (!useTicket && user.getCoinBalance().compareTo(MEGAPHONE_PRICE) < 0) {
             throw new IllegalStateException("잔고가 부족합니다. 확성기 사용에는 3천만원이 필요합니다.");
         }
 
@@ -71,7 +72,11 @@ public class MegaphoneService {
             throw new IllegalStateException("확성기 메시지를 입력해주세요.");
         }
 
-        if (userRepository.addToBalance(uid, MEGAPHONE_PRICE.negate()) != 1) {
+        if (useTicket) {
+            if (userRepository.useMegaphoneTicket(uid) != 1) {
+                throw new IllegalStateException("Megaphone ticket could not be used. Please try again.");
+            }
+        } else if (userRepository.addToBalance(uid, MEGAPHONE_PRICE.negate()) != 1) {
             throw new IllegalStateException("사용자 정보를 찾을 수 없습니다. 다시 로그인해주세요.");
         }
         tradeEngine.evictUserCache(uid);

@@ -25,6 +25,7 @@ export interface Portfolio {
   rankingNicknamePublic?: boolean;
   nicknameChangeTickets?: number;
   stockAddTickets?: number;
+  megaphoneTickets?: number;
   items?: InventoryItem[];
   titles?: UserTitle[];
   selectedTitleId?: string | number | null;

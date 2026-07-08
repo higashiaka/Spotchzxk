@@ -44,6 +44,10 @@ public class User {
     @Builder.Default
     private long stockAddTickets = 0;
 
+    @Column(name = "megaphone_tickets", nullable = false)
+    @Builder.Default
+    private long megaphoneTickets = 0;
+
     @Column(nullable = false)
     @Builder.Default
     private long resetCount = 0;
@@ -139,8 +143,16 @@ public class User {
         this.stockAddTickets++;
     }
 
+    public void addMegaphoneTicket() {
+        this.megaphoneTickets++;
+    }
+
     public void useStockAddTicket() {
         this.stockAddTickets--;
+    }
+
+    public void useMegaphoneTicket() {
+        this.megaphoneTickets--;
     }
 
     public void updateRankingVisibility(boolean isPublic) {
