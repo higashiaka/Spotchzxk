@@ -23,9 +23,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public class DailyAttendanceService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final BigDecimal BASE_REWARD = new BigDecimal("100000");
-    private static final BigDecimal MID_REWARD = new BigDecimal("300000");
-    private static final BigDecimal SEVEN_DAY_REWARD = new BigDecimal("1000000");
+    private static final BigDecimal BASE_REWARD = new BigDecimal("500000");
+    private static final BigDecimal MID_REWARD = new BigDecimal("1500000");
+    private static final BigDecimal SEVEN_DAY_REWARD = new BigDecimal("5000000");
 
     private final DailyAttendanceRewardRepository rewardRepository;
     private final UserRepository userRepository;
