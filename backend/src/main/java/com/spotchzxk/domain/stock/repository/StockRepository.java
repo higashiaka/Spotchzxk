@@ -16,6 +16,8 @@ import java.util.Optional;
 @Repository
 public interface StockRepository extends JpaRepository<Stock, String> {
     List<Stock> findByIsLiveTrue();
+    @Query("SELECT s FROM Stock s WHERE s.isLive = true AND s.dailyVolume = 0 AND s.tradingSuspended = false")
+    List<Stock> findIdleLiveStocks();
     List<Stock> findByCurrentPriceGreaterThan(BigDecimal currentPrice);
     List<Stock> findByCurrentPriceLessThan(BigDecimal currentPrice);
 

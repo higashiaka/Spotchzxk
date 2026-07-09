@@ -78,7 +78,8 @@ public class LiquidityEventService {
             "liquidity-events.pump-buy-chance-percent",
             "liquidity-events.climax-buy-chance-percent",
             "liquidity-events.global-trade-cooldown-min-seconds",
-            "liquidity-events.global-trade-cooldown-max-seconds"
+            "liquidity-events.global-trade-cooldown-max-seconds",
+            "liquidity-events.idle-live-start-chance-percent"
     );
 
     private final LiquidityEventRepository liquidityEventRepository;
@@ -170,6 +171,9 @@ public class LiquidityEventService {
     @Value("${liquidity-events.global-trade-cooldown-max-seconds:90}")
     private int defaultGlobalTradeCooldownMaxSeconds;
 
+    @Value("${liquidity-events.idle-live-start-chance-percent:1}")
+    private BigDecimal defaultIdleLiveStartChancePercent;
+
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
     }
@@ -207,6 +211,30 @@ public class LiquidityEventService {
             } catch (RuntimeException e) {
                 log.warn("Liquidity event tick failed: eventId={}, stock={}", event.getId(), event.getChannelId(), e);
             }
+        }
+    }
+
+    @Scheduled(fixedDelayString = "${liquidity-events.idle-live-scheduler-delay-ms:60000}")
+    public void maybeStartForIdleLiveStocks() {
+        LiquiditySettings settings = settings();
+        if (!settings.enabled() || settings.idleLiveStartChancePercent().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        try {
+            stockRepository.findIdleLiveStocks().forEach(stock -> {
+                if (!roll(settings.idleLiveStartChancePercent())) {
+                    return;
+                }
+                try {
+                    new TransactionTemplate(txManager).executeWithoutResult(status ->
+                            startIfEligible(stock.getChannelId(), settings));
+                } catch (RuntimeException e) {
+                    log.debug("Idle live liquidity event start skipped for {}: {}",
+                            stock.getChannelId(), e.getMessage());
+                }
+            });
+        } catch (RuntimeException e) {
+            log.warn("Idle live liquidity event scan failed", e);
         }
     }
 
@@ -389,7 +417,8 @@ public class LiquidityEventService {
                 appStateService.getInt("liquidity-events.pump-buy-chance-percent", defaultPumpBuyChancePercent),
                 appStateService.getInt("liquidity-events.climax-buy-chance-percent", defaultClimaxBuyChancePercent),
                 appStateService.getInt("liquidity-events.global-trade-cooldown-min-seconds", defaultGlobalTradeCooldownMinSeconds),
-                appStateService.getInt("liquidity-events.global-trade-cooldown-max-seconds", defaultGlobalTradeCooldownMaxSeconds)
+                appStateService.getInt("liquidity-events.global-trade-cooldown-max-seconds", defaultGlobalTradeCooldownMaxSeconds),
+                appStateService.getDecimal("liquidity-events.idle-live-start-chance-percent", defaultIdleLiveStartChancePercent)
         ).normalized();
     }
 
@@ -419,7 +448,8 @@ public class LiquidityEventService {
             int pumpBuyChancePercent,
             int climaxBuyChancePercent,
             int globalTradeCooldownMinSeconds,
-            int globalTradeCooldownMaxSeconds
+            int globalTradeCooldownMaxSeconds,
+            BigDecimal idleLiveStartChancePercent
     ) {
         private LiquiditySettings normalized() {
             int safeTickMin = Math.max(1, tickMinSeconds);
@@ -441,6 +471,9 @@ public class LiquidityEventService {
             BigDecimal safeMinRise = minRisePercent != null ? minRisePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
             BigDecimal safeMaxRise = maxRisePercent != null && maxRisePercent.compareTo(safeMinRise) >= 0 ? maxRisePercent : safeMinRise;
             BigDecimal safeDumpRetain = dumpRetainPercent != null ? dumpRetainPercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
+            BigDecimal safeIdleLiveStartChance = idleLiveStartChancePercent != null
+                    ? idleLiveStartChancePercent.max(BigDecimal.ZERO)
+                    : BigDecimal.ZERO;
             return new LiquiditySettings(
                     enabled,
                     startChancePercent != null ? startChancePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO,
@@ -467,7 +500,8 @@ public class LiquidityEventService {
                     clampPercent(pumpBuyChancePercent),
                     clampPercent(climaxBuyChancePercent),
                     safeGlobalCooldownMin,
-                    safeGlobalCooldownMax
+                    safeGlobalCooldownMax,
+                    safeIdleLiveStartChance
             );
         }
     }
