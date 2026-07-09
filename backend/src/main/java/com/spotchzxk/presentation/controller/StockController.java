@@ -62,7 +62,6 @@ public class StockController {
                             ? row.getProfileImageUrl()
                             : "";
                     return Map.<String, Object>of(
-                            "userId", row.getUserId(),
                             "displayName", name,
                             "profileImageUrl", profileImageUrl,
                             "totalDonation", row.getTotalDonation()
@@ -136,5 +135,4 @@ public class StockController {
         }
     }
 }
-
 

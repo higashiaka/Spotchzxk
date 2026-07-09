@@ -19,11 +19,12 @@ public class OrderController {
     private final OrderRepository orderRepository;
 
     @GetMapping("/api/orders")
-    public ResponseEntity<List<Order>> getOrders(@AuthenticationPrincipal String uid) {
+    public ResponseEntity<List<PublicOrderResponse>> getOrders(@AuthenticationPrincipal String uid) {
         if (uid == null || uid.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        List<Order> orders = orderRepository.findTop300ByUserIdOrderByCreatedAtDesc(uid);
+        List<PublicOrderResponse> orders = orderRepository.findTop300ByUserIdOrderByCreatedAtDesc(uid)
+                .stream().map(PublicOrderResponse::from).toList();
         return ResponseEntity.ok(orders);
     }
 
