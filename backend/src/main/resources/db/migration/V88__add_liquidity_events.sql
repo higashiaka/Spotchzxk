@@ -1,4 +1,4 @@
-CREATE TABLE liquidity_events (
+CREATE TABLE IF NOT EXISTS liquidity_events (
     id VARCHAR(36) PRIMARY KEY,
     channel_id VARCHAR(50) NOT NULL,
     phase VARCHAR(32) NOT NULL,
@@ -18,7 +18,5 @@ CREATE TABLE liquidity_events (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_liquidity_events_channel_phase (channel_id, phase),
     INDEX idx_liquidity_events_phase_end (phase, phase_ends_at),
-    INDEX idx_liquidity_events_started (started_at),
-    CONSTRAINT fk_liquidity_events_stock
-        FOREIGN KEY (channel_id) REFERENCES stocks(channel_id)
-);
+    INDEX idx_liquidity_events_started (started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
