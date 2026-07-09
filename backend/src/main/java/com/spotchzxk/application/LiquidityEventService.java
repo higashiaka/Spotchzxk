@@ -310,6 +310,12 @@ public class LiquidityEventService {
         }
         BigDecimal currentPrice = MarketPrice.spotPrice(stock);
         if (shouldAdvancePhase(event, currentPrice)) {
+            if (event.getPhase() == LiquidityEventPhase.CLIMAX && !hasDumpInventory(event)) {
+                log.info("Liquidity event cooldown without dump inventory: eventId={}, stock={}",
+                        event.getId(), event.getChannelId());
+                startCooldown(event.getId(), now);
+                return;
+            }
             advancePhase(event.getId(), event.getPhase(), now, settings);
             return;
         }
@@ -331,6 +337,11 @@ public class LiquidityEventService {
             qty = capToSystemHolding(event.getChannelId(), qty);
         }
         if (qty.signum() <= 0) {
+            if (event.getPhase() == LiquidityEventPhase.DUMP) {
+                log.info("Liquidity event cooldown because dump inventory is empty: eventId={}, stock={}",
+                        event.getId(), event.getChannelId());
+                startCooldown(event.getId(), now);
+            }
             return;
         }
         if (!reserveGlobalTradeSlot(now, settings)) {
@@ -371,6 +382,12 @@ public class LiquidityEventService {
         BigDecimal minimumRise = event.getStartPrice().multiply(new BigDecimal("0.08"));
         BigDecimal targetRise = quarterRise.max(minimumRise);
         return event.getStartPrice().add(targetRise).min(event.getTargetPeakPrice());
+    }
+
+    private boolean hasDumpInventory(LiquidityEvent event) {
+        return event.getAccumulatedBuyQuantity() != null
+                && event.getAccumulatedBuyQuantity().compareTo(BigDecimal.ZERO) > 0
+                && systemHolding(event.getChannelId()).signum() > 0;
     }
 
     private void startCooldown(String eventId, LocalDateTime now) {
