@@ -5,7 +5,6 @@ import com.spotchzxk.domain.stock.repository.StockRepository;
 import com.spotchzxk.domain.trading.entity.LiquidityEvent;
 import com.spotchzxk.domain.trading.entity.LiquidityEventPhase;
 import com.spotchzxk.domain.trading.repository.LiquidityEventRepository;
-import com.spotchzxk.domain.trading.service.AmmCalculator;
 import com.spotchzxk.domain.trading.service.MarketPrice;
 import com.spotchzxk.domain.user.entity.User;
 import com.spotchzxk.domain.user.repository.UserRepository;
@@ -63,7 +62,17 @@ public class LiquidityEventService {
             "liquidity-events.min-rise-percent",
             "liquidity-events.max-rise-percent",
             "liquidity-events.dump-retain-percent",
-            "liquidity-events.cooldown-minutes"
+            "liquidity-events.cooldown-minutes",
+            "liquidity-events.quantity-jitter-min-percent",
+            "liquidity-events.quantity-jitter-max-percent",
+            "liquidity-events.dump-quantity-jitter-min-percent",
+            "liquidity-events.dump-quantity-jitter-max-percent",
+            "liquidity-events.buy-quantity-min",
+            "liquidity-events.buy-quantity-max",
+            "liquidity-events.sell-holding-min-percent",
+            "liquidity-events.sell-holding-max-percent",
+            "liquidity-events.dump-sell-holding-min-percent",
+            "liquidity-events.dump-sell-holding-max-percent"
     );
 
     private final LiquidityEventRepository liquidityEventRepository;
@@ -109,6 +118,36 @@ public class LiquidityEventService {
 
     @Value("${liquidity-events.cooldown-minutes:360}")
     private int defaultCooldownMinutes;
+
+    @Value("${liquidity-events.quantity-jitter-min-percent:45}")
+    private int defaultQuantityJitterMinPercent;
+
+    @Value("${liquidity-events.quantity-jitter-max-percent:135}")
+    private int defaultQuantityJitterMaxPercent;
+
+    @Value("${liquidity-events.dump-quantity-jitter-min-percent:55}")
+    private int defaultDumpQuantityJitterMinPercent;
+
+    @Value("${liquidity-events.dump-quantity-jitter-max-percent:165}")
+    private int defaultDumpQuantityJitterMaxPercent;
+
+    @Value("${liquidity-events.buy-quantity-min:10}")
+    private int defaultBuyQuantityMin;
+
+    @Value("${liquidity-events.buy-quantity-max:15}")
+    private int defaultBuyQuantityMax;
+
+    @Value("${liquidity-events.sell-holding-min-percent:12}")
+    private int defaultSellHoldingMinPercent;
+
+    @Value("${liquidity-events.sell-holding-max-percent:32}")
+    private int defaultSellHoldingMaxPercent;
+
+    @Value("${liquidity-events.dump-sell-holding-min-percent:25}")
+    private int defaultDumpSellHoldingMinPercent;
+
+    @Value("${liquidity-events.dump-sell-holding-max-percent:55}")
+    private int defaultDumpSellHoldingMaxPercent;
 
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
@@ -227,10 +266,17 @@ public class LiquidityEventService {
 
         boolean buy = shouldBuy(event.getPhase());
         BigDecimal currentPrice = MarketPrice.spotPrice(stock);
-        BigDecimal targetPrice = targetPriceForTick(event, currentPrice, now);
-        BigInteger qty = quantityToward(stock, buy, targetPrice);
-        if (qty.signum() <= 0) {
-            qty = fallbackQuantity(stock, buy);
+        BigInteger qty;
+        if (buy) {
+            qty = randomBuyQuantity(stock, settings);
+        } else if (event.getPhase() == LiquidityEventPhase.DUMP) {
+            qty = dumpStepQuantity(event, settings);
+        } else {
+            qty = holdingPercentQuantity(event.getChannelId(), settings.sellHoldingMinPercent(), settings.sellHoldingMaxPercent());
+            if (qty.signum() <= 0) {
+                buy = true;
+                qty = randomBuyQuantity(stock, settings);
+            }
         }
         if (!buy) {
             qty = capToSystemHolding(event.getChannelId(), qty);
@@ -284,7 +330,17 @@ public class LiquidityEventService {
                 appStateService.getDecimal("liquidity-events.min-rise-percent", defaultMinRisePercent),
                 appStateService.getDecimal("liquidity-events.max-rise-percent", defaultMaxRisePercent),
                 appStateService.getDecimal("liquidity-events.dump-retain-percent", defaultDumpRetainPercent),
-                appStateService.getInt("liquidity-events.cooldown-minutes", defaultCooldownMinutes)
+                appStateService.getInt("liquidity-events.cooldown-minutes", defaultCooldownMinutes),
+                appStateService.getInt("liquidity-events.quantity-jitter-min-percent", defaultQuantityJitterMinPercent),
+                appStateService.getInt("liquidity-events.quantity-jitter-max-percent", defaultQuantityJitterMaxPercent),
+                appStateService.getInt("liquidity-events.dump-quantity-jitter-min-percent", defaultDumpQuantityJitterMinPercent),
+                appStateService.getInt("liquidity-events.dump-quantity-jitter-max-percent", defaultDumpQuantityJitterMaxPercent),
+                appStateService.getInt("liquidity-events.buy-quantity-min", defaultBuyQuantityMin),
+                appStateService.getInt("liquidity-events.buy-quantity-max", defaultBuyQuantityMax),
+                appStateService.getInt("liquidity-events.sell-holding-min-percent", defaultSellHoldingMinPercent),
+                appStateService.getInt("liquidity-events.sell-holding-max-percent", defaultSellHoldingMaxPercent),
+                appStateService.getInt("liquidity-events.dump-sell-holding-min-percent", defaultDumpSellHoldingMinPercent),
+                appStateService.getInt("liquidity-events.dump-sell-holding-max-percent", defaultDumpSellHoldingMaxPercent)
         ).normalized();
     }
 
@@ -299,13 +355,33 @@ public class LiquidityEventService {
             BigDecimal minRisePercent,
             BigDecimal maxRisePercent,
             BigDecimal dumpRetainPercent,
-            int cooldownMinutes
+            int cooldownMinutes,
+            int quantityJitterMinPercent,
+            int quantityJitterMaxPercent,
+            int dumpQuantityJitterMinPercent,
+            int dumpQuantityJitterMaxPercent,
+            int buyQuantityMin,
+            int buyQuantityMax,
+            int sellHoldingMinPercent,
+            int sellHoldingMaxPercent,
+            int dumpSellHoldingMinPercent,
+            int dumpSellHoldingMaxPercent
     ) {
         private LiquiditySettings normalized() {
             int safeTickMin = Math.max(1, tickMinSeconds);
             int safeTickMax = Math.max(safeTickMin, tickMaxSeconds);
             int safeDurationMin = Math.max(1, minDurationMinutes);
             int safeDurationMax = Math.max(safeDurationMin, maxDurationMinutes);
+            int safeJitterMin = Math.max(1, quantityJitterMinPercent);
+            int safeJitterMax = Math.max(safeJitterMin, quantityJitterMaxPercent);
+            int safeDumpJitterMin = Math.max(1, dumpQuantityJitterMinPercent);
+            int safeDumpJitterMax = Math.max(safeDumpJitterMin, dumpQuantityJitterMaxPercent);
+            int safeBuyMin = Math.max(1, buyQuantityMin);
+            int safeBuyMax = Math.max(safeBuyMin, buyQuantityMax);
+            int safeSellMin = Math.max(1, sellHoldingMinPercent);
+            int safeSellMax = Math.max(safeSellMin, sellHoldingMaxPercent);
+            int safeDumpSellMin = Math.max(1, dumpSellHoldingMinPercent);
+            int safeDumpSellMax = Math.max(safeDumpSellMin, dumpSellHoldingMaxPercent);
             BigDecimal safeMinRise = minRisePercent != null ? minRisePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
             BigDecimal safeMaxRise = maxRisePercent != null && maxRisePercent.compareTo(safeMinRise) >= 0 ? maxRisePercent : safeMinRise;
             BigDecimal safeDumpRetain = dumpRetainPercent != null ? dumpRetainPercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
@@ -320,7 +396,17 @@ public class LiquidityEventService {
                     safeMinRise,
                     safeMaxRise,
                     safeDumpRetain,
-                    Math.max(1, cooldownMinutes)
+                    Math.max(1, cooldownMinutes),
+                    safeJitterMin,
+                    safeJitterMax,
+                    safeDumpJitterMin,
+                    safeDumpJitterMax,
+                    safeBuyMin,
+                    safeBuyMax,
+                    safeSellMin,
+                    safeSellMax,
+                    safeDumpSellMin,
+                    safeDumpSellMax
             );
         }
     }
@@ -336,72 +422,60 @@ public class LiquidityEventService {
         };
     }
 
-    private BigDecimal targetPriceForTick(LiquidityEvent event, BigDecimal currentPrice, LocalDateTime now) {
-        if (event.getPhase() == LiquidityEventPhase.DUMP) {
-            return event.getDumpTargetPrice();
+    private BigInteger randomBuyQuantity(Stock stock, LiquiditySettings settings) {
+        BigInteger requested = BigInteger.valueOf(randomInt(settings.buyQuantityMin(), settings.buyQuantityMax()));
+        return requested.min(stock.getShareReserve()).max(BigInteger.ONE);
+    }
+
+    private BigInteger holdingPercentQuantity(String channelId, int minPercent, int maxPercent) {
+        BigInteger held = systemHolding(channelId);
+        if (held.signum() <= 0) {
+            return BigInteger.ZERO;
         }
-        BigDecimal phaseProgress = progress(event.getPhaseStartedAt(), event.getPhaseEndsAt(), now);
-        BigDecimal phaseStart = event.getPhase() == LiquidityEventPhase.ACCUMULATION
-                ? event.getStartPrice()
-                : currentPrice.min(event.getTargetPeakPrice());
-        BigDecimal phaseTarget = switch (event.getPhase()) {
-            case ACCUMULATION -> event.getStartPrice().multiply(new BigDecimal("1.15"));
-            case PUMP -> event.getTargetPeakPrice().multiply(new BigDecimal("0.86"));
-            case CLIMAX -> event.getTargetPeakPrice();
-            default -> currentPrice;
-        };
-        BigDecimal eased = phaseProgress.multiply(phaseProgress);
-        return phaseStart.add(phaseTarget.subtract(phaseStart).multiply(eased))
-                .max(MIN_PRICE)
-                .setScale(6, RoundingMode.HALF_UP);
+        int percent = randomInt(minPercent, maxPercent);
+        return held.multiply(BigInteger.valueOf(percent))
+                .divide(BigInteger.valueOf(100))
+                .max(BigInteger.ONE);
     }
 
-    private BigDecimal progress(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
-        long total = Math.max(1, java.time.Duration.between(start, end).toMillis());
-        long elapsed = Math.max(0, java.time.Duration.between(start, now).toMillis());
-        return BigDecimal.valueOf(Math.min(1.0, (double) elapsed / (double) total));
-    }
-
-    private BigInteger quantityToward(Stock stock, boolean buy, BigDecimal targetPrice) {
-        BigInteger max = buy
-                ? stock.getShareReserve().divide(BigInteger.valueOf(5)).max(BigInteger.ONE)
-                : stock.getShareReserve().divide(BigInteger.valueOf(3)).max(BigInteger.ONE);
-        BigInteger lo = BigInteger.ONE;
-        BigInteger hi = max;
-        BigInteger best = BigInteger.ZERO;
-        for (int i = 0; i < 80 && lo.compareTo(hi) <= 0; i++) {
-            BigInteger mid = lo.add(hi).shiftRight(1);
-            BigDecimal price;
-            try {
-                AmmCalculator.AmmResult result = buy
-                        ? AmmCalculator.calcBuy(stock.getCoinReserve(), stock.getShareReserve(), mid)
-                        : AmmCalculator.calcSell(stock.getCoinReserve(), stock.getShareReserve(), mid);
-                price = result.newPrice();
-            } catch (RuntimeException e) {
-                hi = mid.subtract(BigInteger.ONE);
-                continue;
-            }
-            int cmp = price.compareTo(targetPrice);
-            if ((buy && cmp <= 0) || (!buy && cmp >= 0)) {
-                best = mid;
-                lo = mid.add(BigInteger.ONE);
-            } else {
-                hi = mid.subtract(BigInteger.ONE);
-            }
+    private BigInteger dumpStepQuantity(LiquidityEvent event, LiquiditySettings settings) {
+        BigInteger held = systemHolding(event.getChannelId());
+        if (held.signum() <= 0) {
+            return BigInteger.ZERO;
         }
-        return best;
+        int remainingSteps = Math.max(1, event.getDumpSteps() - event.getDumpTradeCount());
+        BigInteger stepQty = held.divide(BigInteger.valueOf(remainingSteps)).max(BigInteger.ONE);
+        BigInteger percentQty = holdingPercentQuantity(
+                event.getChannelId(),
+                settings.dumpSellHoldingMinPercent(),
+                settings.dumpSellHoldingMaxPercent()
+        );
+        BigInteger baseQty = percentQty.signum() > 0
+                ? percentQty.min(stepQty.multiply(BigInteger.valueOf(2)))
+                : stepQty;
+        return jitterQuantity(baseQty, settings.dumpQuantityJitterMinPercent(), settings.dumpQuantityJitterMaxPercent())
+                .min(held);
     }
 
-    private BigInteger fallbackQuantity(Stock stock, boolean buy) {
-        BigInteger divisor = buy ? BigInteger.valueOf(160) : BigInteger.valueOf(80);
-        return stock.getShareReserve().divide(divisor).max(BigInteger.ONE);
+    private BigInteger jitterQuantity(BigInteger quantity, int minPercent, int maxPercent) {
+        if (quantity.signum() <= 0) {
+            return BigInteger.ZERO;
+        }
+        int percent = randomInt(minPercent, maxPercent);
+        return quantity.multiply(BigInteger.valueOf(percent))
+                .divide(BigInteger.valueOf(100))
+                .max(BigInteger.ONE);
     }
 
     private BigInteger capToSystemHolding(String channelId, BigInteger requestedQty) {
+        return requestedQty.min(systemHolding(channelId));
+    }
+
+    private BigInteger systemHolding(String channelId) {
         BigInteger held = userShareRepository.findByUserIdAndStockChannelId(SYSTEM_USER_ID, channelId)
                 .map(share -> share.getQuantity().setScale(0, RoundingMode.FLOOR).toBigInteger())
                 .orElse(BigInteger.ZERO);
-        return requestedQty.min(held);
+        return held;
     }
 
     private void submitSystemTrade(LiquidityEvent event, boolean buy, BigInteger qty, BigDecimal estimatedPrice, LocalDateTime now) {
