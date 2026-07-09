@@ -81,7 +81,9 @@ public class LiquidityEventService {
             "liquidity-events.global-trade-cooldown-max-seconds",
             "liquidity-events.idle-live-start-chance-percent",
             "liquidity-events.stock-budget-amount",
-            "liquidity-events.stock-budget-refill-threshold"
+            "liquidity-events.stock-budget-refill-threshold",
+            "liquidity-events.stock-budget-refill-min-hours",
+            "liquidity-events.stock-budget-refill-max-hours"
     );
 
     private final LiquidityEventRepository liquidityEventRepository;
@@ -181,6 +183,12 @@ public class LiquidityEventService {
 
     @Value("${liquidity-events.stock-budget-refill-threshold:50000000}")
     private BigDecimal defaultStockBudgetRefillThreshold;
+
+    @Value("${liquidity-events.stock-budget-refill-min-hours:24}")
+    private int defaultStockBudgetRefillMinHours;
+
+    @Value("${liquidity-events.stock-budget-refill-max-hours:30}")
+    private int defaultStockBudgetRefillMaxHours;
 
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
@@ -447,7 +455,9 @@ public class LiquidityEventService {
                 appStateService.getInt("liquidity-events.global-trade-cooldown-max-seconds", defaultGlobalTradeCooldownMaxSeconds),
                 appStateService.getDecimal("liquidity-events.idle-live-start-chance-percent", defaultIdleLiveStartChancePercent),
                 appStateService.getDecimal("liquidity-events.stock-budget-amount", defaultStockBudgetAmount),
-                appStateService.getDecimal("liquidity-events.stock-budget-refill-threshold", defaultStockBudgetRefillThreshold)
+                appStateService.getDecimal("liquidity-events.stock-budget-refill-threshold", defaultStockBudgetRefillThreshold),
+                appStateService.getInt("liquidity-events.stock-budget-refill-min-hours", defaultStockBudgetRefillMinHours),
+                appStateService.getInt("liquidity-events.stock-budget-refill-max-hours", defaultStockBudgetRefillMaxHours)
         ).normalized();
     }
 
@@ -480,7 +490,9 @@ public class LiquidityEventService {
             int globalTradeCooldownMaxSeconds,
             BigDecimal idleLiveStartChancePercent,
             BigDecimal stockBudgetAmount,
-            BigDecimal stockBudgetRefillThreshold
+            BigDecimal stockBudgetRefillThreshold,
+            int stockBudgetRefillMinHours,
+            int stockBudgetRefillMaxHours
     ) {
         private LiquiditySettings normalized() {
             int safeTickMin = Math.max(1, tickMinSeconds);
@@ -511,6 +523,8 @@ public class LiquidityEventService {
             BigDecimal safeStockBudgetRefillThreshold = stockBudgetRefillThreshold != null
                     ? stockBudgetRefillThreshold.max(BigDecimal.ZERO).min(safeStockBudgetAmount)
                     : BigDecimal.ZERO;
+            int safeStockBudgetRefillMinHours = Math.max(1, stockBudgetRefillMinHours);
+            int safeStockBudgetRefillMaxHours = Math.max(safeStockBudgetRefillMinHours, stockBudgetRefillMaxHours);
             return new LiquiditySettings(
                     enabled,
                     startChancePercent != null ? startChancePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO,
@@ -540,7 +554,9 @@ public class LiquidityEventService {
                     safeGlobalCooldownMax,
                     safeIdleLiveStartChance,
                     safeStockBudgetAmount,
-                    safeStockBudgetRefillThreshold
+                    safeStockBudgetRefillThreshold,
+                    safeStockBudgetRefillMinHours,
+                    safeStockBudgetRefillMaxHours
             );
         }
     }
@@ -609,12 +625,27 @@ public class LiquidityEventService {
         if (budget.compareTo(settings.stockBudgetRefillThreshold()) > 0) {
             return budget.min(settings.stockBudgetAmount());
         }
-        String refillKey = stockBudgetRefillKey(channelId);
-        String today = LocalDate.now().toString();
-        String lastRefill = appStateService.get(refillKey).orElse("");
-        if (!today.equals(lastRefill)) {
+        String refillAvailableAtKey = stockBudgetRefillAvailableAtKey(channelId);
+        LocalDateTime refillAvailableAt = appStateService.get(refillAvailableAtKey)
+                .flatMap(value -> {
+                    try {
+                        return java.util.Optional.of(LocalDateTime.parse(value.trim()));
+                    } catch (DateTimeParseException e) {
+                        return java.util.Optional.empty();
+                    }
+                })
+                .orElse(null);
+        if (refillAvailableAt == null) {
+            LocalDateTime nextRefill = now.plusHours(randomInt(
+                    settings.stockBudgetRefillMinHours(),
+                    settings.stockBudgetRefillMaxHours()
+            ));
+            appStateService.put(refillAvailableAtKey, nextRefill.toString());
+            return budget.max(BigDecimal.ZERO);
+        }
+        if (!refillAvailableAt.isAfter(now)) {
             appStateService.put(budgetKey, settings.stockBudgetAmount().toPlainString());
-            appStateService.put(refillKey, today);
+            appStateService.put(refillAvailableAtKey, "refilled");
             return settings.stockBudgetAmount();
         }
         return budget.max(BigDecimal.ZERO);
@@ -702,8 +733,8 @@ public class LiquidityEventService {
         return "liquidity-events.stock-budget.remaining." + channelId;
     }
 
-    private String stockBudgetRefillKey(String channelId) {
-        return "liquidity-events.stock-budget.last-refill-date." + channelId;
+    private String stockBudgetRefillAvailableAtKey(String channelId) {
+        return "liquidity-events.stock-budget.refill-available-at." + channelId;
     }
 
     private void ensureSystemUser() {
