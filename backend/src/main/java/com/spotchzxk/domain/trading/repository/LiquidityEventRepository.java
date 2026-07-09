@@ -17,7 +17,13 @@ public interface LiquidityEventRepository extends JpaRepository<LiquidityEvent, 
     boolean existsByChannelIdAndPhaseIn(String channelId, Collection<LiquidityEventPhase> phases);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT e FROM LiquidityEvent e WHERE e.phase IN :phases ORDER BY e.startedAt ASC")
+    @Query("""
+            SELECT e FROM LiquidityEvent e
+             WHERE e.phase IN :phases
+             ORDER BY CASE WHEN e.lastTradeAt IS NULL THEN 0 ELSE 1 END,
+                      e.lastTradeAt ASC,
+                      e.startedAt ASC
+            """)
     List<LiquidityEvent> findActiveForUpdate(@Param("phases") Collection<LiquidityEventPhase> phases);
 
     long countByChannelIdAndStartedAtGreaterThanEqual(String channelId, LocalDateTime startedAt);
