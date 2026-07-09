@@ -18,6 +18,29 @@ export interface AnnouncementItem {
 
 export const announcements: AnnouncementItem[] = [
   {
+    id: 'notice_daily_attendance_reward_20260709',
+    title: '일일 출석 보상 추가 안내',
+    date: '2026년 7월 9일',
+    summary: '매일 출석하면 보상을 받을 수 있는 일일 출석 보상 기능이 추가되었습니다. 연속 출석 일수에 따라 추가 보상도 지급됩니다.',
+    sections: [
+      {
+        title: '이용 방법',
+        rows: [
+          { label: '위치', value: '상점 탭 → 일일 출석 보상', tone: 'accent' },
+          { label: '수령 조건', value: '하루 1회, 로그인 상태에서 수령', tone: 'accent' },
+        ],
+        note: '연속 출석이 끊기면 출석일이 초기화됩니다.',
+      },
+      {
+        title: '마일스톤 보상',
+        rows: [
+          { label: '보상 종류', value: '현금 또는 아이템(확성기 티켓, 닉네임 변경권, 종목 추가권)', tone: 'accent' },
+          { label: '지급 기준', value: '연속 출석일에 따라 보상 내용이 달라집니다', tone: 'accent' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'notice_initial_balance_policy_20260703',
     title: '초기 자본 정책 변경 안내',
     date: '2026년 7월 3일',
