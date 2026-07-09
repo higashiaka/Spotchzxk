@@ -15,8 +15,6 @@ const pendingStock = (stockId: string): Stock => ({
   basePrice: 0,
   isLive: false,
   totalSupply: 0,
-  coinReserve: '0',
-  shareReserve: '0',
 });
 
 function tabToPath(tab: AppTab, streamerId?: string | null): string {

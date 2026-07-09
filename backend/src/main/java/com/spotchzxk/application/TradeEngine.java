@@ -73,6 +73,10 @@ public class TradeEngine {
     @org.springframework.context.annotation.Lazy
     private final RankCacheService rankCacheService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private LiquidityEventService liquidityEventService;
+
     @PreDestroy
     public void shutdownCandleExecutor() {
         candleExecutor.shutdown();
@@ -102,11 +106,15 @@ public class TradeEngine {
                         return submitLimitOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), req.getLimitPrice(), req.isAllowPartial());
                     }
                     if (sellAll) {
-                        return executeSellAllMarketOrder(userId, channelId, req.getEstimatedPrice());
+                        TradeResponse response = executeSellAllMarketOrder(userId, channelId, req.getEstimatedPrice());
+                        notifyLiquidityEventService(channelId, userId, response);
+                        return response;
                     }
         // Issue #5: pass slippage parameters directly to executeMarketOrder
-                    return executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
+                    TradeResponse response = executeMarketOrder(userId, channelId, isBuy, qty, req.getEstimatedPrice(), true,
                             req.getMaxCoinIn(), req.getMinCoinOut());
+                    notifyLiquidityEventService(channelId, userId, response);
+                    return response;
                 } catch (RuntimeException e) {
                     if (!(e instanceof TradeValidationException)) {
                         evictUserCache(userId);
@@ -120,6 +128,17 @@ public class TradeEngine {
             }
         } finally {
             userLock.unlock();
+        }
+    }
+
+    private void notifyLiquidityEventService(String channelId, String userId, TradeResponse response) {
+        if (response == null || liquidityEventService == null || liquidityEventService.isSystemUser(userId)) {
+            return;
+        }
+        try {
+            liquidityEventService.maybeStartAfterUserTrade(channelId, userId);
+        } catch (RuntimeException e) {
+            log.debug("Liquidity event hook skipped: stock={}, user={}", channelId, userId, e);
         }
     }
 
@@ -968,8 +987,6 @@ public class TradeEngine {
         tradePayload.put("tradingValue", toLongCap(cost));
         tradePayload.put("dailyVolume", dailyVolume != null ? dailyVolume.toPlainString() : qty.toString());
         tradePayload.put("dailyTradingValue", dailyTradingValue != null ? dailyTradingValue.toPlainString() : cost.abs().toPlainString());
-        tradePayload.put("coinReserve", coinReserve.toString());
-        tradePayload.put("shareReserve", shareReserve.toString());
         tradePayload.put("timestamp", executedAt);
         tradePayload.put("tradingSuspended", tradingSuspended);
         tradePayload.put("tradingSuspensionReason", tradingSuspensionReason);

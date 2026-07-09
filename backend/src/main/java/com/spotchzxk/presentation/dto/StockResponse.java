@@ -6,7 +6,6 @@ import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.trading.service.MarketPrice;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.LocalDateTime;
 
 public record StockResponse(
@@ -28,8 +27,6 @@ public record StockResponse(
         long dividendAccumulationCount,
 
         @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal issuedShares,
-        @JsonFormat(shape = JsonFormat.Shape.STRING) BigInteger coinReserve,
-        @JsonFormat(shape = JsonFormat.Shape.STRING) BigInteger shareReserve,
 
         long liquidityTier,
         boolean tradingSuspended,
@@ -60,8 +57,6 @@ public record StockResponse(
                 s.getLiveStartedAt(),
                 s.getDividendAccumulationCount(),
                 s.getIssuedShares(),
-                s.getCoinReserve(),
-                s.getShareReserve(),
                 s.getLiquidityTier(),
                 s.isTradingSuspended(),
                 MarketPrice.suspensionReason(s),

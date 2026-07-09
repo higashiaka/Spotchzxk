@@ -20,10 +20,6 @@ export interface LiveTrade {
   dailyVolume?: number | string;
   /** Server-authoritative daily cumulative trading value after this trade */
   dailyTradingValue?: number | string;
-  /** Updated AMM coin reserve after the trade */
-  coinReserve?: string;
-  /** Updated AMM share reserve after the trade */
-  shareReserve?: string;
   /** Execution timestamp in Unix ms */
   timestamp: number;
   /** Whether trading was suspended as a result of this trade (e.g. price below 1 won) */

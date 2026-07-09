@@ -15,16 +15,6 @@ const FEE_RATE_NUMERATOR = 15n;
 const FEE_RATE_DENOMINATOR = 1000n;
 const PRICE_SCALE = 1000000n;
 
-const parseReserve = (value?: string): bigint | undefined => {
-  if (!value) return undefined;
-  try {
-    const parsed = BigInt(value);
-    return parsed > 0n ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const ceilDiv = (num: bigint, den: bigint): bigint => {
   const q = num / den;
   return num % den > 0n ? q + 1n : q;
@@ -177,19 +167,17 @@ export const OrderForm = ({
   const held = holdings.find(holding => holding.streamer.id === streamer.id)?.qty ?? 0;
   const limitPrice = Math.max(0, parseFloat(limitPriceStr) || 0);
   const orderPrice = orderMode === 'limit' && limitPrice > 0 ? limitPrice : currentPrice;
-  const coinReserve = parseReserve(streamer.coinReserve);
-  const shareReserve = parseReserve(streamer.shareReserve);
   const marketExecutionPrice = averageAmmPrice(
     currentPrice,
-    coinReserve,
-    shareReserve,
+    undefined,
+    undefined,
     orderType === 'buy',
     qtyBig,
   );
   const marketExecutionAmount = ammTradeAmount(
     currentPrice,
-    coinReserve,
-    shareReserve,
+    undefined,
+    undefined,
     orderType === 'buy',
     qtyBig,
   );
@@ -204,7 +192,7 @@ export const OrderForm = ({
   const pct = changePct(currentPrice, streamer.basePrice);
 
   const maxBuy = orderMode === 'market'
-    ? maxAffordableMarketBuyQuantity(balanceBigInt, currentPrice, coinReserve, shareReserve)
+    ? maxAffordableMarketBuyQuantity(balanceBigInt, currentPrice)
     : orderPrice > 0 ? balanceBigInt / (ceilDiv(decimalToScaledBigInt(orderPrice) * (FEE_RATE_DENOMINATOR + FEE_RATE_NUMERATOR), PRICE_SCALE * FEE_RATE_DENOMINATOR) || 1n) : 0n;
   const maxSell = heldBig;
 

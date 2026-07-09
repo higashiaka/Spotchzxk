@@ -103,6 +103,21 @@ bot:
     high-holding-buy-chance-percent: ${BOT_ACTIVITY_HIGH_HOLDING_BUY_CHANCE_PERCENT:20}
     asset-reset-threshold-percent: ${BOT_ACTIVITY_ASSET_RESET_THRESHOLD_PERCENT:15}
 
+liquidity-events:
+  enabled: ${LIQUIDITY_EVENTS_ENABLED:false}
+  start-chance-percent: ${LIQUIDITY_EVENTS_START_CHANCE_PERCENT:0.15}
+  daily-limit-per-stock: ${LIQUIDITY_EVENTS_DAILY_LIMIT_PER_STOCK:1}
+  scheduler-delay-ms: ${LIQUIDITY_EVENTS_SCHEDULER_DELAY_MS:15000}
+  cooldown-scheduler-delay-ms: ${LIQUIDITY_EVENTS_COOLDOWN_SCHEDULER_DELAY_MS:60000}
+  tick-min-seconds: ${LIQUIDITY_EVENTS_TICK_MIN_SECONDS:12}
+  tick-max-seconds: ${LIQUIDITY_EVENTS_TICK_MAX_SECONDS:35}
+  min-duration-minutes: ${LIQUIDITY_EVENTS_MIN_DURATION_MINUTES:10}
+  max-duration-minutes: ${LIQUIDITY_EVENTS_MAX_DURATION_MINUTES:30}
+  min-rise-percent: ${LIQUIDITY_EVENTS_MIN_RISE_PERCENT:80}
+  max-rise-percent: ${LIQUIDITY_EVENTS_MAX_RISE_PERCENT:300}
+  dump-retain-percent: ${LIQUIDITY_EVENTS_DUMP_RETAIN_PERCENT:35}
+  cooldown-minutes: ${LIQUIDITY_EVENTS_COOLDOWN_MINUTES:360}
+
 logging:
   level:
     org.springframework.web.servlet.DispatcherServlet: WARN

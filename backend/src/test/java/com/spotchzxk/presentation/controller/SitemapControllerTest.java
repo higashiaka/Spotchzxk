@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -43,7 +42,7 @@ class SitemapControllerTest {
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 false, null, 0,
-                BigDecimal.ZERO, BigInteger.ZERO, BigInteger.ZERO,
+                BigDecimal.ZERO,
                 0, false, null, null,
                 BigDecimal.ZERO
         );

@@ -32,10 +32,6 @@ export interface Stock {
   nextDividendPerShare?: number;
   /** Float supply before live started */
   preStreamFloat?: number;
-  /** AMM coin reserve used for client-side market order estimates */
-  coinReserve?: string;
-  /** AMM share reserve used for client-side market order estimates */
-  shareReserve?: string;
   /** Listing date in ISO 8601 */
   listedAt?: string;
   /** Whether trading is suspended */

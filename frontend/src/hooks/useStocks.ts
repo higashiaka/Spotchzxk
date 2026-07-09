@@ -18,16 +18,6 @@ const toPositivePrice = (value: unknown, fallback: number): number => {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-const toAmmPrice = (coinReserve: unknown, shareReserve: unknown): number | null => {
-  const coin = Number(coinReserve);
-  const share = Number(shareReserve);
-  if (!Number.isFinite(coin) || !Number.isFinite(share) || coin <= 0 || share <= 0) {
-    return null;
-  }
-  const price = coin / share;
-  return Number.isFinite(price) && price > 0 ? price : null;
-};
-
 const stockIdOf = (r: any, previous?: Stock): string | null => {
   const id = r.channelId || r.id || previous?.id;
   return typeof id === 'string' && id.trim() ? id : null;
@@ -38,14 +28,11 @@ export function mapRawToStock(r: any, previous?: Stock): Stock | null {
   if (!id) return null;
 
   const fallbackPrice = previous?.price && previous.price > 0 ? previous.price : 1000;
-  const coinReserve = String(r.coinReserve ?? previous?.coinReserve ?? '0');
-  const shareReserve = String(r.shareReserve ?? previous?.shareReserve ?? '0');
-  const ammPrice = toAmmPrice(coinReserve, shareReserve);
 
   return {
     id,
     name: r.streamerName || r.name || previous?.name,
-    price: ammPrice ?? toPositivePrice(r.currentPrice ?? r.price, fallbackPrice),
+    price: toPositivePrice(r.currentPrice ?? r.price, fallbackPrice),
     totalVolume: toFiniteNumber(r.dailyVolume ?? r.totalVolume, previous?.totalVolume ?? 0),
     dailyTradingValue: toFiniteNumber(r.dailyTradingValue, previous?.dailyTradingValue ?? 0),
     basePrice: toPositivePrice(r.basePrice, previous?.basePrice ?? 1000),
@@ -65,8 +52,6 @@ export function mapRawToStock(r: any, previous?: Stock): Stock | null {
       previous?.nextDividendPerShare ?? 0,
     ),
     preStreamFloat: toFiniteNumber(r.preStreamFloat, previous?.preStreamFloat ?? 0),
-    coinReserve,
-    shareReserve,
     listedAt: r.listedAt ?? previous?.listedAt ?? null,
     tradingSuspended: r.tradingSuspended ?? previous?.tradingSuspended ?? false,
     tradingSuspensionReason: r.tradingSuspensionReason ?? previous?.tradingSuspensionReason ?? null,
@@ -148,9 +133,6 @@ export const useStocks = () => {
         const trade = JSON.parse(message.body) as LiveTrade;
         setStocks(prev => prev.map(stock => {
           if (stock.id !== trade.streamerId) return stock;
-          const coinReserve = trade.coinReserve ?? stock.coinReserve;
-          const shareReserve = trade.shareReserve ?? stock.shareReserve;
-          const ammPrice = toAmmPrice(coinReserve, shareReserve);
           const dailyVolume = trade.dailyVolume !== undefined
             ? Number(trade.dailyVolume)
             : stock.totalVolume + Number(trade.quantity);
@@ -160,11 +142,9 @@ export const useStocks = () => {
           const hasSuspensionReason = Object.prototype.hasOwnProperty.call(trade, 'tradingSuspensionReason');
           return {
             ...stock,
-            price: ammPrice ?? toPositivePrice(trade.price, stock.price),
+            price: toPositivePrice(trade.price, stock.price),
             totalVolume: dailyVolume,
             dailyTradingValue,
-            coinReserve,
-            shareReserve,
             tradingSuspended: trade.tradingSuspended ?? stock.tradingSuspended,
             tradingSuspensionReason: hasSuspensionReason
               ? trade.tradingSuspensionReason ?? null
