@@ -96,11 +96,18 @@ function ShopItemCard({
   );
 }
 
-function rewardLabel(reward: Pick<AttendanceReward, 'rewardType' | 'rewardAmount' | 'itemName' | 'itemQuantity'>) {
+const ITEM_NAME_KO: Record<string, string> = {
+  'megaphone-ticket': '확성기 티켓',
+  'nickname-change-ticket': '닉네임 변경권',
+  'stock-add-ticket': '종목 추가권',
+};
+
+function rewardLabel(reward: Pick<AttendanceReward, 'rewardType' | 'rewardAmount' | 'itemType' | 'itemName' | 'itemQuantity'>) {
   if (reward.rewardType === 'item') {
-    return `${reward.itemName} x${reward.itemQuantity}`;
+    const name = ITEM_NAME_KO[reward.itemType] ?? reward.itemName;
+    return `${name} x${reward.itemQuantity}`;
   }
-  return `${formatPrice(Number(reward.rewardAmount ?? 0))} cash`;
+  return `${formatPrice(Number(reward.rewardAmount ?? 0))}원`;
 }
 
 function useAttendance(userId: string | undefined) {
@@ -108,7 +115,7 @@ function useAttendance(userId: string | undefined) {
     queryKey: ['attendance', userId],
     queryFn: async (): Promise<AttendanceStatus> => {
       const res = await apiFetch('/api/shop/attendance');
-      if (!res.ok) throw new Error('Failed to load daily reward.');
+      if (!res.ok) throw new Error('일일 보상을 불러오지 못했습니다.');
       return res.json();
     },
     enabled: !!userId,
@@ -122,7 +129,7 @@ function AttendanceRewardCard({ user }: { user: User | null }) {
     mutationFn: async (): Promise<AttendanceStatus> => {
       const res = await apiFetch('/api/shop/attendance/claim', { method: 'POST' });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to claim daily reward.');
+      if (!res.ok) throw new Error(json.error || '일일 보상을 받지 못했습니다.');
       return json;
     },
     onSuccess: (json) => {
@@ -139,24 +146,24 @@ function AttendanceRewardCard({ user }: { user: User | null }) {
       ));
       queryClient.invalidateQueries({ queryKey: ['portfolio', user.uid] });
     },
-    onError: (err) => alert(err instanceof Error ? err.message : 'Failed to claim daily reward.'),
+    onError: (err) => alert(err instanceof Error ? err.message : '일일 보상을 받지 못했습니다.'),
   });
 
   const isLoggedIn = !!user && !user.isAnonymous;
-  const todayReward = data ? rewardLabel(data) : 'Sign in to preview';
+  const todayReward = data ? rewardLabel(data) : '로그인 후 확인 가능';
   const milestone = data?.nextMilestoneReward ? rewardLabel(data.nextMilestoneReward) : '';
 
   return (
     <div className="rounded-xl p-5 md:p-6 mb-4 md:mb-6" style={{ background: 'var(--bg-sidebar)', border: '1px solid var(--border-primary)' }}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <p className="text-base md:text-xl font-black" style={{ color: 'var(--text-secondary)' }}>Daily Streak Reward</p>
+          <p className="text-base md:text-xl font-black" style={{ color: 'var(--text-secondary)' }}>일일 출석 보상</p>
           <p className="text-xs md:text-sm mt-1" style={{ color: 'var(--text-dim)' }}>
-            Day {data?.streakDay ?? 0} streak · Today: {todayReward}
+            {data?.streakDay ?? 0}일 연속 출석 · 오늘: {todayReward}
           </p>
           {milestone && (
             <p className="text-xs mt-2" style={{ color: 'var(--accent)' }}>
-              Next milestone: Day {data?.nextMilestoneDay} · {milestone}
+              다음 보상: {data?.nextMilestoneDay}일차 · {milestone}
             </p>
           )}
         </div>
@@ -167,7 +174,7 @@ function AttendanceRewardCard({ user }: { user: User | null }) {
           className="px-4 py-2.5 md:px-5 md:py-3 rounded-lg text-sm font-bold transition-opacity disabled:opacity-50"
           style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
         >
-          {!isLoggedIn ? 'Sign in' : data?.claimedToday ? 'Claimed today' : mutation.isPending ? 'Claiming...' : 'Claim reward'}
+          {!isLoggedIn ? '로그인 필요' : data?.claimedToday ? '오늘 수령 완료' : mutation.isPending ? '수령 중...' : '보상 받기'}
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1.5 mt-4">
