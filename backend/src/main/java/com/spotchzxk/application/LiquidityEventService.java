@@ -280,13 +280,13 @@ public class LiquidityEventService {
             startCooldown(event.getId(), now);
             return;
         }
-        if (!event.getPhaseEndsAt().isAfter(now)) {
+        BigDecimal currentPrice = MarketPrice.spotPrice(stock);
+        if (shouldAdvancePhase(event, currentPrice)) {
             advancePhase(event.getId(), event.getPhase(), now, settings);
             return;
         }
 
         boolean buy = shouldBuy(event.getPhase(), settings);
-        BigDecimal currentPrice = MarketPrice.spotPrice(stock);
         BigInteger qty;
         if (buy) {
             qty = randomBuyQuantity(stock, settings);
@@ -323,6 +323,26 @@ public class LiquidityEventService {
                 default -> { }
             }
         });
+    }
+
+    private boolean shouldAdvancePhase(LiquidityEvent event, BigDecimal currentPrice) {
+        return switch (event.getPhase()) {
+            case ACCUMULATION -> currentPrice.compareTo(accumulationTargetPrice(event)) >= 0;
+            case PUMP -> currentPrice.compareTo(event.getTargetPeakPrice().multiply(new BigDecimal("0.86"))) >= 0;
+            case CLIMAX -> currentPrice.compareTo(event.getTargetPeakPrice()) >= 0;
+            case DUMP -> currentPrice.compareTo(event.getDumpTargetPrice()) <= 0
+                    || event.getDumpTradeCount() >= event.getDumpSteps();
+            default -> false;
+        };
+    }
+
+    private BigDecimal accumulationTargetPrice(LiquidityEvent event) {
+        BigDecimal quarterRise = event.getTargetPeakPrice()
+                .subtract(event.getStartPrice())
+                .multiply(new BigDecimal("0.25"));
+        BigDecimal minimumRise = event.getStartPrice().multiply(new BigDecimal("0.08"));
+        BigDecimal targetRise = quarterRise.max(minimumRise);
+        return event.getStartPrice().add(targetRise).min(event.getTargetPeakPrice());
     }
 
     private void startCooldown(String eventId, LocalDateTime now) {
