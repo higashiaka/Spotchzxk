@@ -24,6 +24,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,7 +73,12 @@ public class LiquidityEventService {
             "liquidity-events.sell-holding-min-percent",
             "liquidity-events.sell-holding-max-percent",
             "liquidity-events.dump-sell-holding-min-percent",
-            "liquidity-events.dump-sell-holding-max-percent"
+            "liquidity-events.dump-sell-holding-max-percent",
+            "liquidity-events.accumulation-buy-chance-percent",
+            "liquidity-events.pump-buy-chance-percent",
+            "liquidity-events.climax-buy-chance-percent",
+            "liquidity-events.global-trade-cooldown-min-seconds",
+            "liquidity-events.global-trade-cooldown-max-seconds"
     );
 
     private final LiquidityEventRepository liquidityEventRepository;
@@ -148,6 +154,21 @@ public class LiquidityEventService {
 
     @Value("${liquidity-events.dump-sell-holding-max-percent:55}")
     private int defaultDumpSellHoldingMaxPercent;
+
+    @Value("${liquidity-events.accumulation-buy-chance-percent:88}")
+    private int defaultAccumulationBuyChancePercent;
+
+    @Value("${liquidity-events.pump-buy-chance-percent:82}")
+    private int defaultPumpBuyChancePercent;
+
+    @Value("${liquidity-events.climax-buy-chance-percent:94}")
+    private int defaultClimaxBuyChancePercent;
+
+    @Value("${liquidity-events.global-trade-cooldown-min-seconds:30}")
+    private int defaultGlobalTradeCooldownMinSeconds;
+
+    @Value("${liquidity-events.global-trade-cooldown-max-seconds:90}")
+    private int defaultGlobalTradeCooldownMaxSeconds;
 
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
@@ -264,7 +285,7 @@ public class LiquidityEventService {
             return;
         }
 
-        boolean buy = shouldBuy(event.getPhase());
+        boolean buy = shouldBuy(event.getPhase(), settings);
         BigDecimal currentPrice = MarketPrice.spotPrice(stock);
         BigInteger qty;
         if (buy) {
@@ -282,6 +303,9 @@ public class LiquidityEventService {
             qty = capToSystemHolding(event.getChannelId(), qty);
         }
         if (qty.signum() <= 0) {
+            return;
+        }
+        if (!reserveGlobalTradeSlot(now, settings)) {
             return;
         }
         submitSystemTrade(event, buy, qty, currentPrice, now);
@@ -340,7 +364,12 @@ public class LiquidityEventService {
                 appStateService.getInt("liquidity-events.sell-holding-min-percent", defaultSellHoldingMinPercent),
                 appStateService.getInt("liquidity-events.sell-holding-max-percent", defaultSellHoldingMaxPercent),
                 appStateService.getInt("liquidity-events.dump-sell-holding-min-percent", defaultDumpSellHoldingMinPercent),
-                appStateService.getInt("liquidity-events.dump-sell-holding-max-percent", defaultDumpSellHoldingMaxPercent)
+                appStateService.getInt("liquidity-events.dump-sell-holding-max-percent", defaultDumpSellHoldingMaxPercent),
+                appStateService.getInt("liquidity-events.accumulation-buy-chance-percent", defaultAccumulationBuyChancePercent),
+                appStateService.getInt("liquidity-events.pump-buy-chance-percent", defaultPumpBuyChancePercent),
+                appStateService.getInt("liquidity-events.climax-buy-chance-percent", defaultClimaxBuyChancePercent),
+                appStateService.getInt("liquidity-events.global-trade-cooldown-min-seconds", defaultGlobalTradeCooldownMinSeconds),
+                appStateService.getInt("liquidity-events.global-trade-cooldown-max-seconds", defaultGlobalTradeCooldownMaxSeconds)
         ).normalized();
     }
 
@@ -365,7 +394,12 @@ public class LiquidityEventService {
             int sellHoldingMinPercent,
             int sellHoldingMaxPercent,
             int dumpSellHoldingMinPercent,
-            int dumpSellHoldingMaxPercent
+            int dumpSellHoldingMaxPercent,
+            int accumulationBuyChancePercent,
+            int pumpBuyChancePercent,
+            int climaxBuyChancePercent,
+            int globalTradeCooldownMinSeconds,
+            int globalTradeCooldownMaxSeconds
     ) {
         private LiquiditySettings normalized() {
             int safeTickMin = Math.max(1, tickMinSeconds);
@@ -382,6 +416,8 @@ public class LiquidityEventService {
             int safeSellMax = Math.max(safeSellMin, sellHoldingMaxPercent);
             int safeDumpSellMin = Math.max(1, dumpSellHoldingMinPercent);
             int safeDumpSellMax = Math.max(safeDumpSellMin, dumpSellHoldingMaxPercent);
+            int safeGlobalCooldownMin = Math.max(0, globalTradeCooldownMinSeconds);
+            int safeGlobalCooldownMax = Math.max(safeGlobalCooldownMin, globalTradeCooldownMaxSeconds);
             BigDecimal safeMinRise = minRisePercent != null ? minRisePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
             BigDecimal safeMaxRise = maxRisePercent != null && maxRisePercent.compareTo(safeMinRise) >= 0 ? maxRisePercent : safeMinRise;
             BigDecimal safeDumpRetain = dumpRetainPercent != null ? dumpRetainPercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
@@ -406,20 +442,54 @@ public class LiquidityEventService {
                     safeSellMin,
                     safeSellMax,
                     safeDumpSellMin,
-                    safeDumpSellMax
+                    safeDumpSellMax,
+                    clampPercent(accumulationBuyChancePercent),
+                    clampPercent(pumpBuyChancePercent),
+                    clampPercent(climaxBuyChancePercent),
+                    safeGlobalCooldownMin,
+                    safeGlobalCooldownMax
             );
         }
     }
 
-    private boolean shouldBuy(LiquidityEventPhase phase) {
+    private static int clampPercent(int value) {
+        return Math.max(0, Math.min(100, value));
+    }
+
+    private boolean shouldBuy(LiquidityEventPhase phase, LiquiditySettings settings) {
         int n = ThreadLocalRandom.current().nextInt(100);
         return switch (phase) {
-            case ACCUMULATION -> n < 58;
-            case PUMP -> n < 78;
-            case CLIMAX -> n < 92;
+            case ACCUMULATION -> n < settings.accumulationBuyChancePercent();
+            case PUMP -> n < settings.pumpBuyChancePercent();
+            case CLIMAX -> n < settings.climaxBuyChancePercent();
             case DUMP -> false;
             default -> false;
         };
+    }
+
+    private boolean reserveGlobalTradeSlot(LocalDateTime now, LiquiditySettings settings) {
+        if (settings.globalTradeCooldownMaxSeconds() <= 0) {
+            return true;
+        }
+        String key = "liquidity-events.global-trade-cooldown-until";
+        LocalDateTime cooldownUntil = appStateService.get(key)
+                .flatMap(value -> {
+                    try {
+                        return java.util.Optional.of(LocalDateTime.parse(value.trim()));
+                    } catch (DateTimeParseException e) {
+                        return java.util.Optional.empty();
+                    }
+                })
+                .orElse(null);
+        if (cooldownUntil != null && cooldownUntil.isAfter(now)) {
+            return false;
+        }
+        int cooldownSeconds = randomInt(
+                settings.globalTradeCooldownMinSeconds(),
+                settings.globalTradeCooldownMaxSeconds()
+        );
+        appStateService.put(key, now.plusSeconds(cooldownSeconds).toString());
+        return true;
     }
 
     private BigInteger randomBuyQuantity(Stock stock, LiquiditySettings settings) {
