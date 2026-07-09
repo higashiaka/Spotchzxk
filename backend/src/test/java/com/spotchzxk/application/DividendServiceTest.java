@@ -42,7 +42,7 @@ class DividendServiceTest {
         when(stock.getProfileImageUrl()).thenReturn("");
         when(stock.getFeePool()).thenReturn(new BigInteger("40000000000000000000000"));
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(eligibleShares);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(eligibleShares);
         when(userShareRepository.sumDividendPayout("jabin", totalPayout, eligibleShares)).thenReturn(totalPayout);
         when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(1);
         when(userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity("jabin")).thenReturn(List.of());
@@ -80,7 +80,7 @@ class DividendServiceTest {
 
         when(stock.getChannelId()).thenReturn("jabin");
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(BigDecimal.ZERO);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(BigDecimal.ZERO);
 
         DividendService service = new DividendService(
                 userShareRepository,
@@ -111,7 +111,7 @@ class DividendServiceTest {
         when(stock.getChannelId()).thenReturn("jabin");
         when(stock.getFeePool()).thenReturn(BigInteger.ZERO);
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(BigDecimal.TEN);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(BigDecimal.TEN);
 
         DividendService service = new DividendService(
                 userShareRepository,
@@ -142,7 +142,7 @@ class DividendServiceTest {
         when(stock.getChannelId()).thenReturn("jabin");
         when(stock.getFeePool()).thenReturn(BigInteger.TWO);
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(BigDecimal.TEN);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(BigDecimal.TEN);
 
         DividendService service = new DividendService(
                 userShareRepository,
@@ -175,7 +175,7 @@ class DividendServiceTest {
         when(stock.getChannelId()).thenReturn("jabin");
         when(stock.getFeePool()).thenReturn(BigInteger.valueOf(100));
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(eligibleShares);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(eligibleShares);
         when(userShareRepository.sumDividendPayout("jabin", totalPayout, eligibleShares)).thenReturn(totalPayout);
         when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(0);
 
@@ -214,7 +214,7 @@ class DividendServiceTest {
         when(stock.getProfileImageUrl()).thenReturn("");
         when(stock.getFeePool()).thenReturn(BigInteger.valueOf(286));
         when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
-        when(userShareRepository.sumPreStreamQuantityByChannel("jabin")).thenReturn(eligibleShares);
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(eligibleShares);
         when(userShareRepository.sumDividendPayout("jabin", totalPayout, eligibleShares)).thenReturn(actualPaid);
         when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(3);
         when(userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity("jabin")).thenReturn(List.of());
@@ -235,5 +235,48 @@ class DividendServiceTest {
         ArgumentCaptor<DividendLog> logCaptor = ArgumentCaptor.forClass(DividendLog.class);
         verify(dividendLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getTotalDividendPool()).isEqualByComparingTo("99");
+    }
+
+    @Test
+    void burnsBotDividendShareByDrainingItWithoutPayingUsers() {
+        UserShareRepository userShareRepository = mock(UserShareRepository.class);
+        UserDividendLogRepository userDividendLogRepository = mock(UserDividendLogRepository.class);
+        DividendLogRepository dividendLogRepository = mock(DividendLogRepository.class);
+        StockRepository stockRepository = mock(StockRepository.class);
+        SimpMessagingTemplate messagingTemplate = mock(SimpMessagingTemplate.class);
+        TradeEngine tradeEngine = mock(TradeEngine.class);
+        Stock stock = mock(Stock.class);
+
+        BigDecimal eligibleShares = BigDecimal.valueOf(10);
+        BigDecimal totalPayout = BigDecimal.valueOf(100);
+        BigDecimal actualPaid = BigDecimal.valueOf(80);
+        BigDecimal botBurned = BigDecimal.valueOf(20);
+        when(stock.getChannelId()).thenReturn("jabin");
+        when(stock.getStreamerName()).thenReturn("?먮퉰123");
+        when(stock.getProfileImageUrl()).thenReturn("");
+        when(stock.getFeePool()).thenReturn(BigInteger.valueOf(286));
+        when(stockRepository.findById("jabin")).thenReturn(Optional.of(stock));
+        when(userShareRepository.sumPreStreamQuantityByChannelIncludingBots("jabin")).thenReturn(eligibleShares);
+        when(userShareRepository.sumDividendPayout("jabin", totalPayout, eligibleShares)).thenReturn(actualPaid);
+        when(userShareRepository.sumBotDividendBurn("jabin", totalPayout, eligibleShares)).thenReturn(botBurned);
+        when(userShareRepository.distributeDividends("jabin", totalPayout, eligibleShares)).thenReturn(2);
+        when(userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity("jabin")).thenReturn(List.of());
+
+        DividendService service = new DividendService(
+                userShareRepository,
+                userDividendLogRepository,
+                dividendLogRepository,
+                stockRepository,
+                messagingTemplate,
+                tradeEngine
+        );
+
+        DividendPayoutResult result = service.payIntervalDividend(stock);
+
+        assertThat(result).isEqualTo(DividendPayoutResult.paid());
+        verify(stock).drainFeePool(BigInteger.valueOf(100));
+        ArgumentCaptor<DividendLog> logCaptor = ArgumentCaptor.forClass(DividendLog.class);
+        verify(dividendLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getTotalDividendPool()).isEqualByComparingTo("80");
     }
 }

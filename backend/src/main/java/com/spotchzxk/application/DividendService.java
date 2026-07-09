@@ -46,7 +46,7 @@ public class DividendService {
         Stock fresh = stockRepository.findById(stock.getChannelId())
                 .orElseThrow(() -> new IllegalStateException("종목을 찾을 수 없습니다."));
 
-        BigDecimal eligibleShares = userShareRepository.sumPreStreamQuantityByChannel(fresh.getChannelId());
+        BigDecimal eligibleShares = userShareRepository.sumPreStreamQuantityByChannelIncludingBots(fresh.getChannelId());
         if (eligibleShares.compareTo(BigDecimal.ZERO) <= 0) {
             log.debug("Interval dividend skipped for channel {}: {}", fresh.getChannelId(),
                     DividendPayoutResult.Reason.NO_ELIGIBLE_SHARES);
@@ -77,27 +77,39 @@ public class DividendService {
                 totalPayout,
                 eligibleShares
         );
-        if (actualPaid.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal botBurned = userShareRepository.sumBotDividendBurn(
+                fresh.getChannelId(),
+                totalPayout,
+                eligibleShares
+        );
+        if (botBurned == null) {
+            botBurned = BigDecimal.ZERO;
+        }
+        BigDecimal settledPayout = actualPaid.add(botBurned);
+        if (settledPayout.compareTo(BigDecimal.ZERO) <= 0) {
             log.debug("Interval dividend skipped for channel {}: totalPayout={}, eligibleShares={}, reason={}",
                     fresh.getChannelId(), totalPayout, eligibleShares,
                     DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
             return DividendPayoutResult.skipped(DividendPayoutResult.Reason.ZERO_TOTAL_PAYOUT);
         }
 
-        int updatedUsers = userShareRepository.distributeDividends(
-                fresh.getChannelId(),
-                totalPayout,
-                eligibleShares
-        );
+        int updatedUsers = 0;
+        if (actualPaid.compareTo(BigDecimal.ZERO) > 0) {
+            updatedUsers = userShareRepository.distributeDividends(
+                    fresh.getChannelId(),
+                    totalPayout,
+                    eligibleShares
+            );
+        }
 
-        if (updatedUsers <= 0) {
+        if (actualPaid.compareTo(BigDecimal.ZERO) > 0 && updatedUsers <= 0) {
             log.warn("Interval dividend failed for channel {}: totalPayout={}, eligibleShares={}, reason={}",
                     fresh.getChannelId(), totalPayout, eligibleShares,
                     DividendPayoutResult.Reason.NO_USERS_UPDATED);
             return DividendPayoutResult.failed(DividendPayoutResult.Reason.NO_USERS_UPDATED);
         }
 
-        fresh.drainFeePool(actualPaid.toBigIntegerExact());
+        fresh.drainFeePool(settledPayout.toBigIntegerExact());
         stockRepository.save(fresh);
 
         List<UserShare> shares = userShareRepository.findByStockChannelIdWithPositivePreStreamQuantity(fresh.getChannelId());
@@ -135,8 +147,8 @@ public class DividendService {
                 .build();
         dividendLogRepository.save(logEntry);
 
-        log.debug("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, {} users",
-                fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, updatedUsers);
+        log.debug("Interval dividend for channel {}: feePool={}, totalPayout={}, ratePerShare={}, eligibleShares={}, actualPaid={}, botBurned={}, {} users",
+                fresh.getChannelId(), feePool, totalPayout, ratePerShare, eligibleShares, actualPaid, botBurned, updatedUsers);
 
         // STOMP messages must be sent after commit so the frontend REST fetch sees the new records
         final String now = LocalDateTime.now().toString();
