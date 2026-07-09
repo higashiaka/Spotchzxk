@@ -79,7 +79,9 @@ public class LiquidityEventService {
             "liquidity-events.climax-buy-chance-percent",
             "liquidity-events.global-trade-cooldown-min-seconds",
             "liquidity-events.global-trade-cooldown-max-seconds",
-            "liquidity-events.idle-live-start-chance-percent"
+            "liquidity-events.idle-live-start-chance-percent",
+            "liquidity-events.stock-budget-amount",
+            "liquidity-events.stock-budget-refill-threshold"
     );
 
     private final LiquidityEventRepository liquidityEventRepository;
@@ -173,6 +175,12 @@ public class LiquidityEventService {
 
     @Value("${liquidity-events.idle-live-start-chance-percent:1}")
     private BigDecimal defaultIdleLiveStartChancePercent;
+
+    @Value("${liquidity-events.stock-budget-amount:500000000}")
+    private BigDecimal defaultStockBudgetAmount;
+
+    @Value("${liquidity-events.stock-budget-refill-threshold:50000000}")
+    private BigDecimal defaultStockBudgetRefillThreshold;
 
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
@@ -324,6 +332,7 @@ public class LiquidityEventService {
         BigInteger qty;
         if (buy) {
             qty = randomBuyQuantity(stock, settings);
+            qty = capToStockBudget(event.getChannelId(), qty, currentPrice, now, settings);
         } else if (event.getPhase() == LiquidityEventPhase.DUMP) {
             qty = dumpStepQuantity(event, settings);
         } else {
@@ -331,6 +340,7 @@ public class LiquidityEventService {
             if (qty.signum() <= 0) {
                 buy = true;
                 qty = randomBuyQuantity(stock, settings);
+                qty = capToStockBudget(event.getChannelId(), qty, currentPrice, now, settings);
             }
         }
         if (!buy) {
@@ -435,7 +445,9 @@ public class LiquidityEventService {
                 appStateService.getInt("liquidity-events.climax-buy-chance-percent", defaultClimaxBuyChancePercent),
                 appStateService.getInt("liquidity-events.global-trade-cooldown-min-seconds", defaultGlobalTradeCooldownMinSeconds),
                 appStateService.getInt("liquidity-events.global-trade-cooldown-max-seconds", defaultGlobalTradeCooldownMaxSeconds),
-                appStateService.getDecimal("liquidity-events.idle-live-start-chance-percent", defaultIdleLiveStartChancePercent)
+                appStateService.getDecimal("liquidity-events.idle-live-start-chance-percent", defaultIdleLiveStartChancePercent),
+                appStateService.getDecimal("liquidity-events.stock-budget-amount", defaultStockBudgetAmount),
+                appStateService.getDecimal("liquidity-events.stock-budget-refill-threshold", defaultStockBudgetRefillThreshold)
         ).normalized();
     }
 
@@ -466,7 +478,9 @@ public class LiquidityEventService {
             int climaxBuyChancePercent,
             int globalTradeCooldownMinSeconds,
             int globalTradeCooldownMaxSeconds,
-            BigDecimal idleLiveStartChancePercent
+            BigDecimal idleLiveStartChancePercent,
+            BigDecimal stockBudgetAmount,
+            BigDecimal stockBudgetRefillThreshold
     ) {
         private LiquiditySettings normalized() {
             int safeTickMin = Math.max(1, tickMinSeconds);
@@ -490,6 +504,12 @@ public class LiquidityEventService {
             BigDecimal safeDumpRetain = dumpRetainPercent != null ? dumpRetainPercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
             BigDecimal safeIdleLiveStartChance = idleLiveStartChancePercent != null
                     ? idleLiveStartChancePercent.max(BigDecimal.ZERO)
+                    : BigDecimal.ZERO;
+            BigDecimal safeStockBudgetAmount = stockBudgetAmount != null
+                    ? stockBudgetAmount.max(BigDecimal.ONE)
+                    : BigDecimal.ONE;
+            BigDecimal safeStockBudgetRefillThreshold = stockBudgetRefillThreshold != null
+                    ? stockBudgetRefillThreshold.max(BigDecimal.ZERO).min(safeStockBudgetAmount)
                     : BigDecimal.ZERO;
             return new LiquiditySettings(
                     enabled,
@@ -518,7 +538,9 @@ public class LiquidityEventService {
                     clampPercent(climaxBuyChancePercent),
                     safeGlobalCooldownMin,
                     safeGlobalCooldownMax,
-                    safeIdleLiveStartChance
+                    safeIdleLiveStartChance,
+                    safeStockBudgetAmount,
+                    safeStockBudgetRefillThreshold
             );
         }
     }
@@ -566,6 +588,36 @@ public class LiquidityEventService {
     private BigInteger randomBuyQuantity(Stock stock, LiquiditySettings settings) {
         BigInteger requested = BigInteger.valueOf(randomInt(settings.buyQuantityMin(), settings.buyQuantityMax()));
         return requested.min(stock.getShareReserve()).max(BigInteger.ONE);
+    }
+
+    private BigInteger capToStockBudget(String channelId, BigInteger requestedQty, BigDecimal estimatedPrice,
+                                        LocalDateTime now, LiquiditySettings settings) {
+        if (requestedQty.signum() <= 0 || estimatedPrice == null || estimatedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigInteger.ZERO;
+        }
+        BigDecimal budget = stockBudget(channelId, now, settings);
+        if (budget.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigInteger.ZERO;
+        }
+        BigInteger affordableQty = budget.divide(estimatedPrice, 0, RoundingMode.FLOOR).toBigInteger();
+        return requestedQty.min(affordableQty);
+    }
+
+    private BigDecimal stockBudget(String channelId, LocalDateTime now, LiquiditySettings settings) {
+        String budgetKey = stockBudgetKey(channelId);
+        BigDecimal budget = appStateService.getDecimal(budgetKey, settings.stockBudgetAmount());
+        if (budget.compareTo(settings.stockBudgetRefillThreshold()) > 0) {
+            return budget.min(settings.stockBudgetAmount());
+        }
+        String refillKey = stockBudgetRefillKey(channelId);
+        String today = LocalDate.now().toString();
+        String lastRefill = appStateService.get(refillKey).orElse("");
+        if (!today.equals(lastRefill)) {
+            appStateService.put(budgetKey, settings.stockBudgetAmount().toPlainString());
+            appStateService.put(refillKey, today);
+            return settings.stockBudgetAmount();
+        }
+        return budget.max(BigDecimal.ZERO);
     }
 
     private BigInteger holdingPercentQuantity(String channelId, int minPercent, int maxPercent) {
@@ -629,9 +681,29 @@ public class LiquidityEventService {
         req.setEstimatedPrice(estimatedPrice);
         req.setOrderMode("market");
         tradeEngine.submitTrade(req);
+        adjustStockBudget(event.getChannelId(), buy, qty, estimatedPrice);
         new TransactionTemplate(txManager).executeWithoutResult(status ->
                 liquidityEventRepository.findById(event.getId())
                         .ifPresent(e -> e.recordTrade(buy, new BigDecimal(qty), now)));
+    }
+
+    private void adjustStockBudget(String channelId, boolean buy, BigInteger qty, BigDecimal estimatedPrice) {
+        BigDecimal tradeValue = estimatedPrice.multiply(new BigDecimal(qty)).setScale(0, RoundingMode.CEILING);
+        String key = stockBudgetKey(channelId);
+        LiquiditySettings settings = settings();
+        BigDecimal current = appStateService.getDecimal(key, settings.stockBudgetAmount());
+        BigDecimal next = buy
+                ? current.subtract(tradeValue).max(BigDecimal.ZERO)
+                : current.add(tradeValue).min(settings.stockBudgetAmount());
+        appStateService.put(key, next.toPlainString());
+    }
+
+    private String stockBudgetKey(String channelId) {
+        return "liquidity-events.stock-budget.remaining." + channelId;
+    }
+
+    private String stockBudgetRefillKey(String channelId) {
+        return "liquidity-events.stock-budget.last-refill-date." + channelId;
     }
 
     private void ensureSystemUser() {
