@@ -289,7 +289,8 @@ function MegaphoneModal({ streamers, onClose, onSubmit, isPending }: MegaphoneMo
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
