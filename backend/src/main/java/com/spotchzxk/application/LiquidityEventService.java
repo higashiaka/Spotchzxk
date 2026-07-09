@@ -26,6 +26,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -50,63 +52,78 @@ public class LiquidityEventService {
             LiquidityEventPhase.DUMP,
             LiquidityEventPhase.COOLDOWN
     );
+    private static final Set<String> SETTING_KEYS = Set.of(
+            "liquidity-events.enabled",
+            "liquidity-events.start-chance-percent",
+            "liquidity-events.daily-limit-per-stock",
+            "liquidity-events.tick-min-seconds",
+            "liquidity-events.tick-max-seconds",
+            "liquidity-events.min-duration-minutes",
+            "liquidity-events.max-duration-minutes",
+            "liquidity-events.min-rise-percent",
+            "liquidity-events.max-rise-percent",
+            "liquidity-events.dump-retain-percent",
+            "liquidity-events.cooldown-minutes"
+    );
 
     private final LiquidityEventRepository liquidityEventRepository;
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final UserShareRepository userShareRepository;
     private final PlatformTransactionManager txManager;
+    private final AppStateService appStateService;
 
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
     private TradeEngine tradeEngine;
 
     @Value("${liquidity-events.enabled:false}")
-    private boolean enabled;
+    private boolean defaultEnabled;
 
     @Value("${liquidity-events.start-chance-percent:0.15}")
-    private BigDecimal startChancePercent;
+    private BigDecimal defaultStartChancePercent;
 
     @Value("${liquidity-events.daily-limit-per-stock:1}")
-    private int dailyLimitPerStock;
+    private int defaultDailyLimitPerStock;
 
     @Value("${liquidity-events.tick-min-seconds:12}")
-    private int tickMinSeconds;
+    private int defaultTickMinSeconds;
 
     @Value("${liquidity-events.tick-max-seconds:35}")
-    private int tickMaxSeconds;
+    private int defaultTickMaxSeconds;
 
     @Value("${liquidity-events.min-duration-minutes:10}")
-    private int minDurationMinutes;
+    private int defaultMinDurationMinutes;
 
     @Value("${liquidity-events.max-duration-minutes:30}")
-    private int maxDurationMinutes;
+    private int defaultMaxDurationMinutes;
 
     @Value("${liquidity-events.max-rise-percent:300}")
-    private BigDecimal maxRisePercent;
+    private BigDecimal defaultMaxRisePercent;
 
     @Value("${liquidity-events.min-rise-percent:80}")
-    private BigDecimal minRisePercent;
+    private BigDecimal defaultMinRisePercent;
 
     @Value("${liquidity-events.dump-retain-percent:35}")
-    private BigDecimal dumpRetainPercent;
+    private BigDecimal defaultDumpRetainPercent;
 
     @Value("${liquidity-events.cooldown-minutes:360}")
-    private int cooldownMinutes;
+    private int defaultCooldownMinutes;
 
     public boolean isSystemUser(String userId) {
         return SYSTEM_USER_ID.equals(userId);
     }
 
     public void maybeStartAfterUserTrade(String channelId, String userId) {
-        if (!enabled || isSystemUser(userId) || channelId == null || channelId.isBlank()) {
+        LiquiditySettings settings = settings();
+        if (!settings.enabled() || isSystemUser(userId) || channelId == null || channelId.isBlank()) {
             return;
         }
-        if (!roll(startChancePercent)) {
+        if (!roll(settings.startChancePercent())) {
             return;
         }
         try {
-            new TransactionTemplate(txManager).executeWithoutResult(status -> startIfEligible(channelId));
+            new TransactionTemplate(txManager).executeWithoutResult(status -> startIfEligible(channelId, settings));
         } catch (RuntimeException e) {
             log.debug("Liquidity event start skipped for {}: {}", channelId, e.getMessage());
         }
@@ -114,7 +131,8 @@ public class LiquidityEventService {
 
     @Scheduled(fixedDelayString = "${liquidity-events.scheduler-delay-ms:15000}")
     public void processEvents() {
-        if (!enabled) {
+        LiquiditySettings settings = settings();
+        if (!settings.enabled()) {
             return;
         }
         ensureSystemUser();
@@ -125,7 +143,7 @@ public class LiquidityEventService {
         }
         for (LiquidityEvent event : events) {
             try {
-                processEvent(event.getId());
+                processEvent(event.getId(), settings);
             } catch (RuntimeException e) {
                 log.warn("Liquidity event tick failed: eventId={}, stock={}", event.getId(), event.getChannelId(), e);
             }
@@ -134,7 +152,7 @@ public class LiquidityEventService {
 
     @Scheduled(fixedDelayString = "${liquidity-events.cooldown-scheduler-delay-ms:60000}")
     public void completeExpiredCooldowns() {
-        if (!enabled) {
+        if (!settings().enabled()) {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
@@ -146,13 +164,13 @@ public class LiquidityEventService {
         );
     }
 
-    private void startIfEligible(String channelId) {
+    private void startIfEligible(String channelId, LiquiditySettings settings) {
         LocalDateTime now = LocalDateTime.now();
         if (liquidityEventRepository.existsByChannelIdAndPhaseIn(channelId, BLOCKING_PHASES)) {
             return;
         }
         LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        if (liquidityEventRepository.countByChannelIdAndStartedAtGreaterThanEqual(channelId, todayStart) >= dailyLimitPerStock) {
+        if (liquidityEventRepository.countByChannelIdAndStartedAtGreaterThanEqual(channelId, todayStart) >= settings.dailyLimitPerStock()) {
             return;
         }
         Stock stock = stockRepository.findById(channelId).orElse(null);
@@ -163,11 +181,11 @@ public class LiquidityEventService {
         if (currentPrice.compareTo(MIN_PRICE) <= 0 || stock.getCoinReserve().signum() <= 0 || stock.getShareReserve().signum() <= 0) {
             return;
         }
-        int durationMinutes = randomInt(minDurationMinutes, maxDurationMinutes);
-        BigDecimal risePercent = randomPercent(minRisePercent, maxRisePercent);
+        int durationMinutes = randomInt(settings.minDurationMinutes(), settings.maxDurationMinutes());
+        BigDecimal risePercent = randomPercent(settings.minRisePercent(), settings.maxRisePercent());
         BigDecimal peakMultiplier = BigDecimal.ONE.add(risePercent.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
         BigDecimal targetPeak = currentPrice.multiply(peakMultiplier).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal dumpTarget = currentPrice.multiply(dumpRetainPercent)
+        BigDecimal dumpTarget = currentPrice.multiply(settings.dumpRetainPercent())
                 .divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)
                 .max(MIN_PRICE);
         liquidityEventRepository.save(LiquidityEvent.builder()
@@ -186,14 +204,15 @@ public class LiquidityEventService {
                 channelId, currentPrice, targetPeak, dumpTarget);
     }
 
-    private void processEvent(String eventId) {
+    private void processEvent(String eventId, LiquiditySettings settings) {
         LiquidityEvent event = new TransactionTemplate(txManager).execute(status ->
                 liquidityEventRepository.findById(eventId).orElse(null));
         if (event == null || !RUNNING_PHASES.contains(event.getPhase())) {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
-        if (event.getLastTradeAt() != null && event.getLastTradeAt().plusSeconds(randomInt(tickMinSeconds, tickMaxSeconds)).isAfter(now)) {
+        if (event.getLastTradeAt() != null
+                && event.getLastTradeAt().plusSeconds(randomInt(settings.tickMinSeconds(), settings.tickMaxSeconds())).isAfter(now)) {
             return;
         }
         Stock stock = stockRepository.findById(event.getChannelId()).orElse(null);
@@ -202,7 +221,7 @@ public class LiquidityEventService {
             return;
         }
         if (!event.getPhaseEndsAt().isAfter(now)) {
-            advancePhase(event.getId(), event.getPhase(), now);
+            advancePhase(event.getId(), event.getPhase(), now, settings);
             return;
         }
 
@@ -222,7 +241,7 @@ public class LiquidityEventService {
         submitSystemTrade(event, buy, qty, currentPrice, now);
     }
 
-    private void advancePhase(String eventId, LiquidityEventPhase phase, LocalDateTime now) {
+    private void advancePhase(String eventId, LiquidityEventPhase phase, LocalDateTime now, LiquiditySettings settings) {
         new TransactionTemplate(txManager).executeWithoutResult(status -> {
             LiquidityEvent event = liquidityEventRepository.findById(eventId).orElse(null);
             if (event == null) return;
@@ -230,7 +249,7 @@ public class LiquidityEventService {
                 case ACCUMULATION -> event.advanceTo(LiquidityEventPhase.PUMP, now, now.plusMinutes(randomInt(7, 18)));
                 case PUMP -> event.advanceTo(LiquidityEventPhase.CLIMAX, now, now.plusMinutes(randomInt(1, 3)));
                 case CLIMAX -> event.advanceTo(LiquidityEventPhase.DUMP, now, now.plusMinutes(randomInt(1, 4)));
-                case DUMP -> event.startCooldown(now, now.plusMinutes(cooldownMinutes));
+                case DUMP -> event.startCooldown(now, now.plusMinutes(settings.cooldownMinutes()));
                 default -> { }
             }
         });
@@ -239,7 +258,71 @@ public class LiquidityEventService {
     private void startCooldown(String eventId, LocalDateTime now) {
         new TransactionTemplate(txManager).executeWithoutResult(status ->
                 liquidityEventRepository.findById(eventId)
-                        .ifPresent(e -> e.startCooldown(now, now.plusMinutes(cooldownMinutes))));
+                        .ifPresent(e -> e.startCooldown(now, now.plusMinutes(settings().cooldownMinutes()))));
+    }
+
+    public Map<String, String> currentSettings() {
+        return appStateService.getByPrefix("liquidity-events.");
+    }
+
+    public void updateSetting(String key, String value) {
+        if (!SETTING_KEYS.contains(key)) {
+            throw new IllegalArgumentException("Unsupported liquidity event setting: " + key);
+        }
+        appStateService.put(key, value);
+    }
+
+    private LiquiditySettings settings() {
+        return new LiquiditySettings(
+                appStateService.getBoolean("liquidity-events.enabled", defaultEnabled),
+                appStateService.getDecimal("liquidity-events.start-chance-percent", defaultStartChancePercent),
+                appStateService.getInt("liquidity-events.daily-limit-per-stock", defaultDailyLimitPerStock),
+                appStateService.getInt("liquidity-events.tick-min-seconds", defaultTickMinSeconds),
+                appStateService.getInt("liquidity-events.tick-max-seconds", defaultTickMaxSeconds),
+                appStateService.getInt("liquidity-events.min-duration-minutes", defaultMinDurationMinutes),
+                appStateService.getInt("liquidity-events.max-duration-minutes", defaultMaxDurationMinutes),
+                appStateService.getDecimal("liquidity-events.min-rise-percent", defaultMinRisePercent),
+                appStateService.getDecimal("liquidity-events.max-rise-percent", defaultMaxRisePercent),
+                appStateService.getDecimal("liquidity-events.dump-retain-percent", defaultDumpRetainPercent),
+                appStateService.getInt("liquidity-events.cooldown-minutes", defaultCooldownMinutes)
+        ).normalized();
+    }
+
+    private record LiquiditySettings(
+            boolean enabled,
+            BigDecimal startChancePercent,
+            int dailyLimitPerStock,
+            int tickMinSeconds,
+            int tickMaxSeconds,
+            int minDurationMinutes,
+            int maxDurationMinutes,
+            BigDecimal minRisePercent,
+            BigDecimal maxRisePercent,
+            BigDecimal dumpRetainPercent,
+            int cooldownMinutes
+    ) {
+        private LiquiditySettings normalized() {
+            int safeTickMin = Math.max(1, tickMinSeconds);
+            int safeTickMax = Math.max(safeTickMin, tickMaxSeconds);
+            int safeDurationMin = Math.max(1, minDurationMinutes);
+            int safeDurationMax = Math.max(safeDurationMin, maxDurationMinutes);
+            BigDecimal safeMinRise = minRisePercent != null ? minRisePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
+            BigDecimal safeMaxRise = maxRisePercent != null && maxRisePercent.compareTo(safeMinRise) >= 0 ? maxRisePercent : safeMinRise;
+            BigDecimal safeDumpRetain = dumpRetainPercent != null ? dumpRetainPercent.max(BigDecimal.ZERO) : BigDecimal.ZERO;
+            return new LiquiditySettings(
+                    enabled,
+                    startChancePercent != null ? startChancePercent.max(BigDecimal.ZERO) : BigDecimal.ZERO,
+                    Math.max(0, dailyLimitPerStock),
+                    safeTickMin,
+                    safeTickMax,
+                    safeDurationMin,
+                    safeDurationMax,
+                    safeMinRise,
+                    safeMaxRise,
+                    safeDumpRetain,
+                    Math.max(1, cooldownMinutes)
+            );
+        }
     }
 
     private boolean shouldBuy(LiquidityEventPhase phase) {

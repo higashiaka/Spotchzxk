@@ -4,6 +4,7 @@ import com.spotchzxk.application.AmmMigrationService;
 import com.spotchzxk.application.AdminUserService;
 import com.spotchzxk.application.ChzzkLivePollingService;
 import com.spotchzxk.application.DailyResetService;
+import com.spotchzxk.application.LiquidityEventService;
 import com.spotchzxk.application.StockSplitService;
 import com.spotchzxk.domain.stock.entity.Stock;
 import com.spotchzxk.domain.stock.repository.StockRepository;
@@ -23,6 +24,7 @@ public class AdminController {
     private final AmmMigrationService ammMigrationService;
     private final ChzzkLivePollingService chzzkLivePollingService;
     private final DailyResetService dailyResetService;
+    private final LiquidityEventService liquidityEventService;
     private final StockSplitService stockSplitService;
     private final AdminUserService adminUserService;
     private final StockRepository stockRepository;
@@ -55,6 +57,27 @@ public class AdminController {
     public ResponseEntity<?> forceDailyReset() {
         int resetStocks = dailyResetService.forceDailyReset();
         return ResponseEntity.ok(Map.of("resetStocks", resetStocks));
+    }
+
+    @GetMapping("/liquidity-events/settings")
+    public ResponseEntity<Map<String, String>> getLiquidityEventSettings() {
+        return ResponseEntity.ok(liquidityEventService.currentSettings());
+    }
+
+    @PostMapping("/liquidity-events/settings")
+    public ResponseEntity<?> updateLiquidityEventSettings(@RequestBody Map<String, Object> body) {
+        if (body == null || body.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "settings body is required"));
+        }
+        try {
+            body.forEach((key, value) -> {
+                String settingKey = key.startsWith("liquidity-events.") ? key : "liquidity-events." + key;
+                liquidityEventService.updateSetting(settingKey, String.valueOf(value));
+            });
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+        return ResponseEntity.ok(liquidityEventService.currentSettings());
     }
 
     @PostMapping("/stocks/{channelId}/fix-amm")
