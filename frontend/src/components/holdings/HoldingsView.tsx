@@ -220,8 +220,9 @@ export const HoldingsView = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-                    {qty}주
+                  <p className="text-xs font-mono flex flex-wrap items-center gap-x-1.5" style={{ color: 'var(--text-dim)' }}>
+                    <span>{qty}주</span>
+                    <span>· {fmt(s.price)}</span>
                   </p>
                 </div>
 

@@ -34,32 +34,8 @@ export const parseBigBalance = (value: string | number | undefined | null): bigi
   try { return BigInt(s); } catch { return 0n; }
 };
 
-/** Formats a bigint as Korean units (자/해/경/조/억/만원), safe for any magnitude */
+/** Formats a bigint as full KRW, safe for any magnitude */
 export const fmtKoreanBigInt = (value: bigint): string => {
-  const neg = value < 0n;
-  const abs = neg ? -value : value;
-  const sign = neg ? '-' : '';
-  const divFmt = (divisor: bigint, unit: string) => {
-    const whole = abs / divisor;
-    const frac = (abs % divisor) * 10n / divisor;
-    return `${sign}${frac === 0n ? whole : `${whole}.${frac}`}${unit}`;
-  };
-  if (abs >= 10n ** 36n) return divFmt(10n ** 36n, '간원');
-  if (abs >= 10n ** 32n) return divFmt(10n ** 32n, '구원');
-  if (abs >= 10n ** 28n) return divFmt(10n ** 28n, '양원');
-  if (abs >= 10n ** 24n) return divFmt(10n ** 24n, '자원');
-  if (abs >= 10n ** 20n) return divFmt(10n ** 20n, '해원');
-  if (abs >= 10n ** 16n) return divFmt(10n ** 16n, '경원');
-  if (abs >= 10n ** 12n) return divFmt(10n ** 12n, '조원');
-  if (abs >= 10n ** 8n) return divFmt(10n ** 8n, '억원');
-  if (abs >= 10n ** 7n) {
-    const divisor = 10n ** 7n;
-    const whole = abs / divisor;
-    const frac = (abs % divisor) * 100n / divisor;
-    const decimal = frac === 0n ? `${whole}` : `${whole}.${String(frac).padStart(2, '0').replace(/0+$/, '')}`;
-    return `${sign}${decimal}천만원`;
-  }
-  if (abs >= 10n ** 4n) return divFmt(10n ** 4n, '만원');
   return `${value.toLocaleString('ko-KR')}원`;
 };
 
@@ -118,7 +94,7 @@ export const fmtShares = (value: number | string | bigint): string => {
   return `${rounded.toLocaleString('ko-KR')}주`;
 };
 
-/** Abbreviates large KRW amounts with Korean-style short units (e.g. 140,000,000 KRW → "1.4 hundred million") */
+/** Abbreviates KRW amounts for dense chart/table cells */
 export const fmtCompactWon = (value: number | string): string => {
   const rounded = Math.round(toFiniteNumber(value));
   const abs = Math.abs(rounded);
@@ -134,21 +110,9 @@ export const fmtCompactWon = (value: number | string): string => {
   return fmt(rounded);
 };
 
-/** Formats a KRW amount with Korean units: 해 / 경 / 조 / 억 / 천만 / 만 (e.g. 123,456,789 → "1.2억원") */
+/** Formats a KRW amount without compact units */
 export const fmtKorean = (value: number | string): string => {
   const n = toFiniteNumber(value);
-  const abs = Math.abs(Math.round(n));
-  const trim = (s: string) => s.replace(/\.?0+$/, '');
-  if (abs >= 1e36)              return `${trim((n / 1e36).toFixed(1))}간원`;
-  if (abs >= 1e32)              return `${trim((n / 1e32).toFixed(1))}구원`;
-  if (abs >= 1e28)              return `${trim((n / 1e28).toFixed(1))}양원`;
-  if (abs >= 1e24)              return `${trim((n / 1e24).toFixed(1))}자원`;
-  if (abs >= 1e20)              return `${trim((n / 1e20).toFixed(1))}해원`;
-  if (abs >= 1e16)              return `${trim((n / 1e16).toFixed(1))}경원`;
-  if (abs >= 1_000_000_000_000) return `${trim((n / 1_000_000_000_000).toFixed(1))}조원`;
-  if (abs >= 100_000_000)       return `${trim((n / 100_000_000).toFixed(1))}억원`;
-  if (abs >= 10_000_000)        return `${trim((n / 10_000_000).toFixed(2))}천만원`;
-  if (abs >= 10_000)            return `${trim((n / 10_000).toFixed(1))}만원`;
   return fmt(n);
 };
 
